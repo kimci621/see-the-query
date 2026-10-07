@@ -70,8 +70,8 @@
 - 🔄 **P0.7** (2026-10-08) Системные колонки `xmin` / `xmax`, поведение при UPDATE в транзакции.
 - 🔄 **P0.8** (2026-10-08) Расширения PGlite (нужен `pg_trgm`), `CREATE ROLE`, `SET ROLE`, `GRANT` / `REVOKE`.
 - 🔄 **P0.9** (2026-10-08) Ошибки PGlite: доступны ли `code`, `position`, `constraint`, `detail`, `hint`.
-- ⬜ **P0.10** `libpg-query` в браузере (WASM под Vite): парсинг, позиции узлов, версия грамматики PG.
-- ⬜ **P0.11** `pgsql-deparser`: круговой тест «parse → deparse → parse» на 50 запросах из программы.
+- 🔄 **P0.10** (2026-10-08) `libpg-query` в браузере (WASM под Vite): парсинг, позиции узлов, версия грамматики PG.
+- 🔄 **P0.11** (2026-10-08) `pgsql-deparser`: круговой тест «parse → deparse → parse» на 50 запросах из программы.
 - ⬜ **P0.12** React Flow: 30 таблиц по 15 строк, pan/zoom, замер fps.
 - ⬜ **P0.13** Оверлей с той же камерой (transform из viewport): совпадение координат с нодами при pan/zoom.
 - ⬜ **P0.14** `motion` layoutId/FLIP внутри контейнера со `scale`: корректность и fps на 200 строках.

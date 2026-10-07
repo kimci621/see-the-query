@@ -1,0 +1,9 @@
+{
+  "loadMs": 12,
+  "parseMs": 0.061,
+  "byteLoc": 28,
+  "charLoc": 22,
+  "charAtLoc": "b.title",
+  "deparsed": "SELECT\n  'Привет' AS x,\n  b.title\nFROM book AS b",
+  "done": true
+}

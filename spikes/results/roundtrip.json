@@ -1,0 +1,11 @@
+{
+  "total": 50,
+  "equal": 49,
+  "failures": [
+    {
+      "sql": "select * from book order by price fetch first 3 rows with ties",
+      "error": "дерево отличается",
+      "deparsed": "SELECT *\nFROM book\nORDER BY\n  price\nLIMIT 3"
+    }
+  ]
+}
