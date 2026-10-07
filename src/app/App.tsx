@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+
 export function App() {
-  return <p>Visual SQL</p>;
+  return <Button>Visual SQL</Button>;
 }
