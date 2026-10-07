@@ -275,7 +275,7 @@
 
 - **Сборка**: Vite + React 19 + TypeScript (strict), pnpm. SPA без SSR: всё работает в браузере, SSR не нужен.
 - **UI**: Tailwind CSS v4 + shadcn/ui (Sidebar, Resizable, ScrollArea, Tabs, Button, Tooltip, Command, Badge, Kbd, Slider, ToggleGroup, Collapsible, DropdownMenu, Sonner).
-- **БД**: `@electric-sql/pglite` в Web Worker (`PGliteWorker`). PGlite 0.5.8 = PostgreSQL 18.3 (проверено 2026-10-08).
+- **БД**: `@electric-sql/pglite` в собственном Web Worker с простым RPC (не `PGliteWorker`: тот рассчитан на шаринг между вкладками). PGlite 0.5.8 = PostgreSQL 18.3 (проверено 2026-10-08).
 - **Парсер SQL**: `libpg-query` (WASM-сборка настоящего парсера Postgres, отдаёт AST с позициями) + `pgsql-deparser` (AST → SQL) для сборки проб. Совместимость с браузером и версией PG проверяется спайком на фазе 0. Запасной вариант: собирать пробы склейкой исходного текста по позициям узлов AST.
 - **Доска**: `@xyflow/react` (React Flow): pan/zoom, кастомные ноды, рёбра, миникарта, `onlyRenderVisibleElements`.
 - **Авто-раскладка**: `dagre` (`@dagrejs/dagre`).
