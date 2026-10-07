@@ -7,11 +7,11 @@
     <script>
       // Ставим тему до первой отрисовки, чтобы тёмная тема не мигала светлым фоном
       try {
-        var saved = JSON.parse(localStorage.getItem('vs-settings') || '{}');
-        var theme = (saved.state || {}).theme;
-        var dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        const saved = JSON.parse(localStorage.getItem('vs-settings') || '{}');
+        const theme = saved.state?.theme;
+        const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
         if (dark) document.documentElement.classList.add('dark');
-      } catch (e) {}
+      } catch {}
     </script>
   </head>
   <body>

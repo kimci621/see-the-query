@@ -84,7 +84,7 @@
 - ✅ **P1.1** План фазы, согласован. 2026-10-08. Заметка: `2026-10-08-01-skeleton.md`; согласован: пользователь разрешил без подтверждения.
 - ✅ (2026-10-08) **P1.2** Vite + React 19 + TypeScript strict + pnpm.
 - ⬜ **P1.3** Tailwind v4 + shadcn/ui (new-york, neutral), нужные компоненты из спеки 5.1.
-- ⬜ **P1.4** Biome (линт + формат), скрипт `pnpm check` (typecheck + lint + test).
+- ✅ (2026-10-08) **P1.4** Biome (линт + формат), скрипт `pnpm check` (typecheck + lint + test).
 - ⬜ **P1.5** Vitest и Playwright настроены, по одному тесту-пустышке.
 - ⬜ **P1.6** GitHub Actions CI: `pnpm check` на каждый push.
 - ⬜ **P1.7** Вписать реальные команды в `CLAUDE.md`.
