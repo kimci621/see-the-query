@@ -1,0 +1,74 @@
+[
+  {
+    "name": "P0.2 версия и холодный старт в Node",
+    "ok": true,
+    "ms": 0,
+    "fact": "PostgreSQL 18.3 (PGlite 0.5.8); старт + датасет 625 мс"
+  },
+  {
+    "name": "P0.3 dump/load маленькой БД",
+    "ok": true,
+    "ms": 381,
+    "fact": "dump 239 мс, 4654 КБ gzip; load 141 мс; book=11"
+  },
+  {
+    "name": "P0.3 dump/load БД на 100k строк",
+    "ok": true,
+    "ms": 1944,
+    "fact": "dump 452 мс, 8.9 МБ gzip; load 266 мс; book=100011"
+  },
+  {
+    "name": "P0.4 ctid в INNER/LEFT/FULL JOIN",
+    "ok": true,
+    "ms": 3,
+    "fact": "inner 9; left 11 (без пары 2); full 12 (только автор 1, только книга 2)"
+  },
+  {
+    "name": "P0.4 ctid стабилен внутри транзакции",
+    "ok": true,
+    "ms": 1,
+    "fact": "ctid book не меняется при изменениях других таблиц"
+  },
+  {
+    "name": "P0.5 TEMP TABLE внутри BEGIN ... ROLLBACK",
+    "ok": true,
+    "ms": 2,
+    "fact": "строк во временной 7, ctid первой (0,1); после rollback таблицы нет: true"
+  },
+  {
+    "name": "P0.6 statement_timeout",
+    "ok": false,
+    "ms": 10139,
+    "fact": "НЕ сработал, pg_sleep(3) отработал за 3001 мс; тяжёлый CPU-запрос не прерван (7137 мс)"
+  },
+  {
+    "name": "P0.7 xmin/xmax при UPDATE",
+    "ok": true,
+    "ms": 3,
+    "fact": "до (0,1) 752 752; после (0,12) 755 0; txid 755"
+  },
+  {
+    "name": "P0.8 pg_trgm",
+    "ok": true,
+    "ms": 43,
+    "fact": "similarity = 0.67"
+  },
+  {
+    "name": "P0.8 роли, SET ROLE, GRANT",
+    "ok": true,
+    "ms": 2,
+    "fact": "select под reader: 11; insert под reader: 42501"
+  },
+  {
+    "name": "P0.9 поля ошибок PGlite",
+    "ok": true,
+    "ms": 3,
+    "fact": "{\"23502\":{\"code\":\"23502\",\"table\":\"book\",\"column\":\"title\",\"detail\":\"Failing row contains (12, null, null, null, null, null, null, {}, null).\"},\"23503\":{\"code\":\"23503\",\"constraint\":\"orders_customer_id_fkey\",\"table\":\"orders\",\"detail\":\"Key (customer_id)=(999) is not present in table \\\"customer\\\".\"},\"23505\":{\"code\":\"23505\",\"constraint\":\"customer_email_key\",\"table\":\"customer\",\"detail\":\"Key (email)=(anna@example.com) already exists.\"},\"23514\":{\"code\":\"23514\",\"constraint\":\"customer_bonus_check\",\"table\":\"customer\",\"detail\":\"Failing row contains (1, Анна Смирнова, anna@example.com, Москва, -1, {\\\"lang\\\": \\\"ru\\\", \\\"notify\\\": true}, 2024-01-15 10:00:00+03).\"},\"42703\":{\"code\":\"42703\",\"position\":\"8\"}}"
+  },
+  {
+    "name": "Review: ошибка под SAVEPOINT не рушит транзакцию",
+    "ok": true,
+    "ms": 1,
+    "fact": "ошибка 42703, следующий запрос вернул 11"
+  }
+]

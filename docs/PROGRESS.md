@@ -63,13 +63,13 @@
 
 - ✅ **P0.1** План фазы в `docs/superpowers/plans/` (writing-plans), согласован. 2026-10-08. Заметка: `2026-10-08-00-spikes.md`; согласован: пользователь разрешил без подтверждения. Скрипт фактов задачи 1 прогнан заранее: всё OK, кроме P0.6 (`statement_timeout` не работает), спека и контракты поправлены.
 - ⬜ **P0.2** PGlite в своём Web Worker под Vite: загрузка, время холодного старта, размер бандла.
-- ⬜ **P0.3** Снапшоты `dumpDataDir` / `loadDataDir`: время на датасете ~100 строк и на 100k строк.
-- ⬜ **P0.4** `ctid` в INNER / LEFT / FULL JOIN (NULL для стороны без пары), стабильность в рамках транзакции.
-- ⬜ **P0.5** `CREATE TEMP TABLE ... AS` внутри `BEGIN ... ROLLBACK`, ctid у её строк.
-- ⬜ **P0.6** `statement_timeout` в PGlite; если не работает, terminate worker + пересоздание + восстановление из снапшота.
-- ⬜ **P0.7** Системные колонки `xmin` / `xmax`, поведение при UPDATE в транзакции.
-- ⬜ **P0.8** Расширения PGlite (нужен `pg_trgm`), `CREATE ROLE`, `SET ROLE`, `GRANT` / `REVOKE`.
-- ⬜ **P0.9** Ошибки PGlite: доступны ли `code`, `position`, `constraint`, `detail`, `hint`.
+- 🔄 **P0.3** (2026-10-08) Снапшоты `dumpDataDir` / `loadDataDir`: время на датасете ~100 строк и на 100k строк.
+- 🔄 **P0.4** (2026-10-08) `ctid` в INNER / LEFT / FULL JOIN (NULL для стороны без пары), стабильность в рамках транзакции.
+- 🔄 **P0.5** (2026-10-08) `CREATE TEMP TABLE ... AS` внутри `BEGIN ... ROLLBACK`, ctid у её строк.
+- 🔄 **P0.6** (2026-10-08) `statement_timeout` в PGlite; если не работает, terminate worker + пересоздание + восстановление из снапшота.
+- 🔄 **P0.7** (2026-10-08) Системные колонки `xmin` / `xmax`, поведение при UPDATE в транзакции.
+- 🔄 **P0.8** (2026-10-08) Расширения PGlite (нужен `pg_trgm`), `CREATE ROLE`, `SET ROLE`, `GRANT` / `REVOKE`.
+- 🔄 **P0.9** (2026-10-08) Ошибки PGlite: доступны ли `code`, `position`, `constraint`, `detail`, `hint`.
 - ⬜ **P0.10** `libpg-query` в браузере (WASM под Vite): парсинг, позиции узлов, версия грамматики PG.
 - ⬜ **P0.11** `pgsql-deparser`: круговой тест «parse → deparse → parse» на 50 запросах из программы.
 - ⬜ **P0.12** React Flow: 30 таблиц по 15 строк, pan/zoom, замер fps.

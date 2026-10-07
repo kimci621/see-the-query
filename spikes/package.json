@@ -1,0 +1,29 @@
+{
+  "name": "visual-sql-spikes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "facts": "node node/pglite-facts.mjs",
+    "roundtrip": "node node/deparse-roundtrip.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@xyflow/react": "12.12.0",
+    "libpg-query": "18.1.5",
+    "motion": "14.0.0",
+    "pgsql-deparser": "18.3.10",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "6.1.2",
+    "vite": "8.3.3"
+  }
+}
