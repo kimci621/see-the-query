@@ -275,7 +275,7 @@
 
 - **Сборка**: Vite + React 19 + TypeScript (strict), pnpm. SPA без SSR: всё работает в браузере, SSR не нужен.
 - **UI**: Tailwind CSS v4 + shadcn/ui (Sidebar, Resizable, ScrollArea, Tabs, Button, Tooltip, Command, Badge, Kbd, Slider, ToggleGroup, Collapsible, DropdownMenu, Sonner).
-- **БД**: `@electric-sql/pglite` в Web Worker (`PGliteWorker`). Нужен Postgres 17 или новее. Точную версию пинаем на фазе 0.
+- **БД**: `@electric-sql/pglite` в Web Worker (`PGliteWorker`). PGlite 0.5.8 = PostgreSQL 18.3 (проверено 2026-10-08).
 - **Парсер SQL**: `libpg-query` (WASM-сборка настоящего парсера Postgres, отдаёт AST с позициями) + `pgsql-deparser` (AST → SQL) для сборки проб. Совместимость с браузером и версией PG проверяется спайком на фазе 0. Запасной вариант: собирать пробы склейкой исходного текста по позициям узлов AST.
 - **Доска**: `@xyflow/react` (React Flow): pan/zoom, кастомные ноды, рёбра, миникарта, `onlyRenderVisibleElements`.
 - **Авто-раскладка**: `dagre` (`@dagrejs/dagre`).
@@ -541,9 +541,9 @@ join author a using (author_id);
 
 - Одно соединение и один пользователь: конкурентные транзакции только как срежиссированные сцены (глава 11).
 - `CREATE INDEX CONCURRENTLY`, репликация, внешние подключения, `COPY ... FROM` файла сервера не показать вживую: уроки по ним только теоретические.
-- Расширения: доступны только встроенные в PGlite (список проверить в фазе 0: нужны `pg_trgm` для поиска, остальные по ситуации).
+- Расширения: только контрибы PGlite (`@electric-sql/pglite/contrib/*`): есть `pg_trgm`, `pgcrypto`, `uuid_ossp`, `hstore`, `ltree`, `citext`, `unaccent`, `tablefunc` и др.
 - Роли и `GRANT`/`REVOKE` работают внутри одного кластера, но проверка прав для другого пользователя требует `SET ROLE` (проверить в фазе 0).
-- Версия Postgres в песочнице показывается в интерфейсе («PostgreSQL 17.x в браузере»).
+- Версия Postgres в песочнице показывается в интерфейсе («PostgreSQL 18.3 в браузере»).
 
 ### 5.14 Ошибки на человеческом языке
 
