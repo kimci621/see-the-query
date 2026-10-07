@@ -1,0 +1,14 @@
+{
+  "idleFps": 120,
+  "panFps": 120,
+  "maxAlignDiffPx": 0,
+  "tableRendersDuringAnimation": 3,
+  "nodes": 30,
+  "animatedRows": 200,
+  "rendersFromAnimationOnly3s": 0,
+  "cpu4x": {
+    "idleFps": 120,
+    "panFps": 119
+  },
+  "note": "MacBook с экраном 120 Гц, Chromium headed; cpu4x через CDP Emulation.setCPUThrottlingRate"
+}

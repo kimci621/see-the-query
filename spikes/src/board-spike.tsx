@@ -14,7 +14,7 @@ type TData = { title: string };
 const TableNode = memo(function TableNode({ data }: NodeProps<Node<TData>>) {
   tableRenders++;
   return (
-    <div style={{ width: W, background: '#fff', border: '1px solid #ccc', borderRadius: 8, font: '12px monospace' }}>
+    <div style={{ width: W, boxSizing: 'border-box', background: '#fff', border: '1px solid #ccc', borderRadius: 8, font: '12px monospace' }}>
       <div style={{ padding: 8, fontWeight: 600 }}>{data.title}</div>
       {Array.from({ length: 15 }, (_, i) => (
         <div key={i} style={{ height: ROW, borderTop: '1px solid #eee', padding: '0 8px' }}>строка {i + 1}</div>

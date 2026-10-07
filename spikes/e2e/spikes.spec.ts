@@ -56,8 +56,10 @@ test('board: fps и совпадение оверлея с доской', async 
   await page.mouse.up();
   const panFps = await panFpsPromise;
 
-  // зум колесом и сравнение прямоугольников ноды и призрака
+  // зум колесом, затем камера с t0 в кадре (иначе onlyRenderVisibleElements выгружает ноду) и сверка прямоугольников
   await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => (window as any).__rf.setViewport({ x: 120, y: 90, zoom: 1.37 }));
   await page.waitForTimeout(300);
   const diff = await page.evaluate(() => {
     const n = document.querySelector('.react-flow__node[data-id="t0"]')!.getBoundingClientRect();
