@@ -88,7 +88,7 @@
 - ⬜ **P1.5** Vitest и Playwright настроены, по одному тесту-пустышке.
 - ⬜ **P1.6** GitHub Actions CI: `pnpm check` на каждый push.
 - ⬜ **P1.7** Вписать реальные команды в `CLAUDE.md`.
-- ⬜ **P1.8** Дизайн-проход (скилл frontend-design): токены, семантические цвета (kept, dropped, match, null, new, changed, deleted, палитра групп), шрифты Geist / Geist Mono, светлая и тёмная темы.
+- ✅ (2026-10-08) **P1.8** Дизайн-проход (скилл frontend-design): токены, семантические цвета (kept, dropped, match, null, new, changed, deleted, палитра групп), шрифты Geist / Geist Mono, светлая и тёмная темы.
 - ⬜ **P1.9** react-router: `/`, `/l/:lessonId`.
 - ⬜ **P1.10** AppShell: три колонки на Resizable, правая делится по вертикали; ширины в localStorage.
 - ⬜ **P1.11** MDX-пайплайн: `@mdx-js/rollup`, frontmatter, `remark-gfm`, shiki, ленивая загрузка уроков.
