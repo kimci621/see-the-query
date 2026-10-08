@@ -85,7 +85,7 @@
 - ✅ (2026-10-08) **P1.2** Vite + React 19 + TypeScript strict + pnpm.
 - ✅ (2026-10-08) **P1.3** Tailwind v4 + shadcn/ui (new-york, neutral), нужные компоненты из спеки 5.1.
 - ✅ (2026-10-08) **P1.4** Biome (линт + формат), скрипт `pnpm check` (typecheck + lint + test).
-- ⬜ **P1.5** Vitest и Playwright настроены, по одному тесту-пустышке.
+- ✅ (2026-10-08) **P1.5** Vitest и Playwright настроены, по одному тесту-пустышке.
 - ⬜ **P1.6** GitHub Actions CI: `pnpm check` на каждый push.
 - ⬜ **P1.7** Вписать реальные команды в `CLAUDE.md`.
 - ✅ (2026-10-08) **P1.8** Дизайн-проход (скилл frontend-design): токены, семантические цвета (kept, dropped, match, null, new, changed, deleted, палитра групп), шрифты Geist / Geist Mono, светлая и тёмная темы.

@@ -26,6 +26,8 @@
     "vitest.config.ts",
     "tests/unit",
     "plugins",
-    "src/features/lessons/mdx/rehype-code-meta.ts"
+    "src/features/lessons/mdx/rehype-code-meta.ts",
+    "playwright.config.ts",
+    "tests/e2e"
   ]
 }
