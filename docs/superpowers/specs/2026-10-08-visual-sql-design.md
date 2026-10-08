@@ -583,7 +583,7 @@ join author a using (author_id);
 Главный датасет **`bookstore`** (используется в большинстве уроков, растёт вместе с курсом):
 
 - `author (author_id PK, name, country, born_year)`: 6 строк, один автор без книг.
-- `book_category (category_id PK, name, parent_id → book_category)`: 5 строк, одна категория без книг, иерархия для рекурсивного CTE.
+- `book_category (category_id PK, name, parent_id → book_category)`: 6 строк, одна категория без книг, иерархия для рекурсивного CTE.
 - `book (book_id PK, title, author_id → author NULL, category_id → book_category NULL, price numeric NULL, pages, published_at date, tags text[], meta jsonb)`: 10-12 строк, одна книга без автора и категории, одна без цены, две с одинаковой ценой (ничьи для rank).
 - `customer (customer_id PK, name, email UNIQUE, city NULL, created_at timestamptz)`: 6 строк, один без заказов, один без города, два однофамильца.
 - `orders (order_id PK, customer_id → customer, status order_status enum, created_at timestamptz)`: 8 строк.
