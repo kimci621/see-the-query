@@ -1,5 +1,11 @@
-import { Button } from '@/components/ui/button';
+import { RouterProvider } from 'react-router';
+import { Providers } from './providers';
+import { router } from './router';
 
 export function App() {
-  return <Button>Visual SQL</Button>;
+  return (
+    <Providers>
+      <RouterProvider router={router} />
+    </Providers>
+  );
 }
