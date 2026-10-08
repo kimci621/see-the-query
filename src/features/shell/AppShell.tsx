@@ -7,6 +7,7 @@ import { BoardPane } from './BoardPane';
 import { CommandMenu } from './CommandMenu';
 import { HotkeysHelp } from './HotkeysHelp';
 import { LessonSidebar } from './LessonSidebar';
+import { PanelErrorBoundary } from './PanelErrorBoundary';
 import { TheoryPane } from './TheoryPane';
 import { useGlobalHotkeys } from './useGlobalHotkeys';
 
@@ -39,19 +40,25 @@ export function AppShell() {
         }}
       >
         <ResizablePanel id="sidebar" defaultSize={`${mainLayout[0]}%`} minSize="10%" maxSize="30%">
-          <LessonSidebar activeId={lessonId} onOpenSearch={() => setCommandOpen(true)} />
+          <PanelErrorBoundary name="Темы">
+            <LessonSidebar activeId={lessonId} onOpenSearch={() => setCommandOpen(true)} />
+          </PanelErrorBoundary>
         </ResizablePanel>
         <ResizableHandle />
         {!focusMode && (
           <>
             <ResizablePanel id="theory" defaultSize={`${mainLayout[1]}%`} minSize="20%">
-              <TheoryPane meta={meta} />
+              <PanelErrorBoundary key={lessonId} name="Теория">
+                <TheoryPane meta={meta} />
+              </PanelErrorBoundary>
             </ResizablePanel>
             <ResizableHandle />
           </>
         )}
         <ResizablePanel id="workspace" defaultSize={`${mainLayout[2]}%`} minSize="25%">
-          <BoardPane />
+          <PanelErrorBoundary name="Доска">
+            <BoardPane />
+          </PanelErrorBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
