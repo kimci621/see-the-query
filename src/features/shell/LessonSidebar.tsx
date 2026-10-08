@@ -42,7 +42,7 @@ export function LessonSidebar({
     <SidebarProvider className="h-full min-h-0">
       <Sidebar collapsible="none" className="h-full w-full border-r">
         <SidebarHeader className="gap-2">
-          <p className="px-2 font-semibold">Visual SQL</p>
+          <p className="px-2 font-semibold">see-the-query</p>
           <Button variant="outline" size="sm" className="justify-between" onClick={onOpenSearch}>
             <span className="flex items-center gap-2">
               <Search className="size-4" /> Поиск
