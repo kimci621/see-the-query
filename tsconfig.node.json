@@ -21,5 +21,11 @@
       "@content/*": ["./content/*"]
     }
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "tests/unit", "plugins"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tests/unit",
+    "plugins",
+    "src/features/lessons/mdx/rehype-code-meta.ts"
+  ]
 }

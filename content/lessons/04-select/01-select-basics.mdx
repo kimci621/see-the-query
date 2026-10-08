@@ -1,0 +1,21 @@
+---
+id: select-basics
+title: "SELECT: колонки, выражения, алиасы"
+chapter: select
+number: "4.1"
+order: 1
+dataset: bookstore
+initialQuery: |
+  select title, price from book;
+docs:
+  - https://www.postgresql.org/docs/current/queries-select-lists.html
+course: ["11.15", "11.37"]
+tags: [select, алиас, выражения]
+mvp: true
+---
+
+Заглушка урока. Настоящий текст появится в фазе 8.
+
+```sql run expect=rows:11
+select title, price from book;
+```
