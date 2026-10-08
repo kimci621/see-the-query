@@ -1,8 +1,9 @@
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { getLesson, LESSONS } from '@/features/lessons/registry';
+import { getLesson } from '@/features/lessons/registry';
 import { useSettingsStore } from '@/stores/settings';
 import { BoardPane } from './BoardPane';
+import { LessonSidebar } from './LessonSidebar';
 import { TheoryPane } from './TheoryPane';
 
 // Порядок совпадает с mainLayout: [сайдбар, теория, правая колонка]
@@ -25,13 +26,7 @@ export function AppShell() {
         }}
       >
         <ResizablePanel id="sidebar" defaultSize={`${mainLayout[0]}%`} minSize="10%" maxSize="30%">
-          <nav aria-label="Темы" className="h-full overflow-auto p-3 text-sm">
-            {LESSONS.map((l) => (
-              <Link key={l.id} to={`/l/${l.id}`} className="block py-1">
-                {l.number} {l.title}
-              </Link>
-            ))}
-          </nav>
+          <LessonSidebar activeId={lessonId} onOpenSearch={() => undefined} />
         </ResizablePanel>
         <ResizableHandle />
         {!focusMode && (
