@@ -24,7 +24,7 @@
 - Цвет не единственный сигнал: отброшенные строки зачёркнуты и с иконкой, NULL с пунктиром и текстом (спека 10).
 - Режим `final-only`: пошаговой сцены нет, в плеере пометка «пошаговый разбор для этой конструкции пока не умею» с причиной (спека, принцип 3).
 - Тексты интерфейса и комментарии в коде на русском, идентификаторы на английском.
-- Коммит только с зелёным `pnpm check`. Сообщение `<type>(<area>): <описание на русском>` + `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Коммит только с зелёным `pnpm check`. Сообщение `<type>(<area>): <описание на русском>` + ``.
 
 ## Review Focus
 
@@ -499,7 +499,7 @@ Expected: все этапы зелёные.
 git add src/features/overlay/types.ts src/stores/scene.ts src/stores/scene.test.ts vitest.config.ts docs/PROGRESS.md
 git commit -m "feat(overlay): типы кадров и проигрывание в сторе сцены
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -723,7 +723,7 @@ Expected: PASS, 12 tests.
 git add src/features/overlay/geometry.ts src/features/overlay/format.ts src/features/overlay/geometry.test.ts src/features/overlay/format.test.ts
 git commit -m "feat(overlay): геометрия призраков и форматирование ячеек
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1116,7 +1116,7 @@ Expected: PASS, 10 tests.
 git add src/features/overlay/frame.ts src/features/overlay/labels.ts src/features/overlay/__fixtures__/traces.ts src/features/overlay/animators/scan.ts src/features/overlay/frame.test.ts src/features/overlay/animators/scan.test.ts
 git commit -m "feat(overlay): операции над кадром и аниматор FROM
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 (P6.3 и P6.6 закрываются в задаче 11, когда призраки видны на настоящей доске.)
@@ -1294,7 +1294,7 @@ Expected: PASS, 7 tests.
 git add src/features/overlay/animators/generic.ts src/features/overlay/animators/filter.ts src/features/overlay/animators/filter.test.ts
 git commit -m "feat(overlay): аниматор WHERE/HAVING с вердиктами TRUE/FALSE/UNKNOWN
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1430,7 +1430,7 @@ Expected: PASS, 4 tests.
 git add src/features/overlay/animators/project.ts src/features/overlay/animators/project.test.ts
 git commit -m "feat(overlay): аниматор SELECT: убираемые, вычисляемые и переименованные колонки
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1570,7 +1570,7 @@ Expected: PASS, 3 tests.
 git add src/features/overlay/animators/distinct.ts src/features/overlay/animators/distinct.test.ts
 git commit -m "feat(overlay): аниматор DISTINCT со стопками дублей
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1785,7 +1785,7 @@ Expected: PASS, все тесты оверлея (35).
 git add src/features/overlay/animators src/features/overlay/__fixtures__/runUpTo.ts
 git commit -m "feat(overlay): аниматоры ORDER BY и LIMIT, реестр аниматоров
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1920,7 +1920,7 @@ Expected: зелёный.
 git add src/features/overlay/playback.ts src/features/overlay/playback.test.ts docs/PROGRESS.md
 git commit -m "feat(overlay): buildPlayback и сжатый режим больших стадий
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2079,7 +2079,7 @@ Run: `pnpm check`. В `docs/PROGRESS.md`: `✅ (<дата>)` у **P6.21**.
 git add src/features/overlay/emptyHint.ts src/features/overlay/emptyHint.test.ts src/features/results/EmptyHint.tsx src/features/results/EmptyHint.test.tsx src/features/results/ResultsPanel.tsx docs/PROGRESS.md
 git commit -m "feat(results): подсказка, на каком шаге пропали строки
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2451,7 +2451,7 @@ Run: `pnpm check`. В `docs/PROGRESS.md`: `✅ (<дата>)` у **P6.18** (ес�
 git add src/features/overlay/GhostTable.tsx src/features/overlay/Decorations.tsx src/features/overlay/overlay.css src/features/overlay/GhostTable.test.tsx src/features/overlay/Decorations.test.tsx docs/PROGRESS.md
 git commit -m "feat(overlay): рендер призрачных таблиц и декораций
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2745,7 +2745,7 @@ Run: `pnpm check`. В `docs/PROGRESS.md`: `✅ (<дата>)` у **P6.2**, **P6.3
 git add src/features/overlay/context.ts src/features/overlay/context.test.ts src/features/overlay/OverlayErrorBoundary.tsx src/features/overlay/OverlayErrorBoundary.test.tsx src/features/overlay/OverlayLayer.tsx src/features/board/BoardCanvas.tsx docs/PROGRESS.md
 git commit -m "feat(overlay): слой сцены поверх доски с общей камерой
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3062,7 +3062,7 @@ Run: `pnpm check`. В `docs/PROGRESS.md`: `✅ (<дата>)` у **P6.5**, **P6.1
 git add src/features/timeline src/features/shell/BoardPane.tsx src/components/ui docs/PROGRESS.md
 git commit -m "feat(timeline): плеер шагов: чипы, скраб, скорость, автоплей, подписи
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3220,7 +3220,7 @@ Run: `pnpm check`. В `docs/PROGRESS.md`: `✅ (<дата>)` у **P6.17**.
 git add src/features/board/useBoardHotkeys.ts src/features/board/useBoardHotkeys.test.tsx src/features/shell/BoardPane.tsx src/features/editor/useLiveTrace.ts docs/PROGRESS.md
 git commit -m "feat(board): клавиши плеера на доске, Esc и пустой запрос закрывают сцену
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -3455,7 +3455,7 @@ Run: `pnpm check`. В `docs/PROGRESS.md`: `✅ (<дата>)` у **P6.20**. Пр�
 git add src/lib/renderCount.ts src/features/board/TableNode.tsx tests/e2e/overlay.spec.ts tests/e2e/overlay-perf.spec.ts playwright.config.ts package.json docs/PROGRESS.md
 git commit -m "test(overlay): e2e сцен, проверка перерисовки доски и замер fps
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---

@@ -22,7 +22,7 @@
 - Правые и полные соединения не переставляются в трассировщике: проба выполняется как написано в запросе, NULL-ctid несопоставленной стороны даёт строку «без пары». Зеркальность RIGHT - задача аниматора (задача 6).
 - Комментарии в коде на русском, идентификаторы на английском, подписи стадий на русском. Длинное тире в текстах не используем.
 - Новых пакетов не ставим.
-- Перед каждым коммитом: `pnpm format`, затем `pnpm check` зелёный. Сообщение коммита: `<type>(<area>): <описание на русском>`, последняя строка `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Перед каждым коммитом: `pnpm format`, затем `pnpm check` зелёный. Сообщение коммита: `<type>(<area>): <описание на русском>`, последняя строка ``.
 - Коммит идёт с явными путями файлов (не `git add -A`). Трекер `docs/PROGRESS.md` обновляется в том же коммите: пункт ⬜ → 🔄 при старте, 🔄 → ✅ с датой в финальном шаге задачи. Дата подставляется командой `$(date +%F)`.
 
 ## Review Focus
@@ -352,7 +352,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/context.ts src/features/tracer/select/scan.ts src/features/tracer/select/join.ts src/features/tracer/select/join.test.ts src/features/tracer/select/pipeline.ts src/features/tracer/whitelist.ts src/features/tracer/captions.ts src/features/tracer/trace.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадия join для INNER и LEFT с парами и клонами
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -455,7 +455,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/join.ts src/features/tracer/select/join.test.ts src/features/tracer/whitelist.ts docs/PROGRESS.md
 git commit -m "feat(tracer): RIGHT, FULL и CROSS JOIN без перестановки сторон
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -535,7 +535,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/join.ts src/features/tracer/select/join.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): цепочки 3+ таблиц и SELF JOIN
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -652,7 +652,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/join.ts src/features/tracer/select/join.test.ts src/features/tracer/whitelist.ts docs/PROGRESS.md
 git commit -m "feat(tracer): USING и NATURAL со слиянием колонок-ключей
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -879,7 +879,7 @@ pnpm format && pnpm check
 git add src/features/overlay/__fixtures__/traces.ts src/features/overlay/animators/join.ts src/features/overlay/animators/join.test.ts docs/PROGRESS.md
 git commit -m "feat(overlay): аниматор INNER JOIN с линиями пар и клонами
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -976,7 +976,7 @@ pnpm format && pnpm check
 git add src/features/overlay/animators/join.ts src/features/overlay/animators/join.test.ts src/features/overlay/__fixtures__/traces.ts docs/PROGRESS.md
 git commit -m "feat(overlay): аниматоры LEFT, RIGHT и FULL с NULL-половинами
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1090,7 +1090,7 @@ pnpm format && pnpm check
 git add src/features/overlay/animators/cross.ts src/features/overlay/animators/join.ts src/features/overlay/animators/join.test.ts src/features/overlay/__fixtures__/traces.ts docs/PROGRESS.md
 git commit -m "feat(overlay): аниматор CROSS JOIN с веером и сеткой N на M
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1319,7 +1319,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/group.ts src/features/tracer/select/group.test.ts src/features/tracer/select/context.ts src/features/tracer/select/pipeline.ts src/features/tracer/select/project.ts src/features/tracer/whitelist.ts src/features/tracer/captions.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадия group с агрегатами и группами по ключам
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1452,7 +1452,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/having.ts src/features/tracer/select/group.test.ts src/features/tracer/select/pipeline.ts src/features/tracer/captions.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадия HAVING с вердиктами по группам
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1672,7 +1672,7 @@ pnpm format && pnpm check
 git add src/features/overlay/__fixtures__/traces.ts src/features/overlay/animators/group.ts src/features/overlay/animators/group.test.ts src/features/overlay/animators/index.ts docs/PROGRESS.md
 git commit -m "feat(overlay): аниматор GROUP BY со стопками и агрегат без GROUP BY
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1781,7 +1781,7 @@ pnpm format && pnpm check
 git add src/features/tracer/trace.ts src/features/tracer/grouping-error.test.ts src/features/overlay/animators/error.ts docs/PROGRESS.md
 git commit -m "feat(tracer): точный фокус и сцена ошибки 42803
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2039,7 +2039,7 @@ pnpm format && pnpm check
 git add tests/tracer/fuzz-gen.ts tests/tracer/fuzz.test.ts tests/tracer/golden.queries.ts tests/tracer/golden.test.ts docs/PROGRESS.md
 git commit -m "test(tracer): фаззер JOIN и агрегации + golden-набор фазы 7
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2136,7 +2136,7 @@ pnpm format && pnpm check
 git add tests/e2e/join-group.spec.ts tests/e2e/helpers.ts docs/PROGRESS.md
 git commit -m "test(e2e): сцены JOIN и GROUP BY со скриншотами конечных состояний
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---

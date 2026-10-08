@@ -21,7 +21,7 @@
 - Целый `SelectStmt` не депарсим: круговой тест показал, что `FETCH FIRST n ROWS WITH TIES` депарсится в `LIMIT n`. Депарсятся только фрагменты (`sqlOf`), WITH TIES читается из `limitOption` AST и считается в JS. Эталон выполняется по `stmt.text`.
 - Сравнение AST-деревьев в Ф5 не нужно. Если понадобится (Ф7+), кроме `location` отбрасывать `rexpr_list_start` и `rexpr_list_end` у `A_Expr` (`AEXPR_IN`, PG18).
 - Комментарии в коде на русском, идентификаторы на английском, подписи на русском. Длинное тире в текстах не используем.
-- Перед каждым коммитом: `pnpm format`, затем `pnpm check` зелёный. Сообщение коммита по контрактам, раздел 13, последняя строка `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Перед каждым коммитом: `pnpm format`, затем `pnpm check` зелёный. Сообщение коммита по контрактам, раздел 13, последняя строка ``.
 - Трекер `docs/PROGRESS.md`: перед началом пункта ⬜ → 🔄 с датой, после проверки 🔄 → ✅ с датой, в том же коммите, что последняя часть работы.
 
 ## Review Focus
@@ -97,7 +97,7 @@ tests/tracer/golden.queries.ts, golden.test.ts                              (з�
 git add docs/superpowers/plans/2026-10-08-00-contracts.md docs/PROGRESS.md
 git commit -m "docs(contracts): rowCount стадии, resultKey и пайплайн SELECT для трассировщика
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 - [ ] **Шаг 2. Падающий тест** `src/features/tracer/rowkey.test.ts`:
@@ -251,7 +251,7 @@ pnpm format && pnpm check
 git add src/features/tracer/types.ts src/features/tracer/rowkey.ts src/features/tracer/rowkey.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): типы трассы и ключи строк
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -489,7 +489,7 @@ pnpm format && pnpm check
 git add src/features/tracer/whitelist.ts src/features/tracer/whitelist.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): whitelist SELECT, причины final-only и touched
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -663,7 +663,7 @@ pnpm format && pnpm check
 git add src/features/tracer/savepoint.ts src/features/tracer/savepoint.test.ts src/features/tracer/probe.ts src/features/tracer/probe.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): пробы под SAVEPOINT с LIMIT и проверкой signal
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -756,7 +756,7 @@ pnpm format && pnpm check
 git add src/features/tracer/captions.ts src/features/tracer/captions.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): подписи стадий на русском
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -922,7 +922,7 @@ pnpm format && pnpm check
 git add src/features/tracer/verify.ts src/features/tracer/verify.test.ts src/features/tracer/select/align.ts src/features/tracer/select/align.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): сверка с эталоном и выравнивание ничьих
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1460,7 +1460,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/context.ts src/features/tracer/select/pipeline.ts src/features/tracer/select/scan.ts src/features/tracer/select/scan.test.ts src/features/tracer/trace.ts src/features/tracer/trace.test.ts tests/helpers/trace.ts docs/PROGRESS.md
 git commit -m "feat(tracer): ядро SELECT, стадия scan и сверка с прямым выполнением
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1581,7 +1581,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/filter.ts src/features/tracer/select/filter.test.ts src/features/tracer/select/pipeline.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадия filter с вердиктами true / false / null
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1702,7 +1702,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/project.ts src/features/tracer/select/project.test.ts src/features/tracer/select/pipeline.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадия project с kept / removed / computed / renamed
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1927,7 +1927,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/distinct.ts src/features/tracer/select/distinct.test.ts src/features/tracer/select/sort.ts src/features/tracer/select/sort.test.ts src/features/tracer/select/pipeline.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадии distinct, DISTINCT ON и sort
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2065,7 +2065,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/limit.ts src/features/tracer/select/limit.test.ts src/features/tracer/select/pipeline.ts docs/PROGRESS.md
 git commit -m "feat(tracer): стадия limit с OFFSET и WITH TIES
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2207,7 +2207,7 @@ pnpm format && pnpm check
 git add src/features/tracer/trace.ts src/features/tracer/trace.test.ts src/features/tracer/select/project.ts src/features/tracer/select/sort.ts src/features/tracer/select/limit.ts docs/PROGRESS.md
 git commit -m "feat(tracer): volatile-функции считаются одной пробой
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2404,7 +2404,7 @@ pnpm format && pnpm check
 git add src/features/tracer/select/compressed.ts src/features/tracer/trace.ts src/features/tracer/trace.test.ts docs/PROGRESS.md
 git commit -m "feat(tracer): лимит строк на стадию и сжатый режим
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -2520,7 +2520,7 @@ pnpm format && pnpm check
 git add tests/tracer/golden.queries.ts tests/tracer/golden.test.ts docs/PROGRESS.md
 git commit -m "test(tracer): golden-сверка запросов одной таблицы
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+"
 ```
 
 ---

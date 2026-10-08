@@ -28,7 +28,7 @@
 - Ожидание многооператорного блока относится к последнему оператору блока (уточнение контракта, задача 1). Ошибка в любом операторе блока проверяется через `expectError`.
 - Якоря PG wiki «Don't Do This» в брифах написаны по шаблону вики. Перед коммитом урока открой каждую ссылку и проверь, что якорь ведёт на нужный пункт.
 - Тексты интерфейса и комментарии в коде на русском, идентификаторы на английском. Без длинного тире.
-- Каждая задача заканчивается шагом: в `docs/PROGRESS.md` поставить ✅ с датой на закрытые пункты, `pnpm check` зелёный, коммит `<type>(<area>): <описание>` с последней строкой `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Перед началом задачи пункт трекера переводится в 🔄 с датой (правило трекера 1), это не отдельный коммит.
+- Каждая задача заканчивается шагом: в `docs/PROGRESS.md` поставить ✅ с датой на закрытые пункты, `pnpm check` зелёный, коммит `<type>(<area>): <описание>` с последней строкой ``. Перед началом задачи пункт трекера переводится в 🔄 с датой (правило трекера 1), это не отдельный коммит.
 
 ## Review Focus
 
@@ -96,7 +96,7 @@
   git add docs/superpowers/plans/2026-10-08-00-contracts.md docs/PROGRESS.md
   git commit -m "docs(contracts): правки под Ф11: expand, plan, сцены, CI на Postgres
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -153,7 +153,7 @@ export const SANDBOX_EXTENSIONS: { pg_trgm: Extension; pageinspect: Extension };
   git add src/features/db/extensions.ts src/features/db/extensions.test.ts src/features/db/db.worker.ts src/features/db/node-client.ts
   git commit -m "feat(db): контрибы pg_trgm и pageinspect в песочнице
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -206,7 +206,7 @@ export const SANDBOX_EXTENSIONS: { pg_trgm: Extension; pageinspect: Extension };
   git add src/features/db/sandbox.ts src/features/db/sandbox.apply-tx.test.ts
   git commit -m "fix(db): apply откатывает транзакцию, оставленную упавшим примером
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -347,7 +347,7 @@ export const SANDBOX_EXTENSIONS: { pg_trgm: Extension; pageinspect: Extension };
   git add content/datasets/big_bookstore.sql docs/datasets.md src/features/db/big-bookstore.test.ts
   git commit -m "feat(content): датасет big_bookstore на 100 тысяч строк
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -431,7 +431,7 @@ export function hiddenRowsLabel(t: TableInfo): string;   // 'ещё 99 995 ст�
   git add src/features/board docs/PROGRESS.md
   git commit -m "feat(board): сжатый вид таблиц больше 1000 строк
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -535,7 +535,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add src/features/tracer/srf.ts src/features/tracer/srf.test.ts src/features/tracer/types.ts src/features/tracer/whitelist.ts src/features/tracer/captions.ts src/features/tracer/select
   git commit -m "feat(tracer): стадия expand для unnest и jsonb-функций в FROM
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -622,7 +622,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add src/features/overlay/animators/expand.ts src/features/overlay/animators/expand.test.ts src/features/overlay/playback.ts src/features/tracer/captions.ts docs/PROGRESS.md
   git commit -m "feat(overlay): аниматор expand: массив взрывается в строки, документ раскрывается
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -793,7 +793,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/01-types-casting.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.1 «Типы и приведение»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -958,7 +958,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/02-numbers.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.2 «Числа»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1125,7 +1125,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/03-strings.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.3 «Строки»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1296,7 +1296,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/04-dates-time.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.4 «Дата и время»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1442,7 +1442,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/05-boolean.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.5 «boolean»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1494,7 +1494,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/06-enum.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.6 «enum»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1558,7 +1558,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/07-arrays.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.7 «Массивы»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1624,7 +1624,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/08-jsonb.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.8 «JSON и JSONB»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1678,7 +1678,7 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   git add content/lessons/05-types/09-uuid-pk.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 5.9 «UUID и выбор первичного ключа»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1756,7 +1756,7 @@ export async function viewDefinition(db: DbClient, viewId: string): Promise<stri
   git add src/features/db/views.ts src/features/db/views.test.ts src/features/db/introspect.ts src/features/board/model.ts src/features/board/layout.ts src/features/board/TableNode.tsx src/features/board/TableNode.view.test.tsx docs/PROGRESS.md
   git commit -m "feat(board): VIEW стеклянной рамкой и MATERIALIZED VIEW с отставанием
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1811,7 +1811,7 @@ export async function viewDefinition(db: DbClient, viewId: string): Promise<stri
   git add content/lessons/10-views/01-view.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 10.1 «VIEW»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1874,7 +1874,7 @@ export async function viewDefinition(db: DbClient, viewId: string): Promise<stri
   git add content/lessons/10-views/02-materialized-view.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 10.2 «MATERIALIZED VIEW и REFRESH»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -1990,7 +1990,7 @@ export async function runMvccScene(client: DbClient): Promise<MvccStep[]>;
   git add src/features/scenes/useStepper.ts src/features/scenes/MiniTable.tsx src/features/scenes/mvcc-scene.ts src/features/db/pageinspect.ts src/features/db/pageinspect.test.ts src/features/lessons/mdx/MvccPage.tsx src/features/lessons/mdx/components.ts tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(scenes): плеер шагов и MVCC-страница с классификацией версий
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2080,7 +2080,7 @@ export function visibleSnapshot(sc: Scenario, afterStep: number): string[]; // �
   git add src/features/sessions content/scenarios src/features/lessons/mdx/TwoSessionsBlock.tsx src/features/lessons/mdx/components.ts tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(sessions): срежиссированные сцены «две сессии»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2160,7 +2160,7 @@ export async function runScenarioOnPostgres(sc: Scenario, dsn: string): Promise<
   git add src/features/sessions/pg-runner.ts src/features/sessions/scenarios.pg.test.ts .github/workflows/sessions.yml package.json pnpm-lock.yaml docs/PROGRESS.md
   git commit -m "feat(sessions): CI-проверка сценариев на настоящем Postgres в Docker
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2224,7 +2224,7 @@ export async function runScenarioOnPostgres(sc: Scenario, dsn: string): Promise<
   git add content/lessons/11-transactions/01-transactions.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 11.1 «Транзакции»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2289,7 +2289,7 @@ export async function runScenarioOnPostgres(sc: Scenario, dsn: string): Promise<
   git add content/lessons/11-transactions/02-savepoint.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 11.2 «SAVEPOINT»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2340,7 +2340,7 @@ export async function runScenarioOnPostgres(sc: Scenario, dsn: string): Promise<
   git add content/lessons/11-transactions/03-mvcc.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 11.3 «MVCC»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2393,7 +2393,7 @@ export async function runScenarioOnPostgres(sc: Scenario, dsn: string): Promise<
   git add content/lessons/11-transactions/04-isolation.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 11.4 «Уровни изоляции»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2442,7 +2442,7 @@ export async function runScenarioOnPostgres(sc: Scenario, dsn: string): Promise<
   git add content/lessons/11-transactions/05-locks.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 11.5 «Блокировки и deadlock»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2542,7 +2542,7 @@ export function linkPlanToStages(plan: PlanNode, stages: Stage[]): Array<{ node:
   git add src/features/tracer/explain.ts src/features/tracer/explain.test.ts src/features/tracer/trace.ts src/features/results/ResultsPanel.tsx src/features/results/PlanTree.tsx src/stores/scene.ts src/features/timeline/Timeline.tsx docs/PROGRESS.md
   git commit -m "feat(results): вкладка «План» с деревом EXPLAIN и связью со стадиями
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2612,7 +2612,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add src/features/db/btree.ts src/features/db/btree.test.ts src/features/scenes/btree-layout.ts src/features/scenes/btree-layout.test.ts src/features/lessons/mdx/BTreeScene.tsx src/features/lessons/mdx/components.ts tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(scenes): B-дерево из pageinspect и счётчик прочитанных строк
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2679,7 +2679,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/01-btree-seq-vs-index.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.1 «B-tree, Seq Scan vs Index Scan»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2730,7 +2730,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/02-explain.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.2 «EXPLAIN и EXPLAIN ANALYZE»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2781,7 +2781,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/03-composite-indexes.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.3 «Составные индексы»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2835,7 +2835,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/04-index-variants.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.4 «Уникальный, частичный, по выражению, покрывающий»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2888,7 +2888,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/05-selectivity.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.5 «Селективность и статистика»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2949,7 +2949,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/06-index-types.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.6 «GIN, GiST, BRIN, Hash»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -2997,7 +2997,7 @@ export function buildBTreeLayout(idx: BTreeIndex, selectedLeaf: number | null): 
   git add content/lessons/12-indexes/07-index-maintenance.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 12.7 «Ненужные индексы и CONCURRENTLY»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3069,7 +3069,7 @@ export function buildSplitFrames(
   git add src/features/scenes/split.ts src/features/scenes/split.test.ts src/features/lessons/mdx/SplitScene.tsx src/features/lessons/mdx/components.ts tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(scenes): сцена нормализации: таблица раскалывается на две со связью
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3137,7 +3137,7 @@ export function buildSplitFrames(
   git add content/lessons/13-design/01-normalization.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 13.1 «Нормализация»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3197,7 +3197,7 @@ export function buildSplitFrames(
   git add content/lessons/13-design/02-denormalization.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 13.2 «Избыточность и денормализация»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3242,7 +3242,7 @@ export function buildSplitFrames(
   git add content/lessons/13-design/03-dont-do-this.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 13.3 «Don't Do This»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3306,7 +3306,7 @@ export function buildLexemeFrames(words: string[], lexemes: Lexeme[]): LexemeFra
   git add src/features/scenes/lexemes.ts src/features/scenes/lexemes.test.ts src/features/lessons/mdx/LexemeScene.tsx src/features/lessons/mdx/components.ts tests/content/lessons.test.ts
   git commit -m "feat(scenes): сцена лексем полнотекстового поиска
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3383,7 +3383,7 @@ export async function collectTriggerEffects(
   git add src/features/tracer/dml/trigger-effects.ts src/features/tracer/dml/trigger-effects.test.ts src/features/overlay/animators/side-effects.ts src/features/overlay/animators/side-effects.test.ts src/features/tracer/dml src/features/overlay/playback.ts
   git commit -m "feat(tracer): побочные эффекты триггеров в трассе и на сцене DML
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3453,7 +3453,7 @@ export async function collectRouting(
   git add src/features/tracer/dml/routing.ts src/features/tracer/dml/routing.test.ts src/features/tracer/dml src/features/overlay/animators/side-effects.ts docs/PROGRESS.md
   git commit -m "feat(tracer): маршрутизация строк INSERT по секциям партиций
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3515,7 +3515,7 @@ export async function collectRouting(
   git add content/lessons/14-extras/01-full-text-search.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 14.1 «Полнотекстовый поиск»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3580,7 +3580,7 @@ export async function collectRouting(
   git add content/lessons/14-extras/02-functions.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 14.2 «Функции и процедуры»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3643,7 +3643,7 @@ export async function collectRouting(
   git add content/lessons/14-extras/03-triggers.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 14.3 «Триггеры»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3698,7 +3698,7 @@ export async function collectRouting(
   git add content/lessons/14-extras/04-roles.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 14.4 «Роли и права»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3759,7 +3759,7 @@ export async function collectRouting(
   git add content/lessons/14-extras/05-partitioning.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 14.5 «Партиционирование»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3813,7 +3813,7 @@ export async function collectRouting(
   git add content/lessons/14-extras/06-sizes-catalogs.mdx tests/content/lessons.test.ts docs/PROGRESS.md
   git commit -m "feat(content): урок 14.6 «Размер БД и системные каталоги»
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
@@ -3838,7 +3838,7 @@ export async function collectRouting(
   git add docs/PROGRESS.md
   git commit -m "chore(phase): Ф11 закрыта: 37 уроков и 10 визуальных механизмов
 
-  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  "
   ```
 
 ---
