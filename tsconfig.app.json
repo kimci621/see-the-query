@@ -23,5 +23,5 @@
       "@content/*": ["./content/*"]
     }
   },
-  "include": ["src", "content"]
+  "include": ["src", "content", "tests/helpers"]
 }
