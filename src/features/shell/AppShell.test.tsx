@@ -1,8 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { routes } from '@/app/router';
 import { useLessonStore } from '@/stores/lesson';
+import { useSettingsStore } from '@/stores/settings';
+
+beforeEach(() => useSettingsStore.setState({ focusMode: false }));
 
 function renderAt(url: string) {
   const router = createMemoryRouter(routes, { initialEntries: [url] });
@@ -48,5 +51,15 @@ describe('AppShell', () => {
     for (const name of ['Доска', 'Таймлайн', 'Редактор', 'Результат']) {
       expect(await screen.findByRole('region', { name })).toBeInTheDocument();
     }
+  });
+
+  it('⌘\\ прячет теорию и возвращает её обратно', async () => {
+    renderAt('/l/how-to-use');
+    await screen.findByText(/Заглушка урока/);
+    // userEvent.keyboard не проставляет code: 'Backslash', поэтому keyDown вручную
+    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
+    expect(screen.queryByText(/Заглушка урока/)).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
+    expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
   });
 });
