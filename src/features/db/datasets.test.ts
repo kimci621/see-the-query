@@ -33,10 +33,16 @@ describe('датасет bookstore', () => {
   it('особые строки на месте', async () => {
     await withDataset('bookstore', async (db) => {
       expect(
-        await one(db, 'select a.name from author a left join book b using (author_id) where b.book_id is null'),
+        await one(
+          db,
+          'select a.name from author a left join book b using (author_id) where b.book_id is null',
+        ),
       ).toEqual([['Борис Пастернак']]);
       expect(
-        await one(db, 'select b.title from book b left join order_item oi using (book_id) where oi.order_id is null'),
+        await one(
+          db,
+          'select b.title from book b left join order_item oi using (book_id) where oi.order_id is null',
+        ),
       ).toEqual([['Остров погибших кораблей']]);
       expect(await one(db, 'select title from book where price is null')).toEqual([
         ['Остров погибших кораблей'],
