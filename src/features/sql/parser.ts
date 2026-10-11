@@ -4,10 +4,17 @@ import { byteToChar, charToByte } from './offsets';
 import type { ParsedStatement, ParseOutcome, StatementKind } from './types';
 
 let loadPromise: Promise<void> | null = null;
+let parserLoaded = false;
+
+export function isParserReady(): boolean {
+  return parserLoaded;
+}
 
 // Идемпотентная загрузка WASM-парсера: вызывать можно много раз
 export function initParser(): Promise<void> {
-  loadPromise ??= loadModule().then(() => undefined);
+  loadPromise ??= loadModule().then(() => {
+    parserLoaded = true;
+  });
   return loadPromise;
 }
 

@@ -1,10 +1,14 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useParams } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSandbox } from '@/features/db/SandboxProvider';
 import { getLesson } from '@/features/lessons/registry';
+import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
+import { useSceneStore } from '@/stores/scene';
 import './editor.css';
+import { useLiveTrace } from './useLiveTrace';
 
 // CodeMirror тяжёлый: грузим лениво, оболочка его не ждёт (спека 5.12)
 const SqlEditor = lazy(() => import('./SqlEditor').then((m) => ({ default: m.SqlEditor })));
@@ -13,6 +17,16 @@ export function EditorPane() {
   const { lessonId } = useParams();
   const meta = lessonId ? getLesson(lessonId) : undefined;
   const text = useEditorStore((s) => s.text);
+  const { sandbox } = useSandbox();
+  useLiveTrace(sandbox);
+
+  const trace = useSceneStore((s) => s.trace);
+  useEffect(() => {
+    if (!trace) return;
+    const board = useBoardStore.getState();
+    board.focus(trace.touched.tableIds);
+    board.highlightColumns(trace.touched.columns);
+  }, [trace]);
 
   // Открытие урока: initialQuery из мета или последний запрос ученика
   useEffect(() => {
