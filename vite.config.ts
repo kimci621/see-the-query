@@ -16,16 +16,22 @@ import { rehypeCodeMeta } from './src/features/lessons/mdx/rehype-code-meta.ts';
 function libpgQueryWasm(): Plugin {
   const require = createRequire(import.meta.url);
   const file = join(dirname(require.resolve('libpg-query')), 'libpg-query.wasm');
+  const wasmBuffer = readFileSync(file);
   return {
     name: 'libpg-query-wasm',
     configureServer(server) {
-      server.middlewares.use('/libpg-query.wasm', (_req, res) => {
-        res.setHeader('Content-Type', 'application/wasm');
-        res.end(readFileSync(file));
+      server.middlewares.use((req, res, next) => {
+        const path = req.url?.split('?')[0];
+        if (path && (path === '/libpg-query.wasm' || path.endsWith('/libpg-query.wasm'))) {
+          res.setHeader('Content-Type', 'application/wasm');
+          res.end(wasmBuffer);
+          return;
+        }
+        next();
       });
     },
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'libpg-query.wasm', source: readFileSync(file) });
+      this.emitFile({ type: 'asset', fileName: 'libpg-query.wasm', source: wasmBuffer });
     },
   };
 }

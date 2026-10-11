@@ -32,12 +32,6 @@ export function EditorPane() {
 
   const trace = useSceneStore((s) => s.trace);
 
-  // Фокус таблиц по трейсу
-  useEffect(() => {
-    if (!trace) return;
-    useBoardStore.getState().focus(trace.touched.tableIds);
-  }, [trace]);
-
   // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса
   useEffect(() => {
     const columns = hoveredColumn ? [hoveredColumn] : (trace?.touched.columns ?? []);
