@@ -5,7 +5,9 @@ import { keymap, type ViewUpdate } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { forwardRef, useMemo, useRef } from 'react';
 import { useResolvedTheme } from '@/app/ThemeProvider';
+import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
+import { buildSchemaSpec } from './completion';
 import { editorTheme } from './theme';
 
 export interface SqlEditorProps {
@@ -22,6 +24,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
   const text = useEditorStore((s) => s.text);
   const setText = useEditorStore((s) => s.setText);
   const setCursor = useEditorStore((s) => s.setCursor);
+  const schema = useBoardStore((s) => s.schema);
   const resolved = useResolvedTheme();
 
   // onApply меняется каждый рендер панели: замыкаем через ref, чтобы extensions не пересоздавались
@@ -30,7 +33,11 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
 
   const extensions = useMemo(
     () => [
-      sql({ dialect: PostgreSQL, upperCaseKeywords: false }),
+      sql({
+        dialect: PostgreSQL,
+        upperCaseKeywords: false,
+        schema: schema ? buildSchemaSpec(schema) : undefined,
+      }),
       linter(() => []),
       keymap.of([
         {
@@ -44,7 +51,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
       editorTheme(),
       ...extraExtensions,
     ],
-    [extraExtensions],
+    [schema, extraExtensions],
   );
 
   return (

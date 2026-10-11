@@ -14,7 +14,7 @@ export default mergeConfig(
             name: 'node',
             environment: 'node',
             include: [
-              'src/features/{db,sql,tracer,errors,overlay,board}/**/*.test.ts',
+              'src/features/{db,sql,tracer,errors,overlay,board,editor}/**/*.test.ts',
               'tests/tracer/**/*.test.ts',
               'plugins/**/*.test.ts',
               'tests/unit/**/*.test.ts',
