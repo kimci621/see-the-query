@@ -27,6 +27,8 @@ test('bookstore разложен без наложений, FK и рамка с�
   const book = page.getByTestId('table-node-public.book');
   await expect(book.getByTestId('row-count')).toHaveText('11');
   expect(await book.locator('[data-kind="null"]').count()).toBeGreaterThan(0);
+  await expect(page.getByTestId('pg-version')).toHaveText(/^PostgreSQL 18\.\d+ в браузере$/);
+  await expect(page.getByTestId('board-skeleton')).toHaveCount(0);
 });
 
 test('камера урока переживает перезагрузку, ⌘0 вписывает доску', async ({ page }) => {

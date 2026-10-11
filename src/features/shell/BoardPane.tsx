@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { BoardCanvas } from '@/features/board/BoardCanvas';
+import { BoardStatus } from '@/features/board/BoardStatus';
+import { useSandbox } from '@/features/db/SandboxProvider';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
@@ -14,9 +16,11 @@ const PANELS = [
 
 function BoardSlot() {
   useSchemaSync();
+  const { status, version } = useSandbox();
   return (
     <div className="relative h-full w-full">
       <BoardCanvas />
+      <BoardStatus status={status} version={version} />
     </div>
   );
 }
