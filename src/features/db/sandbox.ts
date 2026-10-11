@@ -89,6 +89,32 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     journal = kept;
   }
 
+  // Клиент умер (сторож или падение worker'а): поднимаем новый из снапшота + журнала
+  async function recover(e: DbException): Promise<void> {
+    if (!datasetId) return;
+    setStatus('restarting');
+    try {
+      await rebuild(datasetId, journal);
+    } catch (err) {
+      setStatus('failed');
+      throw err;
+    }
+    setStatus('ready');
+    emit({ type: 'restarted', reason: e.db.code === SANDBOX_TIMEOUT ? 'timeout' : 'crash' });
+    emit({ type: 'changed' });
+  }
+
+  function guarded<T>(fn: () => Promise<T>): Promise<T> {
+    return exclusive(async () => {
+      try {
+        return await fn();
+      } catch (e) {
+        if (isDeath(e)) await recover(e);
+        throw e;
+      }
+    });
+  }
+
   async function changeTo(entries: readonly string[]): Promise<void> {
     if (!datasetId) throw new Error('Урок не загружен');
     await rebuild(datasetId, entries);
@@ -131,7 +157,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       }),
 
     preview: (fn, signal) =>
-      exclusive(async () => {
+      guarded(async () => {
         signal?.throwIfAborted();
         const client = live();
         await client.query('begin');
@@ -150,14 +176,14 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       }),
 
     apply: (sql) =>
-      exclusive(async () => {
+      guarded(async () => {
         const res = await live().exec(sql);
         journal = [...journal, sql];
         emit({ type: 'changed' });
         return res;
       }),
 
-    undo: () => exclusive(() => (journal.length ? changeTo(journal.slice(0, -1)) : Promise.resolve())),
-    reset: () => exclusive(() => changeTo([])),
+    undo: () => guarded(() => (journal.length ? changeTo(journal.slice(0, -1)) : Promise.resolve())),
+    reset: () => guarded(() => changeTo([])),
   };
 }

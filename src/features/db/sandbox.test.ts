@@ -184,3 +184,39 @@ describe('sandbox: применить, отменить, сбросить', () =
     T,
   );
 });
+describe('sandbox: восстановление', () => {
+  it(
+    'после таймаута поднимается из снапшота и журнала',
+    async () => {
+      const { sandbox, events } = await bookstore();
+      await sandbox.apply('delete from review');
+      events.length = 0;
+      await expect(sandbox.preview((db) => db.query('select pg_sleep(10)'))).rejects.toMatchObject({
+        db: { code: SANDBOX_TIMEOUT },
+      });
+      expect(events).toEqual([
+        { type: 'status', status: 'restarting' },
+        { type: 'status', status: 'ready' },
+        { type: 'restarted', reason: 'timeout' },
+        { type: 'changed' },
+      ]);
+      expect(await count(sandbox.client(), 'review')).toBe(0);
+      expect(sandbox.journal()).toEqual(['delete from review']);
+    },
+    T,
+  );
+
+  it(
+    'после падения worker’а на apply журнал не меняется',
+    async () => {
+      const { sandbox, events } = await bookstore();
+      await expect(sandbox.apply('select 1 as __crash__')).rejects.toMatchObject({
+        db: { code: SANDBOX_CRASHED },
+      });
+      expect(events).toContainEqual({ type: 'restarted', reason: 'crash' });
+      expect(sandbox.journal()).toEqual([]);
+      expect(await count(sandbox.client(), 'book')).toBe(11);
+    },
+    T,
+  );
+});
