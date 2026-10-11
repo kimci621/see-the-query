@@ -86,6 +86,21 @@ describe('sandbox: загрузка урока', () => {
 
 describe('sandbox: превью', () => {
   it(
+    'превью INSERT не сдвигает identity',
+    async () => {
+      const { sandbox } = await bookstore();
+      for (let i = 0; i < 3; i++) {
+        await sandbox.preview((db) => db.query("insert into author (name) values ('X') returning author_id"));
+      }
+      const [res] = await sandbox.apply(
+        "insert into author (name) values ('Лев Толстой') returning author_id",
+      );
+      expect(Number(res.rows[0][0])).toBe(7);
+    },
+    T,
+  );
+
+  it(
     'изменения видны внутри и исчезают после',
     async () => {
       const { sandbox } = await bookstore();

@@ -33,6 +33,25 @@ async function xactId(db: DbClient): Promise<string | null> {
   }
 }
 
+// Последовательности не откатываются вместе с транзакцией: снимаем их до превью и возвращаем после
+const SEQ_STATE = 'select seqrelid::regclass::text, pg_sequence_last_value(seqrelid)::text from pg_sequence';
+
+async function sequenceState(db: DbClient): Promise<Map<string, string | null>> {
+  const { rows } = await db.query(SEQ_STATE);
+  return new Map(rows.map((r) => [String(r[0]), r[1] === null ? null : String(r[1])]));
+}
+
+// ponytail: setval(seq, 1, false) предполагает START WITH 1; при нужде читать seqstart из pg_sequence
+async function restoreSequences(db: DbClient, before: Map<string, string | null>): Promise<void> {
+  const after = await sequenceState(db);
+  for (const [seq, value] of before) {
+    if (after.get(seq) === value) continue;
+    // null: последовательность ещё ни разу не выдавала значение
+    if (value === null) await db.query('select setval($1::regclass, 1, false)', [seq]);
+    else await db.query('select setval($1::regclass, $2::bigint, true)', [seq, value]);
+  }
+}
+
 export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): Sandbox {
   const snapshots = new Map<DatasetId, Blob>();
   const listeners = new Set<(e: SandboxEvent) => void>();
@@ -160,6 +179,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       guarded(async () => {
         signal?.throwIfAborted();
         const client = live();
+        const sequences = await sequenceState(client);
         await client.query('begin');
         const started = await xactId(client);
         const outcome = await fn(client).then(
@@ -169,6 +189,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
         if (!outcome.ok && isDeath(outcome.error)) throw outcome.error;
         const now = await xactId(client);
         await client.query('rollback');
+        await restoreSequences(client, sequences);
         // внутри превью выполнился COMMIT: база изменилась, возвращаем состояние журнала
         if (now !== null && now !== started) await changeTo(journal);
         if (!outcome.ok) throw outcome.error;
