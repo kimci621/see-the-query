@@ -3,15 +3,17 @@ import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import type { QueryResult } from '@/features/db/types';
 import { clauseRanges } from '@/features/sql/clauses';
 import type { ClauseName, ParsedStatement } from '@/features/sql/types';
-import { ident, type Prober, sqlOf, typeNames } from '../probe';
+import { ident, type Prober, sqlOf, TraceFallback, typeNames } from '../probe';
 import { rowKeyOf } from '../rowkey';
 import type { Column, Row, RowKey, SourceRange, Stage } from '../types';
 import { canon, rowCanon } from '../verify';
+import { hasVolatile } from '../whitelist';
 import { alignWindow } from './align';
 
 export interface Output {
   columns: Column[]; // выходные колонки запроса
   kinds: Array<{ kind: 'kept' | 'renamed' | 'computed'; column: string | null; expr: Node | null }>;
+  stable: boolean[]; // false у volatile-колонки: её значения в пробе и в эталоне разные
 }
 
 // Упорядоченная проекция P: одна проба даёт значения SELECT, порядок ORDER BY и значения ключей
@@ -125,6 +127,9 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
       kinds.push({ kind: 'kept', column, expr: rt.val ?? null });
     else kinds.push({ kind: 'computed', column: null, expr: rt.val ?? null });
   }
+  // (t).* и подобное раскрываются в несколько колонок, сопоставить их с целями списка нельзя
+  if (kinds.length !== probe.fields.length)
+    throw new TraceFallback('Пока не анимируется: такой список SELECT');
   const columns = probe.fields.map((f, i): Column => {
     const k = kinds[i];
     if (k.column && f.name !== k.column) k.kind = 'renamed';
@@ -134,7 +139,7 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
       ...(k.column ? { source: { alias: ctx.alias, column: k.column } } : {}),
     };
   });
-  return { columns, kinds };
+  return { columns, kinds, stable: kinds.map((k) => !hasVolatile(k.expr)) };
 }
 
 // Ключ ORDER BY / DISTINCT ON → индекс выходной колонки (номер или имя выхода) или null (выражение над входом)
@@ -171,6 +176,7 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
     if (idx !== null) {
       orderParts.push(`${idx + 1}${dir}${nulls}`);
       tupleIdx.push(idx);
+      if (!out.stable[idx]) leading = false;
       if (leading) orderKeys.push(idx);
     } else {
       // Выражение считается один раз в той же пробе: random() даёт согласованный порядок
@@ -191,6 +197,9 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
   const tuple = new Map<RowKey, string>();
   for (const row of r.rows) {
     const key = keyOf(ctx, row[n] as string);
+    // Повтор ctid: функция в SELECT размножила строку, lineage неоднозначен
+    if (values.has(key))
+      throw new TraceFallback('Пока не анимируется: функция, возвращающая несколько строк');
     order.push(key);
     values.set(key, row.slice(0, n));
     tuple.set(key, tupleIdx.map((i) => canon(row[i])).join('\u0002'));
@@ -231,16 +240,21 @@ export async function windowOf(ctx: SelectCtx, keys: RowKey[]): Promise<{ from: 
   return { from, to };
 }
 
+// Канон строки без volatile-колонок: сверка и выравнивание только по тому, что совпадает с эталоном
+export function stableCanon(out: Output): (values: unknown[]) => string {
+  return (values) => rowCanon(values.filter((_, i) => out.stable[i]));
+}
+
 // Равные по ключам строки на границе окна выбираем так же, как выбрал Postgres в эталоне
 export async function alignToReference(ctx: SelectCtx, keys: RowKey[]): Promise<RowKey[]> {
-  if (ctx.volatile) return keys;
   const ordered = await ctx.ordered();
+  const canonOf = stableCanon(await ctx.outputs());
   const { from, to } = await windowOf(ctx, keys);
   return alignWindow(
     keys,
     (k) => (ctx.sel.sortClause ? (ordered.tuple.get(k) ?? '') : ''),
-    (k) => rowCanon(ordered.values.get(k) ?? []),
-    ctx.reference.rows.map(rowCanon),
+    (k) => canonOf(ordered.values.get(k) ?? []),
+    ctx.reference.rows.map(canonOf),
     from,
     to,
   );

@@ -1,10 +1,10 @@
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
-import { createProber, ProbeOverflow, typeNames } from './probe';
+import { createProber, ProbeOverflow, TraceFallback, typeNames } from './probe';
 import { resultKey } from './rowkey';
 import { runCompressed } from './select/compressed';
-import { createSelectCtx, rangeOf } from './select/context';
+import { createSelectCtx, rangeOf, stableCanon } from './select/context';
 import { runSelect } from './select/pipeline';
 import type { Stage, Trace, TraceOptions } from './types';
 import { sameResult } from './verify';
@@ -110,27 +110,33 @@ export async function traceStatement(
 
   const args = { stmt, sel, prober, reference, volatile, table, schema: opts.schema };
   let ctx = createSelectCtx(args);
+  let compressed = false;
   try {
-    await runSelect(ctx);
-  } catch (e) {
-    if (e instanceof ProbeOverflow) {
+    try {
+      await runSelect(ctx);
+    } catch (e) {
+      if (!(e instanceof ProbeOverflow)) throw e;
       ctx = createSelectCtx(args);
+      compressed = true;
       await runCompressed(ctx);
-      const ok = ctx.stages.at(-1)?.rowCount === reference.rows.length;
-      return ok
-        ? finish({ mode: 'full', stages: ctx.stages, result: reference, error: null })
-        : finalOnly('Сверка с прямым выполнением не сошлась');
     }
+  } catch (e) {
+    if (e instanceof TraceFallback) return finalOnly(e.message);
     if (!(e instanceof DbException)) throw e;
     return finalOnly(`Проба не удалась: ${e.db.message}`);
   }
+  if (compressed) {
+    const ok = ctx.stages.at(-1)?.rowCount === reference.rows.length;
+    return ok
+      ? finish({ mode: 'full', stages: ctx.stages, result: reference, error: null })
+      : finalOnly('Сверка с прямым выполнением не сошлась');
+  }
 
-  // Принцип честности: финальная стадия обязана совпасть с прямым выполнением
+  // Принцип честности: финальная стадия обязана совпасть с прямым выполнением.
+  // Volatile-колонки в сверку не входят: проба P и эталон считают их по-разному
   const last = ctx.stages[ctx.stages.length - 1];
   const orderKeys = ctx.sel.sortClause ? (await ctx.ordered()).orderKeys : null;
-  const ok = volatile
-    ? last.output.rows.length === reference.rows.length // значения volatile пересчитаны, сверяем число строк
-    : sameResult(last.output, reference, orderKeys);
+  const ok = sameResult(last.output, reference, orderKeys, stableCanon(await ctx.outputs()));
   if (!ok) {
     if (import.meta.env?.DEV) console.warn('[tracer] сверка не сошлась', stmt.text);
     return finalOnly('Сверка с прямым выполнением не сошлась');

@@ -4,7 +4,8 @@ import type { Relation } from './types';
 // Каноническая строка значения: одинаковые значения дают одинаковую строку при любом пути получения
 export function canon(value: unknown): string {
   if (value === null || value === undefined) return 'null';
-  if (value instanceof Date) return `d:${value.toISOString()}`;
+  // ponytail: infinity и даты до н. э. PGlite отдаёт как Invalid Date, различить их по значению нельзя
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'd:invalid' : `d:${value.toISOString()}`;
   if (typeof value === 'object') return `j:${JSON.stringify(value)}`;
   return `${typeof value}:${String(value)}`;
 }
@@ -18,9 +19,10 @@ export function sameResult(
   stageOutput: Relation,
   reference: QueryResult,
   orderKeys: number[] | null,
+  canonOf: (values: unknown[]) => string = rowCanon,
 ): boolean {
-  const ours = stageOutput.rows.map((r) => rowCanon(r.values));
-  const theirs = reference.rows.map(rowCanon);
+  const ours = stageOutput.rows.map((r) => canonOf(r.values));
+  const theirs = reference.rows.map(canonOf);
   if (ours.length !== theirs.length) return false;
   const a = [...ours].sort();
   const b = [...theirs].sort();

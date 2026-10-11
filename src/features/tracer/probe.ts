@@ -12,6 +12,9 @@ export class ProbeOverflow extends Error {
   }
 }
 
+// Трасса не может быть честной: уходим в final-only с этой причиной
+export class TraceFallback extends Error {}
+
 export interface Prober {
   maxRows: number;
   run(sql: string): Promise<QueryResult>; // проба как есть (агрегаты, счётчики)

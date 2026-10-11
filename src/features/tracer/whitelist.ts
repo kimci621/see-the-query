@@ -66,6 +66,7 @@ export type Feature =
   | 'limit'
   | 'volatile'
   | 'volatile-other'
+  | 'volatile-order-limit'
   | 'join'
   | 'subquery'
   | 'function-from'
@@ -104,6 +105,7 @@ const FEATURE_LABELS: Record<Feature, string> = {
   limit: 'LIMIT',
   volatile: 'volatile-функции',
   'volatile-other': 'volatile-функция в WHERE, DISTINCT или LIMIT',
+  'volatile-order-limit': 'volatile-функция в ORDER BY вместе с LIMIT или OFFSET',
   join: 'JOIN',
   subquery: 'подзапрос',
   'function-from': 'функция в FROM',
@@ -150,7 +152,7 @@ export function funcName(fc: FuncCall): string {
   return last && 'String' in last ? (last.String.sval ?? '') : '';
 }
 
-function hasVolatile(node: unknown): boolean {
+export function hasVolatile(node: unknown): boolean {
   let found = false;
   walk(node, (key, value) => {
     if (key === 'FuncCall' && VOLATILE.has(funcName(value as FuncCall))) found = true;
@@ -201,7 +203,24 @@ export function selectFeatures(sel: SelectStmt): Set<Feature> {
   if (hasVolatile([sel.whereClause, sel.distinctClause, sel.limitCount, sel.limitOffset]))
     f.add('volatile-other');
   if (f.has('volatile') && (f.has('distinct') || f.has('distinct-on'))) f.add('volatile-other');
+  // Окно над случайным порядком выбирает другие строки, чем эталон
+  if (f.has('limit') && volatileSort(sel)) f.add('volatile-order-limit');
   return f;
+}
+
+// Ключ ORDER BY volatile сам или ссылается на volatile-колонку выхода по имени или номеру
+function volatileSort(sel: SelectStmt): boolean {
+  const targets = (sel.targetList ?? []).map((n) => ('ResTarget' in n ? n.ResTarget : {}));
+  return (sel.sortClause ?? []).some((n) => {
+    const key = 'SortBy' in n ? n.SortBy.node : undefined;
+    if (!key) return false;
+    if (hasVolatile(key)) return true;
+    if ('A_Const' in key && key.A_Const.ival)
+      return hasVolatile(targets[(key.A_Const.ival.ival ?? 0) - 1]?.val);
+    const fields = 'ColumnRef' in key ? key.ColumnRef.fields : undefined;
+    const name = fields?.length === 1 && 'String' in fields[0] ? fields[0].String.sval : undefined;
+    return name !== undefined && targets.some((t) => t.name === name && hasVolatile(t.val));
+  });
 }
 
 // null = оператор трассируется полностью

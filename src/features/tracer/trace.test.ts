@@ -49,17 +49,62 @@ describe('traceStatement', () => {
   it('volatile: одно вычисление на все стадии, метка volatile', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
-        const trace = await traceSql(db, 'select title, random() as r from book order by r limit 3');
+        const trace = await traceSql(db, 'select title, random() as r from book order by r');
         expect(trace.mode).toBe('full');
         expect(trace.stages.map((s) => `${s.kind}:${s.volatile ?? false}`)).toEqual([
           'scan:false',
           'project:true',
           'sort:true',
-          'limit:true',
         ]);
         const r = column(stageOf(trace, 'sort'), 'r') as number[];
         expect([...r].sort((a, b) => a - b)).toEqual(r);
-        expect(column(stageOf(trace, 'limit'), 'r')).toEqual(r.slice(0, 3));
+      }),
+    ));
+  it('volatile в ORDER BY с LIMIT: строки окна случайны, только final-only', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        for (const sql of [
+          'select title from book order by random() limit 3',
+          'select title, random() as r from book order by r limit 3',
+          'select title, random() as r from book order by 2 offset 1',
+        ])
+          expect((await traceSql(db, sql)).mode, sql).toBe('final-only');
+      }),
+    ));
+  it('volatile в SELECT и ничья на границе OFFSET: строки окна те, что вернул Postgres', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select title, random() from book order by price limit 4 offset 1');
+        expect(trace.mode).toBe('full');
+        expect(column(stageOf(trace, 'limit'), 'title')).toEqual((trace.result?.rows ?? []).map((r) => r[0]));
+      }),
+    ));
+  it('ошибка пробы в сжатом режиме → final-only, а не исключение', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select * from book where 1/(price - 610) > 0 limit 1', {
+          maxRows: 3,
+        });
+        expect(trace.mode).toBe('final-only');
+        expect(trace.fallbackReason).toMatch(/^Проба не удалась/);
+      }),
+    ));
+  it('infinity в дате не ломает сверку', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          "select title, 'infinity'::timestamptz as t from book order by title",
+        );
+        expect(trace.mode).toBe('full');
+      }),
+    ));
+  it('(t).* и функция, возвращающая множество → final-only, а не исключение', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        expect((await traceSql(db, 'select (book).* from book')).mode).toBe('final-only');
+        const srf = await traceSql(db, 'select title, unnest(array[1,1]) as x from book order by title');
+        expect(srf.mode).toBe('final-only');
       }),
     ));
   it('больше maxRows строк → сжатый режим с точными счётчиками', () =>

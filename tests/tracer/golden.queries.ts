@@ -49,10 +49,7 @@ export const GOLDEN: Array<{ sql: string; stages: string }> = [
   { sql: 'select distinct name from customer', stages: 'scan:6 > project:6 > distinct:5' },
   { sql: 'select 2 + 2 as answer', stages: 'project:1' },
   { sql: 'select title, random() as r from book', stages: 'scan:11 > project:11' },
-  {
-    sql: 'select title from book order by random() limit 1',
-    stages: 'scan:11 > project:11 > sort:11 > limit:1',
-  },
+  { sql: 'select title from book order by random()', stages: 'scan:11 > project:11 > sort:11' },
   {
     sql: "select title, upper(title), length(title) from book where title ilike '%python%'",
     stages: 'scan:11 > filter:3 > project:3',
