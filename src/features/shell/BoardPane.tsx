@@ -1,5 +1,11 @@
+import type { ReactNode } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { EditorPane } from '@/features/editor/EditorPane';
 import { useSettingsStore } from '@/stores/settings';
+
+const SLOTS: Partial<Record<string, ReactNode>> = {
+  editor: <EditorPane />,
+};
 
 // Заглушки панелей правой колонки; содержимое появится в Ф3, Ф4, Ф6
 const PANELS = [
@@ -46,9 +52,13 @@ function PanelSlot(props: {
       <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={`${props.minSize}%`}>
         <section
           aria-label={props.title}
-          className="flex h-full items-center justify-center text-sm text-muted-foreground"
+          className={
+            SLOTS[props.id]
+              ? 'h-full w-full min-h-0'
+              : 'flex h-full items-center justify-center text-sm text-muted-foreground'
+          }
         >
-          {props.hint}
+          {SLOTS[props.id] ?? props.hint}
         </section>
       </ResizablePanel>
       {!props.last && <ResizableHandle />}

@@ -1,0 +1,27 @@
+/* Переменные редактора: светлые по умолчанию, тёмные под .dark (класс на html из ThemeProvider) */
+.editor-pane {
+  --editor-bg: var(--background);
+  --editor-fg: var(--foreground);
+  --editor-muted: var(--muted-foreground);
+}
+
+.editor-pane .tok-keyword {
+  color: var(--primary);
+  font-weight: 600;
+}
+.editor-pane .tok-string {
+  color: color-mix(in oklab, var(--chart-2, var(--primary)) 70%, var(--foreground));
+}
+.editor-pane .tok-number {
+  color: color-mix(in oklab, var(--chart-1, var(--primary)) 70%, var(--foreground));
+}
+.editor-pane .tok-comment {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.editor-pane .tok-identifier {
+  color: var(--foreground);
+}
+.editor-pane .tok-operator {
+  color: var(--muted-foreground);
+}
