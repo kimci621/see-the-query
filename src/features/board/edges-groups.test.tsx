@@ -33,7 +33,7 @@ describe('FkEdge', () => {
   it('ребро с маркерами «один» и «много» и тултипом', () => {
     const { container } = render(
       <ReactFlowProvider>
-        <svg>
+        <svg aria-hidden="true">
           <FkEdge {...edgeProps('public.book', 'shop.cart')} />
         </svg>
       </ReactFlowProvider>,

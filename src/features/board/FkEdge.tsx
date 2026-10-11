@@ -19,20 +19,18 @@ export function selfLoopPath(sx: number, sy: number, tx: number, ty: number): st
 
 export const FkEdge = memo(function FkEdge(props: EdgeProps<FkFlowEdge>) {
   const { source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props;
-  const [path] =
+  const path =
     source === target
-      ? [selfLoopPath(sourceX, sourceY, targetX, targetY)]
-      : [
-          getSmoothStepPath({
-            sourceX,
-            sourceY,
-            targetX,
-            targetY,
-            sourcePosition,
-            targetPosition,
-            borderRadius: 12,
-          }),
-        ];
+      ? selfLoopPath(sourceX, sourceY, targetX, targetY)
+      : getSmoothStepPath({
+          sourceX,
+          sourceY,
+          targetX,
+          targetY,
+          sourcePosition,
+          targetPosition,
+          borderRadius: 12,
+        })[0];
   return (
     <g className="vs-fk">
       {data && <title>{fkTitle(data.fk)}</title>}
