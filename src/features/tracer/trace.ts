@@ -88,6 +88,7 @@ export async function traceStatement(
       removed: [],
       computed: columns.map((c) => c.name),
       renamed: {},
+      volatile: volatile || undefined,
       sourceRange: rangeOf(stmt, 'select'),
       caption: captions.projectNoFrom(reference.rows.length),
       output: {
@@ -118,7 +119,9 @@ export async function traceStatement(
   // Принцип честности: финальная стадия обязана совпасть с прямым выполнением
   const last = ctx.stages[ctx.stages.length - 1];
   const orderKeys = ctx.sel.sortClause ? (await ctx.ordered()).orderKeys : null;
-  const ok = sameResult(last.output, reference, orderKeys);
+  const ok = volatile
+    ? last.output.rows.length === reference.rows.length // значения volatile пересчитаны, сверяем число строк
+    : sameResult(last.output, reference, orderKeys);
   if (!ok) {
     if (import.meta.env?.DEV) console.warn('[tracer] сверка не сошлась', stmt.text);
     return finalOnly('Сверка с прямым выполнением не сошлась');

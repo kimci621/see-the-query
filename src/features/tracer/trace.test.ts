@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { introspect } from '@/features/db/introspect';
 import { inPreview, withDataset } from '../../../tests/helpers/db';
-import { stageOf, traceSql } from '../../../tests/helpers/trace';
+import { column, stageOf, traceSql } from '../../../tests/helpers/trace';
 
 describe('traceStatement', () => {
   it('ошибка Postgres → стадия error с фокусом на таблице', () =>
@@ -44,6 +44,22 @@ describe('traceStatement', () => {
           fallbackReason: 'Пока не анимируется: представление',
         });
         expect(trace.result?.rows).toHaveLength(3);
+      }),
+    ));
+  it('volatile: одно вычисление на все стадии, метка volatile', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select title, random() as r from book order by r limit 3');
+        expect(trace.mode).toBe('full');
+        expect(trace.stages.map((s) => `${s.kind}:${s.volatile ?? false}`)).toEqual([
+          'scan:false',
+          'project:true',
+          'sort:true',
+          'limit:true',
+        ]);
+        const r = column(stageOf(trace, 'sort'), 'r') as number[];
+        expect([...r].sort((a, b) => a - b)).toEqual(r);
+        expect(column(stageOf(trace, 'limit'), 'r')).toEqual(r.slice(0, 3));
       }),
     ));
   it('отменённый signal прерывает трассу', () =>

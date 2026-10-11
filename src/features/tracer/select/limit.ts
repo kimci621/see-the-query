@@ -24,6 +24,7 @@ export const limitStep: SelectStep = {
       cut: keys.filter((k) => !keptSet.has(k)),
       limit,
       offset,
+      volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'limit', 'offset'),
       caption: captions.limit(limitLabel(limit, offset, withTies), before, ctx.rows.length),
       output: { columns: ctx.columns, rows: ctx.rows },

@@ -34,6 +34,7 @@ export const projectStep: SelectStep = {
       id: stageId(ctx, 'project'),
       kind: 'project',
       ...p,
+      volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'select'),
       caption: captions.project(
         p.kept.length + Object.keys(p.renamed).length,

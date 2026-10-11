@@ -18,6 +18,7 @@ export const sortStep: SelectStep = {
       kind: 'sort',
       order,
       sortKeys: ordered.sortKeys,
+      volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'order'),
       caption: captions.sort(ordered.sortKeys, ctx.rows.length),
       output: { columns: ctx.columns, rows: ctx.rows },
