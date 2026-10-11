@@ -23,20 +23,27 @@ const RESULT: QueryResult = {
 
 type PreviewFn = (db: { query: (sql: string) => Promise<QueryResult> }) => Promise<unknown>;
 
-function fakeSandbox(opts: { result?: QueryResult; error?: DbException; calls?: string[] }): Sandbox {
+function fakeSandbox(opts: {
+  result?: QueryResult;
+  error?: DbException;
+  calls?: string[];
+  previews?: { n: number };
+}): Sandbox {
   return {
     status: 'ready',
     datasetId: 'bookstore',
     client: vi.fn(),
     loadLesson: vi.fn(),
-    preview: (async (fn: PreviewFn) =>
-      fn({
+    preview: (async (fn: PreviewFn) => {
+      if (opts.previews) opts.previews.n += 1;
+      return fn({
         query: async (sql: string) => {
           opts.calls?.push(sql);
           if (opts.error) throw opts.error;
           return RESULT;
         },
-      })) as Sandbox['preview'],
+      });
+    }) as Sandbox['preview'],
     apply: vi.fn(),
     undo: vi.fn(),
     reset: vi.fn(),
@@ -109,6 +116,21 @@ describe('useLiveTrace', () => {
     expect(s.trace?.result).toEqual(RESULT);
     expect(s.trace?.touched.tableIds).toEqual(['public.book']);
     expect(s.trace?.fallbackReason).toBe('Пошаговый разбор недоступен');
+  });
+
+  it('сбой трассировщика: итог в отдельном превью, оператор не выполняется второй раз в той же транзакции', async () => {
+    traceStatement.mockRejectedValue(new TypeError('bug'));
+    const previews = { n: 0 };
+    const sandbox = fakeSandbox({ previews });
+    useBoardStore.getState().setSchema(SCHEMA);
+    useEditorStore.getState().setText('select title from book');
+
+    renderHook(() => useLiveTrace(sandbox));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(previews.n).toBe(2);
+    expect(useSceneStore.getState().trace?.result).toEqual(RESULT);
   });
 
   it('новый ввод отменяет невыполненное превью старого поколения', async () => {

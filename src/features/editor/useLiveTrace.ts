@@ -91,18 +91,20 @@ async function runPreview(
     notices: [],
   };
   try {
-    const out = await sandbox.preview(async (db): Promise<Trace | Awaited<ReturnType<typeof db.query>>> => {
-      if (schema) {
-        try {
-          return await traceStatement(stmt, db, { schema });
-        } catch (e) {
-          // Ошибку базы показываем как есть, баг трассировщика не должен прятать итог
-          if (e instanceof DbException) throw e;
-          if (import.meta.env.DEV) console.error('[tracer]', e);
-        }
-      }
-      return db.query(stmt.text);
-    });
+    const traced = schema
+      ? await sandbox.preview(async (db): Promise<Trace | null> => {
+          try {
+            return await traceStatement(stmt, db, { schema });
+          } catch (e) {
+            // Ошибку базы показываем как есть, баг трассировщика не должен прятать итог
+            if (e instanceof DbException) throw e;
+            if (import.meta.env.DEV) console.error('[tracer]', e);
+            return null;
+          }
+        })
+      : null;
+    // Итог без трассы: отдельное превью, в транзакции трассировщика оператор уже выполнялся
+    const out = traced ?? (await sandbox.preview((db) => db.query(stmt.text)));
     // Подсветку колонок по-прежнему считает редактор
     if ('stages' in out) {
       useSceneStore.getState().setTrace({ ...out, touched: base.touched }, generation);

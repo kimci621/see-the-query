@@ -15,7 +15,8 @@ export function useBoardHotkeys(ref: RefObject<HTMLElement | null>): void {
     const el = ref.current;
     if (!el) return;
     const onKey = (e: KeyboardEvent) => {
-      if (isEditable(e.target)) return;
+      // Только сама доска: автоповтор (Space зажат для пана) и клавиши на кнопках внутри не трогают плеер
+      if (e.repeat || e.target !== e.currentTarget || isEditable(e.target)) return;
       const scene = useSceneStore.getState();
       if (e.key === ' ') {
         e.preventDefault();
@@ -27,8 +28,8 @@ export function useBoardHotkeys(ref: RefObject<HTMLElement | null>): void {
         e.preventDefault();
         scene.step(1);
       } else if (e.key === 'Escape') {
-        // Закрываем только сцену: призраки уходят, итог запроса остаётся
-        scene.setPlayback(null);
+        // Прячем только сцену: призраки растворяются, итог запроса остаётся, плеер её вернёт
+        scene.hide();
       }
     };
     el.addEventListener('keydown', onKey);

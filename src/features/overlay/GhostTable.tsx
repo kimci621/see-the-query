@@ -14,6 +14,9 @@ import {
 } from './geometry';
 import type { GhostColumn, GhostRow, GhostTable } from './types';
 
+// Прозрачность строки по состоянию: через animate, иначе inline opacity motion перебьёт CSS
+const STATE_OPACITY: Partial<Record<GhostRow['state'], number>> = { cut: 0.35, unknown: 0.8 };
+
 // Иконка состояния: цвет не единственный сигнал
 const STATE_ICON: Partial<Record<GhostRow['state'], { icon: string; label: string }>> = {
   kept: { icon: '✓', label: 'прошла' },
@@ -50,7 +53,7 @@ const GhostRowView = memo(function GhostRowView({
           : {}),
       }}
       initial={{ opacity: 0, y: rowTop(index) }}
-      animate={{ opacity: 1, y: rowTop(index) }}
+      animate={{ opacity: STATE_OPACITY[row.state] ?? 1, y: rowTop(index) }}
       exit={{ opacity: 0, y: rowTop(index) + ROW_H / 2 }}
     >
       {columns.map((c, ci) => {

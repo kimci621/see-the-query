@@ -9,6 +9,7 @@ export interface SceneStore {
   status: 'idle' | 'tracing' | 'ready' | 'error';
   stale: boolean; // ввод невалиден, сцена погашена
   playback: Playback | null;
+  hidden: boolean; // сцена спрятана (Esc, сбой рендера): трасса и проигрывание остаются, плеер её вернёт
   phaseIndex: number;
   playing: boolean;
   instant: boolean; // следующий кадр без анимации: скраб, шаг назад, новая сцена
@@ -21,6 +22,7 @@ export interface SceneStore {
   setStatus(s: SceneStore['status']): void;
   setStale(v: boolean): void;
   setPlayback(p: Playback | null): void;
+  hide(): void;
   seek(phaseIndex: number): void;
   advance(): void;
   play(): void;
@@ -43,6 +45,7 @@ export const useSceneStore = create<SceneStore>()(
       status: 'idle',
       stale: false,
       playback: null,
+      hidden: false,
       phaseIndex: 0,
       playing: false,
       instant: true,
@@ -64,15 +67,24 @@ export const useSceneStore = create<SceneStore>()(
       setStale: (stale) => set({ stale }),
       setPlayback: (playback) => {
         if (!playback || playback.phases.length === 0)
-          set({ playback, phaseIndex: 0, playing: false, autoRun: false, instant: true });
+          set({ playback, hidden: false, phaseIndex: 0, playing: false, autoRun: false, instant: true });
         else if (get().autoplay)
-          set({ playback, phaseIndex: 0, playing: true, autoRun: true, instant: true });
+          set({ playback, hidden: false, phaseIndex: 0, playing: true, autoRun: true, instant: true });
         else
-          set({ playback, phaseIndex: lastIndex(playback), playing: false, autoRun: false, instant: true });
+          set({
+            playback,
+            hidden: false,
+            phaseIndex: lastIndex(playback),
+            playing: false,
+            autoRun: false,
+            instant: true,
+          });
       },
+      hide: () => set({ hidden: true, playing: false, autoRun: false }),
       seek: (index) =>
         set({
           phaseIndex: Math.min(Math.max(0, index), lastIndex(get().playback)),
+          hidden: false,
           instant: true,
           playing: false,
           autoRun: false,
@@ -87,8 +99,8 @@ export const useSceneStore = create<SceneStore>()(
         if (!playback || playback.phases.length === 0) return;
         // С последней фазы играем сначала
         if (phaseIndex >= lastIndex(playback))
-          set({ phaseIndex: 0, instant: true, playing: true, autoRun: false });
-        else set({ playing: true, autoRun: false });
+          set({ phaseIndex: 0, hidden: false, instant: true, playing: true, autoRun: false });
+        else set({ hidden: false, playing: true, autoRun: false });
       },
       pause: () => set({ playing: false, autoRun: false }),
       toggle: () => (get().playing ? get().pause() : get().play()),
@@ -96,6 +108,7 @@ export const useSceneStore = create<SceneStore>()(
       step: (delta) =>
         set({
           phaseIndex: Math.min(Math.max(0, get().phaseIndex + delta), lastIndex(get().playback)),
+          hidden: false,
           instant: delta < 0,
           playing: false,
           autoRun: false,
@@ -107,6 +120,7 @@ export const useSceneStore = create<SceneStore>()(
         set({
           trace: null,
           playback: null,
+          hidden: false,
           status: 'idle',
           stale: false,
           phaseIndex: 0,

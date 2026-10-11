@@ -162,4 +162,23 @@ describe('useSceneStore', () => {
     expect(st.playing).toBe(false);
     expect(st.status).toBe('idle');
   });
+
+  it('hide прячет сцену, но трасса и проигрывание остаются; play и seek возвращают', () => {
+    const s = useSceneStore.getState();
+    s.setTrace(trace('select 1'), s.nextGeneration());
+    useSceneStore.getState().setPlayback(playback(3));
+    useSceneStore.getState().hide();
+    let st = useSceneStore.getState();
+    expect(st.hidden).toBe(true);
+    expect(st.playing).toBe(false);
+    expect(st.trace).not.toBeNull();
+    expect(st.playback?.phases).toHaveLength(3);
+    st.play();
+    expect(useSceneStore.getState().hidden).toBe(false);
+    st.hide();
+    st.seek(1);
+    st = useSceneStore.getState();
+    expect(st.hidden).toBe(false);
+    expect(st.phaseIndex).toBe(1);
+  });
 });

@@ -68,6 +68,28 @@ test('Esc на доске закрывает сцену и снимает при
   await expect(page.getByTestId('ghost-table').first()).toBeVisible({ timeout: 10_000 });
   await page.getByTestId('board-area').focus();
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('overlay')).toHaveCount(0);
+  // призраки растворяются, слой остаётся пустым
+  await expect(page.getByTestId('ghost-table')).toHaveCount(0);
   await expect(page.getByTestId('board-canvas')).not.toHaveAttribute('data-dimmed');
+});
+
+test('при открытии урока сцена спрятана, доска не гаснет; плеер её возвращает', async ({ page }) => {
+  await openBoard(page);
+  await expect(page.getByTestId('stage-chip').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('board-canvas')).not.toHaveAttribute('data-dimmed');
+  await expect(page.getByTestId('ghost-table')).toHaveCount(0);
+  await page.getByTestId('player-toggle').click();
+  await expect(page.getByTestId('ghost-table').first()).toBeVisible();
+  await expect(page.getByTestId('board-canvas')).toHaveAttribute('data-dimmed', 'true');
+});
+
+test('после Esc клик по чипу снова показывает сцену', async ({ page }) => {
+  await openBoard(page);
+  await typeQuery(page, QUERY);
+  await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
+  await page.getByTestId('board-area').focus();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('ghost-table')).toHaveCount(0);
+  await page.getByTestId('stage-chip').nth(1).click();
+  await expect(page.getByTestId('ghost-row')).toHaveCount(7);
 });

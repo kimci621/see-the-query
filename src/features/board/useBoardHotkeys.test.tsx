@@ -17,6 +17,9 @@ function Board() {
       data-testid="board"
     >
       <input data-testid="field" />
+      <button type="button" data-testid="inner-button">
+        Миникарта
+      </button>
     </div>
   );
 }
@@ -50,9 +53,19 @@ describe('useBoardHotkeys', () => {
     fireEvent.keyDown(board, { key: ' ' });
     expect(useSceneStore.getState().playing).toBe(true);
     fireEvent.keyDown(board, { key: 'Escape' });
-    expect(useSceneStore.getState().playback).toBeNull();
-    // Закрывается только сцена: итог запроса остаётся в панели результата
+    // Esc прячет сцену: итог запроса и проигрывание остаются, плеер снова оживает
+    expect(useSceneStore.getState().hidden).toBe(true);
     expect(useSceneStore.getState().trace).not.toBeNull();
+    fireEvent.keyDown(board, { key: 'ArrowLeft' });
+    expect(useSceneStore.getState().hidden).toBe(false);
+  });
+
+  it('автоповтор пробела (зажат для пана) и пробел на кнопке внутри доски плеер не трогают', () => {
+    render(<Board />);
+    fireEvent.keyDown(screen.getByTestId('board'), { key: ' ', repeat: true });
+    expect(useSceneStore.getState().playing).toBe(false);
+    fireEvent.keyDown(screen.getByTestId('inner-button'), { key: ' ' });
+    expect(useSceneStore.getState().playing).toBe(false);
   });
 
   it('пробел в поле ввода не трогает плеер', () => {

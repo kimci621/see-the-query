@@ -13,6 +13,8 @@ import './overlay.css';
 
 // Доля длительности фазы, которую занимает движение; остаток пауза, чтобы глаз успел
 const MOTION_SHARE = 0.85;
+// Растворение призраков, когда сцену прячут или закрывают
+const DISSOLVE_SEC = 0.3;
 
 // Камера сцены двигается, только пока пользователь работает с запросом: фокус в редакторе,
 // на доске или в таймлайне. При открытии урока остаётся его сохранённая камера (спека 5.12).
@@ -31,6 +33,7 @@ export function OverlayLayer() {
   const speed = useSceneStore(effectiveSpeed);
   const followCamera = useSceneStore((s) => s.followCamera);
   const stale = useSceneStore((s) => s.stale);
+  const hidden = useSceneStore((s) => s.hidden);
   const schema = useBoardStore((s) => s.schema);
   const rf = useReactFlow();
   const reduced = useReducedMotion() ?? false;
@@ -44,9 +47,12 @@ export function OverlayLayer() {
       return;
     }
     scene.setPlayback(buildPlayback(trace, makeAnimatorContext(rf, schema)));
+    // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
+    // таймлайн и плеер её вернут
+    if (!userDrivesScene()) scene.hide();
   }, [trace, schema, rf]);
 
-  const active = !!playback && playback.phases.length > 0;
+  const active = !!playback && playback.phases.length > 0 && !hidden;
 
   // пока идёт сцена, базовая доска приглушена (один CSS-класс на контейнере)
   useEffect(() => {
@@ -56,6 +62,7 @@ export function OverlayLayer() {
 
   const phase = active ? playback.phases[Math.min(phaseIndex, playback.phases.length - 1)] : null;
   const durationSec = !phase || instant || reduced ? 0 : ((phase.durationMs / speed) * MOTION_SHARE) / 1000;
+  const transitionSec = phase ? durationSec : reduced ? 0 : DISSOLVE_SEC;
 
   // «камера следит»: вписываем сцену, только если её границы изменились
   useEffect(() => {
@@ -68,11 +75,12 @@ export function OverlayLayer() {
     void rf.fitBounds(b, { padding: 0.2, duration: durationSec * 1000 });
   }, [phase, followCamera, rf, durationSec]);
 
-  if (!phase) return null;
+  // Слой смонтирован всегда: без сцены список таблиц пуст, и AnimatePresence растворяет призраков
   return (
     <ViewportPortal>
-      <OverlayErrorBoundary resetKey={trace} onError={() => useSceneStore.getState().close()}>
-        <MotionConfig reducedMotion="user" transition={{ duration: durationSec, ease: 'easeInOut' }}>
+      {/* Сбой рендера прячет только сцену: итог запроса в панели результата остаётся */}
+      <OverlayErrorBoundary resetKey={trace} onError={() => useSceneStore.getState().hide()}>
+        <MotionConfig reducedMotion="user" transition={{ duration: transitionSec, ease: 'easeInOut' }}>
           <div
             className="vs-overlay"
             data-testid="overlay"
@@ -81,11 +89,11 @@ export function OverlayLayer() {
             style={{ ['--vs-dur' as string]: `${durationSec}s`, opacity: stale ? 0.4 : 1 }}
           >
             <AnimatePresence>
-              {phase.frame.tables.map((t) => (
+              {phase?.frame.tables.map((t) => (
                 <GhostTableView key={t.id} table={t} />
               ))}
             </AnimatePresence>
-            <Decorations frame={phase.frame} />
+            {phase ? <Decorations frame={phase.frame} /> : null}
           </div>
         </MotionConfig>
       </OverlayErrorBoundary>

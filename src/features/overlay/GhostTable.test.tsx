@@ -57,6 +57,20 @@ describe('GhostTableView', () => {
     expect(screen.getByTestId('ghost-hidden').textContent).toBe('… ещё 42 строк');
   });
 
+  it('отрезанные строки гаснут, UNKNOWN полупрозрачные: inline opacity motion не перебивает', () => {
+    const cut: GhostTable = {
+      ...table,
+      rows: [
+        { key: 'c', values: ['a', '1'], state: 'cut' },
+        { key: 'u', values: ['b', null], state: 'unknown' },
+      ],
+    };
+    render(<GhostTableView table={cut} />);
+    const [c, u] = screen.getAllByTestId('ghost-row');
+    expect(c.style.opacity).toBe('0.35');
+    expect(u.style.opacity).toBe('0.8');
+  });
+
   it('убираемая колонка помечена классом', () => {
     render(<GhostTableView table={table} />);
     expect(screen.getByText('price').className).toContain('vs-col--removed');
