@@ -4,6 +4,7 @@ import { BoardCanvas } from '@/features/board/BoardCanvas';
 import { BoardStatus } from '@/features/board/BoardStatus';
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
+import { ResultsPanel } from '@/features/results/ResultsPanel';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
@@ -30,6 +31,7 @@ function BoardSlot() {
 const SLOTS: Partial<Record<string, ReactNode>> = {
   board: <BoardSlot />,
   editor: <EditorPane />,
+  results: <ResultsPanel />,
 };
 
 export function BoardPane() {
