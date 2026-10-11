@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export type ThemeSetting = 'light' | 'dark' | 'system';
 
 export const DEFAULT_MAIN_LAYOUT = [15, 35, 50];
-export const DEFAULT_RIGHT_LAYOUT = [55, 8, 22, 15];
+export const DEFAULT_RIGHT_LAYOUT = [55, 12, 18, 15];
 
 export interface SettingsStore {
   theme: ThemeSetting;

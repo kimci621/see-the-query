@@ -5,6 +5,7 @@ import { BoardStatus } from '@/features/board/BoardStatus';
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
 import { ResultsPanel } from '@/features/results/ResultsPanel';
+import { Timeline } from '@/features/timeline/Timeline';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
@@ -30,6 +31,7 @@ function BoardSlot() {
 // Содержимое панелей правой колонки
 const SLOTS: Partial<Record<string, ReactNode>> = {
   board: <BoardSlot />,
+  timeline: <Timeline />,
   editor: <EditorPane />,
   results: <ResultsPanel />,
 };
