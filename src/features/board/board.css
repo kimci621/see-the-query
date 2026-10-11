@@ -1,0 +1,28 @@
+/* Рёбра FK и маркеры: цвет из токена shadcn, без анимаций */
+.vs-board .vs-fk-path {
+  stroke: var(--muted-foreground);
+  stroke-width: 1.5;
+}
+
+.vs-fk-marker {
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-width: 1.5;
+}
+
+/* Точки соединения не нужны: связи не редактируются */
+.vs-board .vs-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Пока идёт сцена, базовая доска приглушена; меняется только атрибут контейнера */
+.vs-board .react-flow__node-table,
+.vs-board .react-flow__edge {
+  transition: opacity 200ms ease;
+}
+
+.vs-board[data-dimmed] .react-flow__node-table,
+.vs-board[data-dimmed] .react-flow__edge {
+  opacity: 0.35;
+}
