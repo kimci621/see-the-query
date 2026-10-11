@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { introspect } from '@/features/db/introspect';
 import { inPreview, withDataset } from '../../../tests/helpers/db';
-import { column, stageOf, traceSql } from '../../../tests/helpers/trace';
+import { column, stageOf, summary, traceSql } from '../../../tests/helpers/trace';
 
 describe('traceStatement', () => {
   it('ошибка Postgres → стадия error с фокусом на таблице', () =>
@@ -60,6 +60,18 @@ describe('traceStatement', () => {
         const r = column(stageOf(trace, 'sort'), 'r') as number[];
         expect([...r].sort((a, b) => a - b)).toEqual(r);
         expect(column(stageOf(trace, 'limit'), 'r')).toEqual(r.slice(0, 3));
+      }),
+    ));
+  it('больше maxRows строк → сжатый режим с точными счётчиками', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select title from book where price > 500 order by price limit 3', {
+          maxRows: 5,
+        });
+        expect(trace.mode).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > filter:7 > project:7 > sort:7 > limit:3');
+        expect(trace.stages.every((s) => s.compressed && s.output.rows.length === 0)).toBe(true);
+        expect(trace.result?.rows).toHaveLength(3);
       }),
     ));
   it('отменённый signal прерывает трассу', () =>

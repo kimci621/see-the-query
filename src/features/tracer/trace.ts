@@ -1,8 +1,9 @@
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
-import { createProber, typeNames } from './probe';
+import { createProber, ProbeOverflow, typeNames } from './probe';
 import { resultKey } from './rowkey';
+import { runCompressed } from './select/compressed';
 import { createSelectCtx, rangeOf } from './select/context';
 import { runSelect } from './select/pipeline';
 import type { Stage, Trace, TraceOptions } from './types';
@@ -108,10 +109,18 @@ export async function traceStatement(
   if (table.kind === 'partitioned') return finalOnly('Пока не анимируется: секционированная таблица');
 
   const args = { stmt, sel, prober, reference, volatile, table, schema: opts.schema };
-  const ctx = createSelectCtx(args);
+  let ctx = createSelectCtx(args);
   try {
     await runSelect(ctx);
   } catch (e) {
+    if (e instanceof ProbeOverflow) {
+      ctx = createSelectCtx(args);
+      await runCompressed(ctx);
+      const ok = ctx.stages.at(-1)?.rowCount === reference.rows.length;
+      return ok
+        ? finish({ mode: 'full', stages: ctx.stages, result: reference, error: null })
+        : finalOnly('Сверка с прямым выполнением не сошлась');
+    }
     if (!(e instanceof DbException)) throw e;
     return finalOnly(`Проба не удалась: ${e.db.message}`);
   }
