@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { emptyResultHint } from '@/features/overlay/emptyHint';
 import { useSceneStore } from '@/stores/scene';
 import { MessagesList } from './MessagesList';
 import { ResultGrid } from './ResultGrid';
@@ -41,7 +42,13 @@ export function ResultsPanel() {
         </div>
         <TabsContent value="result" className="mt-0 min-h-0 flex-1">
           {result ? (
-            <ResultGrid result={result} emptyHint={isDml ? undefined : '0 строк'} />
+            <ResultGrid
+              result={result}
+              // Под «0 строк» подсказка, на каком шаге запрос потерял все строки
+              emptyHint={
+                isDml || !trace ? undefined : ['0 строк', emptyResultHint(trace)].filter(Boolean).join('. ')
+              }
+            />
           ) : trace?.error ? (
             <div className="grid h-full place-items-center text-sm text-muted-foreground">
               Запрос не выполнен, см. «Сообщения»
