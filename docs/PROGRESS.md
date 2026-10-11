@@ -170,7 +170,7 @@
 - ✅ (2026-10-11) **P5.4** Сборщик проб (deparser или склейка по позициям, по итогам Ф0).
 - ✅ (2026-10-11) **P5.5** Стадия `scan` (ctid как lineage).
 - ✅ (2026-10-11) **P5.6** Стадия `filter` (where) с вердиктами true / false / null.
-- ⬜ **P5.7** Стадия `project`: kept, removed, computed, renamed.
+- ✅ (2026-10-11) **P5.7** Стадия `project`: kept, removed, computed, renamed.
 - ⬜ **P5.8** Стадия `distinct` и `DISTINCT ON`.
 - ⬜ **P5.9** Стадия `sort` (позиции из упорядоченной пробы P: ORDER BY + ctid).
 - ⬜ **P5.10** Стадия `limit` (LIMIT, OFFSET, FETCH FIRST).
