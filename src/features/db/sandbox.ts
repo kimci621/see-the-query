@@ -1,0 +1,163 @@
+import { type DatasetId, loadDatasetSql } from './datasets';
+import { type DbClient, DbException, type QueryResult, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from './types';
+
+export interface Sandbox {
+  readonly status: 'booting' | 'ready' | 'restarting' | 'failed';
+  readonly datasetId: DatasetId | null;
+  client(): DbClient; // текущий живой клиент
+  loadLesson(datasetId: DatasetId, journal: readonly string[]): Promise<void>;
+  // BEGIN; fn(client); ROLLBACK: всегда, даже при ошибке. Зависание ловит сторож клиента (VS001).
+  // signal: превью устаревшего поколения, которое ещё не начало выполняться, отменяется (AbortError)
+  preview<T>(fn: (db: DbClient) => Promise<T>, signal?: AbortSignal): Promise<T>;
+  apply(sql: string): Promise<QueryResult[]>; // exec с автокоммитом, в журнал при успехе
+  undo(): Promise<void>; // снапшот датасета + журнал без последнего
+  reset(): Promise<void>; // снапшот датасета, журнал пуст
+  journal(): readonly string[];
+  subscribe(listener: (e: SandboxEvent) => void): () => void;
+}
+export type SandboxEvent =
+  | { type: 'status'; status: Sandbox['status'] }
+  | { type: 'restarted'; reason: 'timeout' | 'crash' }
+  | { type: 'changed' }; // после apply/undo/reset/loadLesson: пора обновить доску
+
+const isDeath = (e: unknown): e is DbException =>
+  e instanceof DbException && (e.db.code === SANDBOX_TIMEOUT || e.db.code === SANDBOX_CRASHED);
+
+// id текущей транзакции; null, если она прервана ошибкой (это всё ещё наша транзакция)
+async function xactId(db: DbClient): Promise<string | null> {
+  try {
+    return String((await db.query('select pg_current_xact_id()::text')).rows[0][0]);
+  } catch (e) {
+    if (e instanceof DbException && e.db.code === '25P02') return null;
+    throw e;
+  }
+}
+
+export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): Sandbox {
+  const snapshots = new Map<DatasetId, Blob>();
+  const listeners = new Set<(e: SandboxEvent) => void>();
+  let status: Sandbox['status'] = 'booting';
+  let datasetId: DatasetId | null = null;
+  let journal: string[] = [];
+  let db: DbClient | null = null;
+  let lock: Promise<unknown> = Promise.resolve();
+
+  const emit = (e: SandboxEvent) => {
+    for (const l of listeners) l(e);
+  };
+  const setStatus = (s: Sandbox['status']) => {
+    if (s === status) return;
+    status = s;
+    emit({ type: 'status', status: s });
+  };
+  const live = (): DbClient => {
+    if (!db) throw new DbException({ code: SANDBOX_CRASHED, message: 'Песочница не готова' });
+    return db;
+  };
+
+  // Операции идут строго по одной: превью, применение и пересборка не перемешиваются
+  function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = lock.then(fn);
+    lock = run.catch(() => {});
+    return run;
+  }
+
+  // Новый клиент: снапшот датасета (из кэша или собранный сейчас) + повтор журнала.
+  // Запись журнала, которая больше не выполняется, и всё после неё отбрасываются.
+  async function rebuild(id: DatasetId, entries: readonly string[]): Promise<void> {
+    const old = db;
+    db = null;
+    await old?.close();
+    const cached = snapshots.get(id);
+    const next = await factory(cached);
+    if (!cached) {
+      await next.exec(await loadDatasetSql(id));
+      snapshots.set(id, await next.dump());
+    }
+    const kept: string[] = [];
+    for (const sql of entries) {
+      try {
+        await next.exec(sql);
+        kept.push(sql);
+      } catch (e) {
+        if (isDeath(e)) throw e;
+        break;
+      }
+    }
+    db = next;
+    datasetId = id;
+    journal = kept;
+  }
+
+  async function changeTo(entries: readonly string[]): Promise<void> {
+    if (!datasetId) throw new Error('Урок не загружен');
+    await rebuild(datasetId, entries);
+    emit({ type: 'changed' });
+  }
+
+  return {
+    get status() {
+      return status;
+    },
+    get datasetId() {
+      return datasetId;
+    },
+    client: live,
+    journal: () => journal,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+
+    loadLesson: (id, entries) =>
+      exclusive(async () => {
+        // тот же датасет и тот же журнал: база уже в нужном состоянии
+        if (
+          db &&
+          id === datasetId &&
+          entries.length === journal.length &&
+          entries.every((s, i) => s === journal[i])
+        )
+          return;
+        setStatus('booting');
+        try {
+          await rebuild(id, entries);
+        } catch (e) {
+          setStatus('failed');
+          throw e;
+        }
+        setStatus('ready');
+        emit({ type: 'changed' });
+      }),
+
+    preview: (fn, signal) =>
+      exclusive(async () => {
+        signal?.throwIfAborted();
+        const client = live();
+        await client.query('begin');
+        const started = await xactId(client);
+        const outcome = await fn(client).then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
+        if (!outcome.ok && isDeath(outcome.error)) throw outcome.error;
+        const now = await xactId(client);
+        await client.query('rollback');
+        // внутри превью выполнился COMMIT: база изменилась, возвращаем состояние журнала
+        if (now !== null && now !== started) await changeTo(journal);
+        if (!outcome.ok) throw outcome.error;
+        return outcome.value;
+      }),
+
+    apply: (sql) =>
+      exclusive(async () => {
+        const res = await live().exec(sql);
+        journal = [...journal, sql];
+        emit({ type: 'changed' });
+        return res;
+      }),
+
+    undo: () => exclusive(() => (journal.length ? changeTo(journal.slice(0, -1)) : Promise.resolve())),
+    reset: () => exclusive(() => changeTo([])),
+  };
+}
