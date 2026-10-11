@@ -235,3 +235,61 @@ describe('sandbox: восстановление', () => {
     T,
   );
 });
+
+describe('sandbox: транзакции ученика', () => {
+  it(
+    'превью с DROP и COMMIT не оставляет изменений',
+    async () => {
+      const { sandbox } = await bookstore();
+      await sandbox.preview((db) => db.exec('drop table review; commit'));
+      expect(await count(sandbox.client(), 'review')).toBe(10);
+    },
+    T,
+  );
+
+  it(
+    'COMMIT и упавшая новая транзакция внутри превью не протекают',
+    async () => {
+      const { sandbox } = await bookstore();
+      await expect(
+        sandbox.preview((db) => db.exec('delete from review; commit; begin; select 1/0')),
+      ).rejects.toMatchObject({ db: { code: '22012' } });
+      expect(await count(sandbox.client(), 'review')).toBe(10);
+    },
+    T,
+  );
+
+  it(
+    'apply BEGIN не оставляет открытую транзакцию: превью не откатывает применённое',
+    async () => {
+      const { sandbox } = await bookstore();
+      await sandbox.apply('begin');
+      await sandbox.apply('delete from review');
+      await sandbox.preview((db) => db.query('select 1'));
+      expect(await count(sandbox.client(), 'review')).toBe(0);
+    },
+    T,
+  );
+
+  it(
+    'apply с упавшей транзакцией не ломает следующее превью',
+    async () => {
+      const { sandbox } = await bookstore();
+      await expect(sandbox.apply('begin; select 1/0')).rejects.toMatchObject({ db: { code: '22012' } });
+      expect(await sandbox.preview((db) => count(db, 'book'))).toBe(11);
+    },
+    T,
+  );
+
+  it(
+    'запись журнала, на которой умер клиент, обрезает журнал, а не роняет песочницу',
+    async () => {
+      const ok = `insert into author (name) values ('A')`;
+      const { sandbox } = await bookstore([ok, 'select pg_sleep(1)', ok]);
+      expect(sandbox.status).toBe('ready');
+      expect(sandbox.journal()).toEqual([ok]);
+      expect(await count(sandbox.client(), 'author')).toBe(7);
+    },
+    T,
+  );
+});

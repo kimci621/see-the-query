@@ -45,10 +45,23 @@ async function sequenceState(db: DbClient): Promise<Map<string, string | null>> 
 async function restoreSequences(db: DbClient, before: Map<string, string | null>): Promise<void> {
   const after = await sequenceState(db);
   for (const [seq, value] of before) {
-    if (after.get(seq) === value) continue;
+    if (!after.has(seq) || after.get(seq) === value) continue;
     // null: последовательность ещё ни разу не выдавала значение
     if (value === null) await db.query('select setval($1::regclass, 1, false)', [seq]);
     else await db.query('select setval($1::regclass, $2::bigint, true)', [seq, value]);
+  }
+}
+
+// Применить = выполнение с COMMIT (спека 3.9): транзакция ученика не остаётся открытой.
+// COMMIT и ROLLBACK вне транзакции дают только предупреждение.
+async function applyOne(db: DbClient, sql: string): Promise<QueryResult[]> {
+  try {
+    const res = await db.exec(sql);
+    await db.query('commit');
+    return res;
+  } catch (e) {
+    if (!isDeath(e)) await db.query('rollback');
+    throw e;
   }
 }
 
@@ -87,19 +100,31 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     const old = db;
     db = null;
     await old?.close();
-    const cached = snapshots.get(id);
-    const next = await factory(cached);
-    if (!cached) {
-      await next.exec(await loadDatasetSql(id));
-      snapshots.set(id, await next.dump());
-    }
+    const fresh = async (): Promise<DbClient> => {
+      const cached = snapshots.get(id);
+      const client = await factory(cached);
+      if (cached) return client;
+      try {
+        await client.exec(await loadDatasetSql(id));
+        snapshots.set(id, await client.dump());
+        return client;
+      } catch (e) {
+        await client.close();
+        throw e;
+      }
+    };
+    let next = await fresh();
     const kept: string[] = [];
     for (const sql of entries) {
       try {
-        await next.exec(sql);
+        await applyOne(next, sql);
         kept.push(sql);
       } catch (e) {
-        if (isDeath(e)) throw e;
+        // запись журнала убила клиент: поднимаем новый без неё, иначе песочница не поднимется никогда
+        if (isDeath(e)) {
+          next = await fresh();
+          for (const s of kept) await applyOne(next, s);
+        }
         break;
       }
     }
@@ -187,18 +212,19 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
           (error: unknown) => ({ ok: false as const, error }),
         );
         if (!outcome.ok && isDeath(outcome.error)) throw outcome.error;
-        const now = await xactId(client);
         await client.query('rollback');
-        await restoreSequences(client, sequences);
-        // внутри превью выполнился COMMIT: база изменилась, возвращаем состояние журнала
-        if (now !== null && now !== started) await changeTo(journal);
+        // внутри превью выполнился COMMIT (даже если потом началась и упала новая транзакция):
+        // база изменилась, возвращаем состояние журнала. Последовательности после пересборки и так верные
+        const { rows } = await client.query('select pg_xact_status($1::xid8)::text', [started]);
+        if (rows[0][0] === 'committed') await changeTo(journal);
+        else await restoreSequences(client, sequences);
         if (!outcome.ok) throw outcome.error;
         return outcome.value;
       }),
 
     apply: (sql) =>
       guarded(async () => {
-        const res = await live().exec(sql);
+        const res = await applyOne(live(), sql);
         journal = [...journal, sql];
         emit({ type: 'changed' });
         return res;
