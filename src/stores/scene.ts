@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Playback } from '@/features/overlay/types';
 import type { Trace } from '@/features/tracer/types';
 
 export interface SceneStore {
@@ -7,8 +8,11 @@ export interface SceneStore {
   generation: number;
   status: 'idle' | 'tracing' | 'ready' | 'error';
   stale: boolean; // ввод невалиден, сцена погашена
+  playback: Playback | null;
   phaseIndex: number;
   playing: boolean;
+  instant: boolean; // следующий кадр без анимации: скраб, шаг назад, новая сцена
+  autoRun: boolean; // автопроигрывание после правки запроса, не медленнее 2x
   speed: 0.5 | 1 | 2;
   autoplay: boolean;
   followCamera: boolean;
@@ -16,7 +20,9 @@ export interface SceneStore {
   setTrace(trace: Trace, generation: number): void; // игнорирует устаревшее поколение
   setStatus(s: SceneStore['status']): void;
   setStale(v: boolean): void;
+  setPlayback(p: Playback | null): void;
   seek(phaseIndex: number): void;
+  advance(): void;
   play(): void;
   pause(): void;
   toggle(): void;
@@ -27,6 +33,8 @@ export interface SceneStore {
   close(): void;
 }
 
+const lastIndex = (p: Playback | null) => (p ? Math.max(0, p.phases.length - 1) : 0);
+
 export const useSceneStore = create<SceneStore>()(
   persist(
     (set, get) => ({
@@ -34,8 +42,11 @@ export const useSceneStore = create<SceneStore>()(
       generation: 0,
       status: 'idle',
       stale: false,
+      playback: null,
       phaseIndex: 0,
       playing: false,
+      instant: true,
+      autoRun: false,
       speed: 1,
       autoplay: true,
       followCamera: true,
@@ -46,19 +57,63 @@ export const useSceneStore = create<SceneStore>()(
       },
       setTrace: (trace, generation) => {
         if (generation < get().generation) return;
-        set({ trace, generation, status: 'ready', stale: false, phaseIndex: 0, playing: false });
+        // Проигрывание не трогаем: новое придёт через setPlayback, оверлей не мигает
+        set({ trace, generation, status: 'ready', stale: false });
       },
       setStatus: (status) => set({ status }),
       setStale: (stale) => set({ stale }),
-      seek: (phaseIndex) => set({ phaseIndex, playing: false }),
-      play: () => set({ playing: true }),
-      pause: () => set({ playing: false }),
-      toggle: () => set({ playing: !get().playing }),
-      step: (delta) => set({ phaseIndex: Math.max(0, get().phaseIndex + delta), playing: false }),
+      setPlayback: (playback) => {
+        if (!playback || playback.phases.length === 0)
+          set({ playback, phaseIndex: 0, playing: false, autoRun: false, instant: true });
+        else if (get().autoplay)
+          set({ playback, phaseIndex: 0, playing: true, autoRun: true, instant: true });
+        else
+          set({ playback, phaseIndex: lastIndex(playback), playing: false, autoRun: false, instant: true });
+      },
+      seek: (index) =>
+        set({
+          phaseIndex: Math.min(Math.max(0, index), lastIndex(get().playback)),
+          instant: true,
+          playing: false,
+          autoRun: false,
+        }),
+      advance: () => {
+        const { phaseIndex, playback } = get();
+        if (phaseIndex < lastIndex(playback)) set({ phaseIndex: phaseIndex + 1, instant: false });
+        else set({ playing: false, autoRun: false });
+      },
+      play: () => {
+        const { phaseIndex, playback } = get();
+        if (!playback || playback.phases.length === 0) return;
+        // С последней фазы играем сначала
+        if (phaseIndex >= lastIndex(playback))
+          set({ phaseIndex: 0, instant: true, playing: true, autoRun: false });
+        else set({ playing: true, autoRun: false });
+      },
+      pause: () => set({ playing: false, autoRun: false }),
+      toggle: () => (get().playing ? get().pause() : get().play()),
+      // Назад показываем мгновенно, вперёд анимируем
+      step: (delta) =>
+        set({
+          phaseIndex: Math.min(Math.max(0, get().phaseIndex + delta), lastIndex(get().playback)),
+          instant: delta < 0,
+          playing: false,
+          autoRun: false,
+        }),
       setSpeed: (speed) => set({ speed }),
       setAutoplay: (autoplay) => set({ autoplay }),
       setFollowCamera: (followCamera) => set({ followCamera }),
-      close: () => set({ trace: null, status: 'idle', stale: false, phaseIndex: 0, playing: false }),
+      close: () =>
+        set({
+          trace: null,
+          playback: null,
+          status: 'idle',
+          stale: false,
+          phaseIndex: 0,
+          playing: false,
+          autoRun: false,
+          instant: true,
+        }),
     }),
     {
       name: 'vs-scene',
@@ -66,3 +121,8 @@ export const useSceneStore = create<SceneStore>()(
     },
   ),
 );
+
+// Скорость с учётом автопроигрывания: после правки запроса не медленнее 2x
+export function effectiveSpeed(s: Pick<SceneStore, 'speed' | 'autoRun'>): number {
+  return s.autoRun ? Math.max(2, s.speed) : s.speed;
+}

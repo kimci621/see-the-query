@@ -1,6 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { Phase, Playback } from '@/features/overlay/types';
 import type { Trace } from '@/features/tracer/types';
-import { useSceneStore } from './scene';
+import { effectiveSpeed, useSceneStore } from './scene';
+
+const frame = { tables: [], decorations: [] };
+const phase = (i: number): Phase => ({
+  id: `p${i}`,
+  stageIndex: 0,
+  caption: `фаза ${i}`,
+  durationMs: 500,
+  frame,
+});
+const playback = (n: number): Playback => ({
+  phases: Array.from({ length: n }, (_, i) => phase(i)),
+  stageStarts: [0],
+});
 
 const trace = (sql: string): Trace => ({
   sql,
@@ -58,16 +72,94 @@ describe('useSceneStore', () => {
     expect(saved.trace).toBeUndefined();
   });
 
-  it('плеерные методы меняют состояние (используются с Ф6)', () => {
-    useSceneStore.getState().play();
-    expect(useSceneStore.getState().playing).toBe(true);
-    useSceneStore.getState().pause();
-    expect(useSceneStore.getState().playing).toBe(false);
-    useSceneStore.getState().seek(3);
-    expect(useSceneStore.getState().phaseIndex).toBe(3);
-    useSceneStore.getState().step(-1);
+  it('setTrace не трогает проигрывание: новое придёт через setPlayback', () => {
+    useSceneStore.getState().setPlayback(playback(3));
+    useSceneStore.getState().setTrace(trace('select 1'), useSceneStore.getState().nextGeneration());
+    expect(useSceneStore.getState().playback?.phases).toHaveLength(3);
+  });
+
+  it('setPlayback сбрасывает индекс и запускает автоплей заново', () => {
+    const s = useSceneStore.getState();
+    s.setAutoplay(true);
+    s.setPlayback(playback(5));
+    s.advance();
+    s.advance();
     expect(useSceneStore.getState().phaseIndex).toBe(2);
+    useSceneStore.getState().setPlayback(playback(2));
+    const st = useSceneStore.getState();
+    expect(st.phaseIndex).toBe(0);
+    expect(st.playing).toBe(true);
+    expect(st.autoRun).toBe(true);
+    expect(st.instant).toBe(true);
+  });
+
+  it('без автоплея setPlayback сразу показывает последнюю фазу', () => {
+    useSceneStore.getState().setAutoplay(false);
+    useSceneStore.getState().setPlayback(playback(4));
+    const st = useSceneStore.getState();
+    expect(st.phaseIndex).toBe(3);
+    expect(st.playing).toBe(false);
+  });
+
+  it('advance на последней фазе останавливает плеер и снимает autoRun', () => {
+    useSceneStore.getState().setAutoplay(true);
+    useSceneStore.getState().setPlayback(playback(2));
+    useSceneStore.getState().advance();
+    expect(useSceneStore.getState().phaseIndex).toBe(1);
+    useSceneStore.getState().advance();
+    const st = useSceneStore.getState();
+    expect(st.phaseIndex).toBe(1);
+    expect(st.playing).toBe(false);
+    expect(st.autoRun).toBe(false);
+  });
+
+  it('seek мгновенный, ставит паузу и ограничивает индекс', () => {
+    useSceneStore.getState().setPlayback(playback(3));
+    useSceneStore.getState().play();
+    useSceneStore.getState().seek(10);
+    const st = useSceneStore.getState();
+    expect(st.phaseIndex).toBe(2);
+    expect(st.instant).toBe(true);
+    expect(st.playing).toBe(false);
+  });
+
+  it('step назад мгновенный, вперёд анимированный', () => {
+    useSceneStore.getState().setAutoplay(false);
+    useSceneStore.getState().setPlayback(playback(3));
+    useSceneStore.getState().step(-1);
+    expect(useSceneStore.getState().phaseIndex).toBe(1);
+    expect(useSceneStore.getState().instant).toBe(true);
     useSceneStore.getState().step(1);
-    expect(useSceneStore.getState().phaseIndex).toBe(3);
+    expect(useSceneStore.getState().phaseIndex).toBe(2);
+    expect(useSceneStore.getState().instant).toBe(false);
+  });
+
+  it('play на последней фазе начинает с начала', () => {
+    useSceneStore.getState().setAutoplay(false);
+    useSceneStore.getState().setPlayback(playback(3));
+    useSceneStore.getState().play();
+    const st = useSceneStore.getState();
+    expect(st.phaseIndex).toBe(0);
+    expect(st.playing).toBe(true);
+  });
+
+  it('effectiveSpeed при autoRun не меньше 2', () => {
+    useSceneStore.getState().setSpeed(0.5);
+    useSceneStore.getState().setAutoplay(true);
+    useSceneStore.getState().setPlayback(playback(3));
+    expect(effectiveSpeed(useSceneStore.getState())).toBe(2);
+    useSceneStore.getState().pause();
+    expect(effectiveSpeed(useSceneStore.getState())).toBe(0.5);
+  });
+
+  it('close очищает сцену и проигрывание', () => {
+    useSceneStore.getState().setTrace(trace('select 1'), useSceneStore.getState().nextGeneration());
+    useSceneStore.getState().setPlayback(playback(3));
+    useSceneStore.getState().close();
+    const st = useSceneStore.getState();
+    expect(st.trace).toBeNull();
+    expect(st.playback).toBeNull();
+    expect(st.playing).toBe(false);
+    expect(st.status).toBe('idle');
   });
 });
