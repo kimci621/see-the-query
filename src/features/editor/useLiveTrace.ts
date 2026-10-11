@@ -4,6 +4,8 @@ import type { DbError } from '@/features/db/types';
 import { DbException } from '@/features/db/types';
 import { initParser, isParserReady, parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
+import { traceStatement } from '@/features/tracer/trace';
+import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
@@ -11,8 +13,8 @@ import { touchedOf } from './touched';
 
 const DEBOUNCE_MS = 250;
 
-// Живое превью (спека 5.3, без трассировщика до Ф5): парсим текст, берём оператор под
-// курсором, выполняем его в транзакции песочницы и кладём Trace «только итог».
+// Живое превью (спека 5.3): парсим текст, берём оператор под курсором, трассируем его
+// в транзакции песочницы. Нет схемы или трассировщик сломался → Trace «только итог».
 // Поколения защищают от гонки: setTrace отбрасывает ответ устаревшего запроса.
 export function useLiveTrace(sandbox: Sandbox | null): void {
   const text = useEditorStore((s) => s.text);
@@ -83,13 +85,30 @@ async function runPreview(
     sql: stmt.text,
     statementType: stmt.kind,
     mode: 'final-only' as const,
-    fallbackReason: 'Пошаговый разбор запроса появится позже', // Ф5 подменит на traceStatement
+    fallbackReason: 'Пошаговый разбор недоступен',
     touched: touchedOf(stmt, schema),
     stages: [],
     notices: [],
   };
   try {
-    const result = await sandbox.preview((db) => db.query(stmt.text));
+    const out = await sandbox.preview(async (db): Promise<Trace | Awaited<ReturnType<typeof db.query>>> => {
+      if (schema) {
+        try {
+          return await traceStatement(stmt, db, { schema });
+        } catch (e) {
+          // Ошибку базы показываем как есть, баг трассировщика не должен прятать итог
+          if (e instanceof DbException) throw e;
+          if (import.meta.env.DEV) console.error('[tracer]', e);
+        }
+      }
+      return db.query(stmt.text);
+    });
+    // Подсветку колонок по-прежнему считает редактор
+    if ('stages' in out) {
+      useSceneStore.getState().setTrace({ ...out, touched: base.touched }, generation);
+      return;
+    }
+    const result = out;
     useSceneStore.getState().setTrace(
       {
         ...base,

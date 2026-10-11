@@ -4,11 +4,15 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { Sandbox } from '@/features/db/sandbox';
 import { DbException, type QueryResult } from '@/features/db/types';
 import { initParser } from '@/features/sql/parser';
+import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { SCHEMA } from './__fixtures__/schema';
 import { useLiveTrace } from './useLiveTrace';
+
+const { traceStatement } = vi.hoisted(() => ({ traceStatement: vi.fn() }));
+vi.mock('@/features/tracer/trace', () => ({ traceStatement }));
 
 const RESULT: QueryResult = {
   fields: [{ name: 'title', dataTypeID: 25 }],
@@ -51,13 +55,42 @@ describe('useLiveTrace', () => {
     useEditorStore.setState(useEditorStore.getInitialState(), true);
     useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
     useBoardStore.setState(useBoardStore.getInitialState(), true);
+    traceStatement.mockReset();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('после паузы 250 мс выполняет превью и кладёт final-only Trace', async () => {
+  it('со схемой превью строит трассу через traceStatement, подсветка из редактора', async () => {
+    const trace = {
+      mode: 'full',
+      stages: [],
+      result: RESULT,
+      error: null,
+      touched: { tableIds: [], columns: [] },
+    };
+    traceStatement.mockResolvedValue(trace as unknown as Trace);
+    useBoardStore.getState().setSchema(SCHEMA);
+    useEditorStore.getState().setText('select title from book');
+    renderHook(() => useLiveTrace(fakeSandbox({})));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(traceStatement).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'select title from book' }),
+      expect.anything(),
+      {
+        schema: SCHEMA,
+      },
+    );
+    const s = useSceneStore.getState().trace;
+    expect(s?.mode).toBe('full');
+    expect(s?.touched.tableIds).toEqual(['public.book']);
+  });
+
+  it('сбой трассировщика (не ошибка базы): итог прямым выполнением, final-only', async () => {
+    traceStatement.mockRejectedValue(new TypeError('bug'));
     const calls: string[] = [];
     const sandbox = fakeSandbox({ calls });
     useBoardStore.getState().setSchema(SCHEMA);
@@ -75,7 +108,7 @@ describe('useLiveTrace', () => {
     expect(s.trace?.mode).toBe('final-only');
     expect(s.trace?.result).toEqual(RESULT);
     expect(s.trace?.touched.tableIds).toEqual(['public.book']);
-    expect(s.trace?.fallbackReason).toBe('Пошаговый разбор запроса появится позже');
+    expect(s.trace?.fallbackReason).toBe('Пошаговый разбор недоступен');
   });
 
   it('новый ввод отменяет невыполненное превью старого поколения', async () => {
