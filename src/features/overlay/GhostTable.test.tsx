@@ -1,0 +1,64 @@
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { GhostTableView } from './GhostTable';
+import type { GhostTable } from './types';
+
+const table: GhostTable = {
+  id: 't:b',
+  title: 'book b',
+  x: 10,
+  y: 20,
+  columns: [
+    { name: 'title', state: 'normal' },
+    { name: 'price', state: 'removed' },
+  ],
+  rows: [
+    { key: 'b=(0,1)', values: ['Тихий Дон', '890.00'], state: 'kept' },
+    { key: 'b=(0,3)', values: ['Судьба человека', '350.00'], state: 'dropped' },
+    { key: 'b=(0,5)', values: ['Судьба человека', '350.00'], state: 'normal' },
+    { key: 'b=(0,7)', values: ['Остров', null], state: 'unknown', badge: 'UNKNOWN' },
+    { key: 'b=(0,9)', values: ['', '1.00'], state: 'normal' },
+  ],
+  hiddenRows: 42,
+};
+
+describe('GhostTableView', () => {
+  it('рисует заголовок, колонки и строки', () => {
+    render(<GhostTableView table={table} />);
+    expect(screen.getByTestId('ghost-table').getAttribute('data-table-id')).toBe('t:b');
+    expect(screen.getByText('book b')).toBeTruthy();
+    expect(screen.getAllByTestId('ghost-row')).toHaveLength(5);
+  });
+
+  it('дубликаты значений рендерятся отдельными строками', () => {
+    render(<GhostTableView table={table} />);
+    expect(screen.getAllByText('Судьба человека')).toHaveLength(2);
+  });
+
+  it('состояния строк в data-state, отсеянные зачёркнуты и с иконкой', () => {
+    render(<GhostTableView table={table} />);
+    const dropped = screen
+      .getAllByTestId('ghost-row')
+      .find((r) => r.getAttribute('data-row-key') === 'b=(0,3)');
+    expect(dropped?.getAttribute('data-state')).toBe('dropped');
+    expect(dropped?.className).toContain('vs-row--dropped');
+    expect(dropped?.querySelector('[aria-label="отсеяна"]')).toBeTruthy();
+  });
+
+  it('NULL отличается от пустой строки', () => {
+    render(<GhostTableView table={table} />);
+    expect(screen.getByText('NULL').className).toContain('vs-null');
+    expect(screen.getByText("''").className).not.toContain('vs-null');
+  });
+
+  it('бейдж и полоса скрытых строк', () => {
+    render(<GhostTableView table={table} />);
+    expect(screen.getByText('UNKNOWN')).toBeTruthy();
+    expect(screen.getByTestId('ghost-hidden').textContent).toBe('… ещё 42 строк');
+  });
+
+  it('убираемая колонка помечена классом', () => {
+    render(<GhostTableView table={table} />);
+    expect(screen.getByText('price').className).toContain('vs-col--removed');
+  });
+});

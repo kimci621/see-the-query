@@ -38,6 +38,7 @@
     "cn": "^0.4.0",
     "libpg-query": "18.1.5",
     "lucide-react": "^1.52.0",
+    "motion": "14.0.0",
     "pgsql-deparser": "18.3.10",
     "radix-ui": "^1.7.0",
     "react": "19.3.0",
