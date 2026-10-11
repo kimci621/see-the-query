@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { useSandbox } from '@/features/db/SandboxProvider';
+import { useLessonSandbox } from '@/features/db/useLessonSandbox';
 import { getLesson } from '@/features/lessons/registry';
 import { useSettingsStore } from '@/stores/settings';
 import { BoardPane } from './BoardPane';
@@ -17,6 +19,8 @@ const MAIN_PANELS = ['sidebar', 'theory', 'workspace'] as const;
 export function AppShell() {
   const { lessonId } = useParams();
   const meta = lessonId ? getLesson(lessonId) : undefined;
+  const { sandbox } = useSandbox();
+  useLessonSandbox(sandbox, meta?.id, meta?.dataset);
   const mainLayout = useSettingsStore((s) => s.mainLayout);
   const setMainLayout = useSettingsStore((s) => s.setMainLayout);
   const focusMode = useSettingsStore((s) => s.focusMode);
