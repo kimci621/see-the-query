@@ -14,6 +14,7 @@ import { MapIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { getLesson } from '@/features/lessons/registry';
+import { OverlayLayer } from '@/features/overlay/OverlayLayer';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import { FkEdge, FkMarkers } from './FkEdge';
@@ -91,6 +92,7 @@ function BoardFlow() {
           </ControlButton>
         </Controls>
         {miniMap && <MiniMap pannable zoomable ariaLabel="Миникарта доски" />}
+        <OverlayLayer />
       </ReactFlow>
     </div>
   );

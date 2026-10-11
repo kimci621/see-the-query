@@ -1,0 +1,85 @@
+import { useReactFlow, ViewportPortal } from '@xyflow/react';
+import { AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
+import { useEffect, useRef } from 'react';
+import { useBoardStore } from '@/stores/board';
+import { effectiveSpeed, useSceneStore } from '@/stores/scene';
+import { makeAnimatorContext } from './context';
+import { Decorations } from './Decorations';
+import { GhostTableView } from './GhostTable';
+import { frameBounds } from './geometry';
+import { OverlayErrorBoundary } from './OverlayErrorBoundary';
+import { buildPlayback } from './playback';
+import './overlay.css';
+
+// Доля длительности фазы, которую занимает движение; остаток пауза, чтобы глаз успел
+const MOTION_SHARE = 0.85;
+
+export function OverlayLayer() {
+  const trace = useSceneStore((s) => s.trace);
+  const playback = useSceneStore((s) => s.playback);
+  const phaseIndex = useSceneStore((s) => s.phaseIndex);
+  const instant = useSceneStore((s) => s.instant);
+  const speed = useSceneStore(effectiveSpeed);
+  const followCamera = useSceneStore((s) => s.followCamera);
+  const stale = useSceneStore((s) => s.stale);
+  const schema = useBoardStore((s) => s.schema);
+  const rf = useReactFlow();
+  const reduced = useReducedMotion() ?? false;
+  const lastCamera = useRef('');
+
+  // новая трасса → новое проигрывание
+  useEffect(() => {
+    const scene = useSceneStore.getState();
+    if (!trace || !schema) {
+      scene.setPlayback(null);
+      return;
+    }
+    scene.setPlayback(buildPlayback(trace, makeAnimatorContext(rf, schema)));
+  }, [trace, schema, rf]);
+
+  const active = !!playback && playback.phases.length > 0;
+
+  // пока идёт сцена, базовая доска приглушена (один CSS-класс на контейнере)
+  useEffect(() => {
+    useBoardStore.getState().setDimmed(active);
+    return () => useBoardStore.getState().setDimmed(false);
+  }, [active]);
+
+  const phase = active ? playback.phases[Math.min(phaseIndex, playback.phases.length - 1)] : null;
+  const durationSec = !phase || instant || reduced ? 0 : ((phase.durationMs / speed) * MOTION_SHARE) / 1000;
+
+  // «камера следит»: вписываем сцену, только если её границы изменились
+  useEffect(() => {
+    if (!phase || !followCamera) return;
+    const b = frameBounds(phase.frame);
+    if (!b) return;
+    const key = `${Math.round(b.x)}:${Math.round(b.y)}:${Math.round(b.width)}:${Math.round(b.height)}`;
+    if (key === lastCamera.current) return;
+    lastCamera.current = key;
+    void rf.fitBounds(b, { padding: 0.2, duration: durationSec * 1000 });
+  }, [phase, followCamera, rf, durationSec]);
+
+  if (!phase) return null;
+  return (
+    <ViewportPortal>
+      <OverlayErrorBoundary resetKey={trace} onError={() => useSceneStore.getState().close()}>
+        <MotionConfig reducedMotion="user" transition={{ duration: durationSec, ease: 'easeInOut' }}>
+          <div
+            className="vs-overlay"
+            data-testid="overlay"
+            data-stale={stale || undefined}
+            // Недописанный запрос: сцена гаснет, но не пропадает, как и панель результата
+            style={{ ['--vs-dur' as string]: `${durationSec}s`, opacity: stale ? 0.4 : 1 }}
+          >
+            <AnimatePresence>
+              {phase.frame.tables.map((t) => (
+                <GhostTableView key={t.id} table={t} />
+              ))}
+            </AnimatePresence>
+            <Decorations frame={phase.frame} />
+          </div>
+        </MotionConfig>
+      </OverlayErrorBoundary>
+    </ViewportPortal>
+  );
+}
