@@ -16,7 +16,12 @@ export function formatCell(value: unknown, type?: string): FormattedCell {
 function toText(value: unknown, type?: string): string {
   // PGlite отдаёт date как полночь UTC, timestamp/timestamptz как Date
   if (value instanceof Date) {
-    return type === 'date' ? value.toISOString().slice(0, 10) : value.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z');
+    return type === 'date'
+      ? value.toISOString().slice(0, 10)
+      : value
+          .toISOString()
+          .replace('T', ' ')
+          .replace(/\.\d{3}Z$/, 'Z');
   }
   if (Array.isArray(value)) return `{${value.map((v) => (v === null ? 'NULL' : String(v))).join(',')}}`;
   if (typeof value === 'object') return JSON.stringify(value);

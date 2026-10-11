@@ -11,7 +11,9 @@ describe('formatCell', () => {
 
   it('date без времени, timestamptz в UTC', () => {
     expect(formatCell(new Date(Date.UTC(1940, 0, 1)), 'date').text).toBe('1940-01-01');
-    expect(formatCell(new Date('2024-03-01T07:00:00.000Z'), 'timestamp with time zone').text).toBe('2024-03-01 07:00:00Z');
+    expect(formatCell(new Date('2024-03-01T07:00:00.000Z'), 'timestamp with time zone').text).toBe(
+      '2024-03-01 07:00:00Z',
+    );
   });
 
   it('массивы как литерал Postgres, jsonb как JSON, числа и булевы как есть', () => {

@@ -16,7 +16,12 @@ export function col(name: string, type: string, extra: Partial<ColumnInfo> = {})
   };
 }
 
-export function table(id: string, columns: ColumnInfo[], rows: unknown[][] = [], rowCount = rows.length): TableInfo {
+export function table(
+  id: string,
+  columns: ColumnInfo[],
+  rows: unknown[][] = [],
+  rowCount = rows.length,
+): TableInfo {
   const [schema = 'public', name = id] = id.split('.');
   return {
     id,
@@ -32,15 +37,36 @@ export function table(id: string, columns: ColumnInfo[], rows: unknown[][] = [],
   };
 }
 
-export function fk(name: string, from: string, fromCol: string, to: string, toCol: string, onDelete: FkAction = 'NO ACTION'): FkInfo {
-  return { name, from: { tableId: from, columns: [fromCol] }, to: { tableId: to, columns: [toCol] }, onDelete, onUpdate: 'NO ACTION' };
+export function fk(
+  name: string,
+  from: string,
+  fromCol: string,
+  to: string,
+  toCol: string,
+  onDelete: FkAction = 'NO ACTION',
+): FkInfo {
+  return {
+    name,
+    from: { tableId: from, columns: [fromCol] },
+    to: { tableId: to, columns: [toCol] },
+    onDelete,
+    onUpdate: 'NO ACTION',
+  };
 }
 
-const ref = (t: string, c: string) => ({ schema: t.split('.')[0] ?? 'public', table: t.split('.')[1] ?? t, column: c });
+const ref = (t: string, c: string) => ({
+  schema: t.split('.')[0] ?? 'public',
+  table: t.split('.')[1] ?? t,
+  column: c,
+});
 
 export const author = table(
   'public.author',
-  [col('author_id', 'bigint', { isPk: true, nullable: false, identity: 'always' }), col('name', 'text', { nullable: false }), col('country', 'text')],
+  [
+    col('author_id', 'bigint', { isPk: true, nullable: false, identity: 'always' }),
+    col('name', 'text', { nullable: false }),
+    col('country', 'text'),
+  ],
   [
     [1, 'Михаил Шолохов', 'Россия'],
     [2, 'Лусиану Рамальо', 'Бразилия'],
@@ -79,7 +105,10 @@ export const book = table(
 
 export const cart = table(
   'shop.cart',
-  [col('cart_id', 'bigint', { isPk: true, nullable: false }), col('book_id', 'bigint', { fk: ref('public.book', 'book_id') })],
+  [
+    col('cart_id', 'bigint', { isPk: true, nullable: false }),
+    col('book_id', 'bigint', { fk: ref('public.book', 'book_id') }),
+  ],
   [],
   0,
 );
@@ -90,7 +119,13 @@ export const SCHEMA: SchemaSnapshot = {
   fks: [
     fk('book_author_id_fkey', 'public.book', 'author_id', 'public.author', 'author_id'),
     fk('book_category_id_fkey', 'public.book', 'category_id', 'public.book_category', 'category_id'),
-    fk('book_category_parent_id_fkey', 'public.book_category', 'parent_id', 'public.book_category', 'category_id'),
+    fk(
+      'book_category_parent_id_fkey',
+      'public.book_category',
+      'parent_id',
+      'public.book_category',
+      'category_id',
+    ),
     fk('cart_book_id_fkey', 'shop.cart', 'book_id', 'public.book', 'book_id', 'CASCADE'),
   ],
   sequences: [],

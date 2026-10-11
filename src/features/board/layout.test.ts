@@ -13,7 +13,8 @@ function rects(positions: Record<string, { x: number; y: number }>): Record<stri
   return out;
 }
 
-const overlap = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const overlap = (a: Rect, b: Rect) =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 describe('размеры таблицы', () => {
   it('высота: шапка, заголовки колонок, видимые строки и строка «+ ещё» или «пусто»', () => {
