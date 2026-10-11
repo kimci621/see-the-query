@@ -14,6 +14,7 @@
     "test:watch": "vitest --project node --project dom",
     "test:content": "vitest run --project content",
     "e2e": "playwright test",
+    "e2e:perf": "PERF=1 playwright test --grep @perf",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {

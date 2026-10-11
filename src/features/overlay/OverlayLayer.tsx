@@ -14,6 +14,15 @@ import './overlay.css';
 // Доля длительности фазы, которую занимает движение; остаток пауза, чтобы глаз успел
 const MOTION_SHARE = 0.85;
 
+// Камера сцены двигается, только пока пользователь работает с запросом: фокус в редакторе,
+// на доске или в таймлайне. При открытии урока остаётся его сохранённая камера (спека 5.12).
+// ponytail: эвристика по фокусу; если не хватит, завести в сторе флаг «сцену запустил пользователь»
+const USER_SCENE = '.cm-editor, [data-testid="board-area"], [data-testid="timeline"]';
+
+function userDrivesScene(): boolean {
+  return document.activeElement?.closest(USER_SCENE) != null;
+}
+
 export function OverlayLayer() {
   const trace = useSceneStore((s) => s.trace);
   const playback = useSceneStore((s) => s.playback);
@@ -50,7 +59,7 @@ export function OverlayLayer() {
 
   // «камера следит»: вписываем сцену, только если её границы изменились
   useEffect(() => {
-    if (!phase || !followCamera) return;
+    if (!phase || !followCamera || !userDrivesScene()) return;
     const b = frameBounds(phase.frame);
     if (!b) return;
     const key = `${Math.round(b.x)}:${Math.round(b.y)}:${Math.round(b.width)}:${Math.round(b.height)}`;
