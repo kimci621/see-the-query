@@ -1,13 +1,28 @@
+import type { ReactNode } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { BoardCanvas } from '@/features/board/BoardCanvas';
 import { useSettingsStore } from '@/stores/settings';
+import { useSchemaSync } from './useSchemaSync';
 
-// Заглушки панелей правой колонки; содержимое появится в Ф3, Ф4, Ф6
+// Панели правой колонки; панель без содержимого показывает подсказку-заглушку
 const PANELS = [
   { id: 'board', title: 'Доска', hint: 'Здесь будет доска с таблицами', minSize: 25 },
   { id: 'timeline', title: 'Таймлайн', hint: 'Шаги выполнения запроса', minSize: 5 },
   { id: 'editor', title: 'Редактор', hint: 'SQL-редактор', minSize: 10 },
   { id: 'results', title: 'Результат', hint: 'Результат запроса и сообщения', minSize: 8 },
 ] as const;
+
+function BoardSlot() {
+  useSchemaSync();
+  return (
+    <div className="relative h-full w-full">
+      <BoardCanvas />
+    </div>
+  );
+}
+
+// Содержимое панелей правой колонки
+const SLOTS: Partial<Record<string, ReactNode>> = { board: <BoardSlot /> };
 
 export function BoardPane() {
   const rightLayout = useSettingsStore((s) => s.rightLayout);
@@ -27,7 +42,9 @@ export function BoardPane() {
           last={index === PANELS.length - 1}
           size={rightLayout[index] ?? 25}
           {...panel}
-        />
+        >
+          {SLOTS[panel.id]}
+        </PanelSlot>
       ))}
     </ResizablePanelGroup>
   );
@@ -40,15 +57,20 @@ function PanelSlot(props: {
   minSize: number;
   size: number;
   last: boolean;
+  children?: ReactNode;
 }) {
   return (
     <>
       <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={`${props.minSize}%`}>
         <section
           aria-label={props.title}
-          className="flex h-full items-center justify-center text-sm text-muted-foreground"
+          className={
+            props.children
+              ? 'h-full'
+              : 'flex h-full items-center justify-center text-sm text-muted-foreground'
+          }
         >
-          {props.hint}
+          {props.children ?? props.hint}
         </section>
       </ResizablePanel>
       {!props.last && <ResizableHandle />}
