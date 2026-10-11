@@ -1,0 +1,207 @@
+import type { SchemaSnapshot } from '@/features/db/introspect';
+import type { Relation, Row, Stage, Trace } from '@/features/tracer/types';
+import type { AnimatorContext } from '../types';
+
+const bookColumns = [
+  { name: 'book_id', type: 'int8', source: { alias: 'b', column: 'book_id' } },
+  { name: 'title', type: 'text', source: { alias: 'b', column: 'title' } },
+  { name: 'price', type: 'numeric', source: { alias: 'b', column: 'price' } },
+];
+
+const row = (ctid: string, values: unknown[]): Row => ({ key: `b=${ctid}`, lineage: { b: ctid }, values });
+
+// Пять книг: одна без цены (NULL), одна дешёвая
+export const BOOKS: Row[] = [
+  row('(0,1)', [1, 'Тихий Дон', '890.00']),
+  row('(0,2)', [2, 'Python. К вершинам мастерства', '2400.00']),
+  row('(0,3)', [3, 'Судьба человека', '350.00']),
+  row('(0,7)', [7, 'Остров погибших кораблей', null]),
+  row('(0,8)', [8, 'Путешествие к центру Земли', '610.00']),
+];
+
+export function bookScan(): Extract<Stage, { kind: 'scan' }> {
+  return {
+    id: 's0',
+    kind: 'scan',
+    alias: 'b',
+    tableId: 'public.book',
+    caption: 'FROM book: 5 строк',
+    output: { columns: bookColumns, rows: BOOKS },
+  };
+}
+
+const pick = (keys: string[]) => keys.map((k) => BOOKS.find((r) => r.key === k) as Row);
+
+// select title, price, price * 0.9 as sale from book b where price > 500 order by price desc limit 2
+export function fullPipelineTrace(): Trace {
+  const afterWhere: Relation = { columns: bookColumns, rows: pick(['b=(0,1)', 'b=(0,2)', 'b=(0,8)']) };
+  const projColumns = [
+    { name: 'title', type: 'text', source: { alias: 'b', column: 'title' } },
+    { name: 'price', type: 'numeric', source: { alias: 'b', column: 'price' } },
+    { name: 'sale', type: 'numeric' },
+  ];
+  const proj = (k: string, title: string, price: string, sale: string): Row => ({
+    key: k,
+    lineage: { b: k.slice(2) },
+    values: [title, price, sale],
+  });
+  const projected: Row[] = [
+    proj('b=(0,1)', 'Тихий Дон', '890.00', '801.000'),
+    proj('b=(0,2)', 'Python. К вершинам мастерства', '2400.00', '2160.000'),
+    proj('b=(0,8)', 'Путешествие к центру Земли', '610.00', '549.000'),
+  ];
+  const sorted = [projected[1], projected[0], projected[2]];
+  const stages: Stage[] = [
+    bookScan(),
+    {
+      id: 's1',
+      kind: 'filter',
+      clause: 'where',
+      predicateColumns: ['price'],
+      verdicts: { 'b=(0,1)': true, 'b=(0,2)': true, 'b=(0,3)': false, 'b=(0,7)': null, 'b=(0,8)': true },
+      caption: 'WHERE price > 500: осталось 3 из 5',
+      output: afterWhere,
+    },
+    {
+      id: 's2',
+      kind: 'project',
+      kept: ['title', 'price'],
+      removed: ['book_id'],
+      computed: ['sale'],
+      renamed: {},
+      caption: 'SELECT: 3 колонки',
+      output: { columns: projColumns, rows: projected },
+    },
+    {
+      id: 's3',
+      kind: 'sort',
+      order: sorted.map((r) => r.key),
+      sortKeys: ['price'],
+      caption: 'ORDER BY price DESC',
+      output: { columns: projColumns, rows: sorted },
+    },
+    {
+      id: 's4',
+      kind: 'limit',
+      kept: ['b=(0,2)', 'b=(0,1)'],
+      cut: ['b=(0,8)'],
+      limit: 2,
+      offset: 0,
+      caption: 'LIMIT 2: осталось 2 из 3',
+      output: { columns: projColumns, rows: sorted.slice(0, 2) },
+    },
+  ];
+  return {
+    sql: 'select title, price, price * 0.9 as sale from book b where price > 500 order by price desc limit 2',
+    statementType: 'select',
+    mode: 'full',
+    touched: { tableIds: ['public.book'], columns: ['public.book.price'] },
+    stages,
+    result: null,
+    error: null,
+    notices: [],
+    timingMs: 12,
+  };
+}
+
+// select distinct price from book b (только цены, у двух книг цена 610)
+export function distinctTrace(): Trace {
+  const priceCol = [{ name: 'price', type: 'numeric' }];
+  const r = (k: string, p: string | null): Row => ({ key: k, lineage: { b: k.slice(2) }, values: [p] });
+  const projected = [
+    r('b=(0,1)', '890.00'),
+    r('b=(0,8)', '610.00'),
+    r('b=(0,9)', '610.00'),
+    r('b=(0,7)', null),
+  ];
+  const scanRows: Row[] = projected.map((p, i) => ({ ...p, values: [i, `книга ${i}`, p.values[0]] }));
+  const stages: Stage[] = [
+    { ...bookScan(), output: { columns: bookColumns, rows: scanRows }, caption: 'FROM book: 4 строки' },
+    {
+      id: 's1',
+      kind: 'project',
+      kept: ['price'],
+      removed: ['book_id', 'title'],
+      computed: [],
+      renamed: {},
+      caption: 'SELECT price',
+      output: { columns: priceCol, rows: projected },
+    },
+    {
+      id: 's2',
+      kind: 'distinct',
+      on: null,
+      stacks: [
+        { winner: 'b=(0,1)', members: ['b=(0,1)'] },
+        { winner: 'b=(0,8)', members: ['b=(0,8)', 'b=(0,9)'] },
+        { winner: 'b=(0,7)', members: ['b=(0,7)'] },
+      ],
+      caption: 'DISTINCT: 3 уникальных из 4',
+      output: { columns: priceCol, rows: [projected[0], projected[1], projected[3]] },
+    },
+  ];
+  return { ...fullPipelineTrace(), sql: 'select distinct price from book b', stages };
+}
+
+// Большая стадия: n строк, WHERE оставляет чётные
+export function bigFilterTrace(n: number): Trace {
+  const rows: Row[] = Array.from({ length: n }, (_, i) => ({
+    key: `b=(${Math.floor(i / 100)},${(i % 100) + 1})`,
+    lineage: { b: `(${Math.floor(i / 100)},${(i % 100) + 1})` },
+    values: [i, `книга ${i}`, String(i)],
+  }));
+  const verdicts: Record<string, boolean> = {};
+  rows.forEach((r, i) => {
+    verdicts[r.key] = i % 2 === 0;
+  });
+  const kept = rows.filter((_, i) => i % 2 === 0);
+  const stages: Stage[] = [
+    { ...bookScan(), output: { columns: bookColumns, rows }, caption: `FROM book: ${n} строк` },
+    {
+      id: 's1',
+      kind: 'filter',
+      clause: 'where',
+      predicateColumns: ['price'],
+      verdicts,
+      caption: `WHERE: осталось ${kept.length} из ${n}`,
+      output: { columns: bookColumns, rows: kept },
+    },
+  ];
+  return { ...fullPipelineTrace(), stages };
+}
+
+// Сжатый режим Ф5: таблица больше maxRows, строк в стадиях нет, только точный rowCount
+export function compressedTrace(n: number): Trace {
+  const stages: Stage[] = [
+    {
+      ...bookScan(),
+      output: { columns: bookColumns, rows: [] },
+      compressed: true,
+      rowCount: n,
+      caption: `FROM book: ${n} строк`,
+    },
+    {
+      id: 's1',
+      kind: 'filter',
+      clause: 'where',
+      predicateColumns: [],
+      verdicts: {},
+      compressed: true,
+      rowCount: n / 2,
+      caption: `WHERE: осталось ${n / 2} из ${n}`,
+      output: { columns: bookColumns, rows: [] },
+    },
+  ];
+  return { ...fullPipelineTrace(), stages };
+}
+
+export const EMPTY_SCHEMA: SchemaSnapshot = { schemas: ['public'], tables: [], fks: [], sequences: [] };
+
+// Контекст аниматоров для тестов: book стоит в (0, 0), рабочая зона справа
+export function testCtx(
+  rects: Record<string, { x: number; y: number; width: number; height: number }> = {
+    'public.book': { x: 0, y: 0, width: 260, height: 400 },
+  },
+): AnimatorContext {
+  return { nodeRect: (id) => rects[id] ?? null, workArea: { x: 500, y: 0 }, schema: EMPTY_SCHEMA };
+}
