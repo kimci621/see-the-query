@@ -169,7 +169,7 @@
 - ✅ (2026-10-11) **P5.3** Whitelist поддерживаемых узлов AST и фолбэк `final-only` с `touched`.
 - ✅ (2026-10-11) **P5.4** Сборщик проб (deparser или склейка по позициям, по итогам Ф0).
 - ✅ (2026-10-11) **P5.5** Стадия `scan` (ctid как lineage).
-- ⬜ **P5.6** Стадия `filter` (where) с вердиктами true / false / null.
+- ✅ (2026-10-11) **P5.6** Стадия `filter` (where) с вердиктами true / false / null.
 - ⬜ **P5.7** Стадия `project`: kept, removed, computed, renamed.
 - ⬜ **P5.8** Стадия `distinct` и `DISTINCT ON`.
 - ⬜ **P5.9** Стадия `sort` (позиции из упорядоченной пробы P: ORDER BY + ctid).
