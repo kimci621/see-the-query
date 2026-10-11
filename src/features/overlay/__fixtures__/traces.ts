@@ -76,7 +76,7 @@ export function fullPipelineTrace(): Trace {
       id: 's3',
       kind: 'sort',
       order: sorted.map((r) => r.key),
-      sortKeys: ['price'],
+      sortKeys: ['price DESC'],
       caption: 'ORDER BY price DESC',
       output: { columns: projColumns, rows: sorted },
     },
