@@ -1,16 +1,22 @@
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
 import { type Diagnostic, linter, setDiagnostics } from '@codemirror/lint';
 import type { Extension } from '@codemirror/state';
-import { type EditorView, keymap, type ViewUpdate } from '@codemirror/view';
+import { type EditorView, hoverTooltip, keymap, type ViewUpdate } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { useResolvedTheme } from '@/app/ThemeProvider';
+import { clauseRanges } from '@/features/sql/clauses';
+import { parseSql } from '@/features/sql/parser';
+import { statementAt } from '@/features/sql/statements';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { buildSchemaSpec } from './completion';
 import { parseDiagnostic, pgDiagnostic } from './diagnostics';
+import { clauseHighlight, setActiveClauseRange } from './highlight';
+import { columnContextAt } from './hover';
 import { editorTheme } from './theme';
+import { resolveColumn } from './touched';
 
 export interface SqlEditorProps {
   onApply?: () => void;
@@ -29,6 +35,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
   const parseError = useEditorStore((s) => s.parseError);
   const traceError = useSceneStore((s) => s.trace?.error ?? null);
   const traceSql = useSceneStore((s) => s.trace?.sql ?? null);
+  const activeClause = useEditorStore((s) => s.activeClause);
   const schema = useBoardStore((s) => s.schema);
   const resolved = useResolvedTheme();
   const viewRef = useRef<EditorView | null>(null);
@@ -36,6 +43,34 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
   // onApply меняется каждый рендер панели: замыкаем через ref, чтобы extensions не пересоздавались
   const applyRef = useRef(onApply);
   applyRef.current = onApply;
+
+  const hoverExtension = useMemo(
+    () =>
+      hoverTooltip((view, pos) => {
+        const docText = view.state.doc.toString();
+        const ctx = columnContextAt(docText, pos);
+        if (!ctx) return null;
+        const resolvedCol = resolveColumn(ctx.column, ctx.tables, schema);
+        if (!resolvedCol) return null;
+        return {
+          pos: ctx.column.from,
+          end: ctx.column.to,
+          above: true,
+          create() {
+            // подсветка на доске (и в призраке, когда он появится в Ф6)
+            useEditorStore.getState().setHoveredColumn(resolvedCol.id);
+            const dom = document.createElement('div');
+            dom.className = 'rounded-md border bg-popover px-2 py-1 text-xs font-mono shadow-sm';
+            dom.textContent = `${resolvedCol.id} : ${resolvedCol.type}`;
+            return {
+              dom,
+              destroy: () => useEditorStore.getState().setHoveredColumn(null),
+            };
+          },
+        };
+      }),
+    [schema],
+  );
 
   const extensions = useMemo(
     () => [
@@ -55,9 +90,11 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
         },
       ]),
       editorTheme(),
+      clauseHighlight(),
+      hoverExtension,
       ...extraExtensions,
     ],
-    [schema, extraExtensions],
+    [schema, hoverExtension, extraExtensions],
   );
 
   // Программные диагностики: lint-расширение уже зарегистрировано в extensions
@@ -75,6 +112,22 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
     }
     view.dispatch(setDiagnostics(view.state, diags));
   }, [parseError, traceError, traceSql]);
+
+  // Подсветка активного клауза в редакторе
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    let range: { from: number; to: number } | null = null;
+    if (activeClause) {
+      const parsed = parseSql(text);
+      if (parsed.ok) {
+        const stmt = statementAt(parsed.statements, useEditorStore.getState().cursor);
+        const found = stmt ? clauseRanges(stmt).find((r) => r.clause === activeClause) : undefined;
+        if (found) range = { from: found.from, to: Math.min(found.to, view.state.doc.length) };
+      }
+    }
+    view.dispatch({ effects: setActiveClauseRange.of(range) });
+  }, [activeClause, text]);
 
   return (
     <CodeMirror
