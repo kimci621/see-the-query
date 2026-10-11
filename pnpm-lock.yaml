@@ -71,6 +71,9 @@ importers:
       lucide-react:
         specifier: ^1.52.0
         version: 1.52.0(@types/react@19.3.0)(react@19.3.0)
+      pgsql-deparser:
+        specifier: 18.3.10
+        version: 18.3.10
       radix-ui:
         specifier: ^1.7.0
         version: 1.7.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -564,6 +567,9 @@ packages:
 
   '@oxc-project/types@0.153.0':
     resolution: {integrity: sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw==}
+
+  '@pgsql/quotes@18.2.4':
+    resolution: {integrity: sha512-muCDdPu/bM/f9d7IquBNfkMgiRPehv6vvjdhSMxXeVKwJKPX9xIscDu11ju15s7UeEXoWntE8zrSaR9wQ9wgCg==}
 
   '@pgsql/types@18.0.0':
     resolution: {integrity: sha512-jtAY4JU7jdVYZ/Vv3zlZqVP+FRWZokyCLKPPCnAApiaJAElpyyiMC3HRiquBu29kSrVs+rkqZD50SUIb/zyEGw==}
@@ -3215,6 +3221,9 @@ packages:
   path-to-regexp@8.4.2:
     resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
 
+  pgsql-deparser@18.3.10:
+    resolution: {integrity: sha512-VCSnAo+uGWkT3PrM8nOg/wectH/loy6J70oECpapLGamGym2Ri16I/k23pA7PGmLCu13Yc4d5KbOfyUvNsBbeg==}
+
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
@@ -4482,6 +4491,8 @@ snapshots:
       fastq: 1.20.3
 
   '@oxc-project/types@0.153.0': {}
+
+  '@pgsql/quotes@18.2.4': {}
 
   '@pgsql/types@18.0.0': {}
 
@@ -7275,6 +7286,11 @@ snapshots:
   path-key@4.0.0: {}
 
   path-to-regexp@8.4.2: {}
+
+  pgsql-deparser@18.3.10:
+    dependencies:
+      '@pgsql/quotes': 18.2.4
+      '@pgsql/types': 18.0.0
 
   picocolors@1.1.1: {}
 
