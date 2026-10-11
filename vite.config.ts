@@ -25,4 +25,6 @@ export default defineConfig({
     },
   },
   worker: { format: 'es' },
+  // PGlite сам грузит свои .wasm и .data: пребандлинг Vite их ломает
+  optimizeDeps: { exclude: ['@electric-sql/pglite'] },
 });

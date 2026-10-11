@@ -100,3 +100,20 @@ export async function createRpcClient(port: RpcPort, opts: RpcOptions = {}): Pro
     },
   };
 }
+
+export function createWorkerClient(opts: WorkerClientOptions = {}): Promise<DbClient> {
+  const worker = new Worker(new URL('./db.worker.ts', import.meta.url), { type: 'module' });
+  return createRpcClient(
+    {
+      post: (req) => worker.postMessage(req),
+      onMessage: (cb) => {
+        worker.onmessage = (e: MessageEvent<WorkerResponse>) => cb(e.data);
+      },
+      onError: (cb) => {
+        worker.onerror = () => cb();
+      },
+      terminate: () => worker.terminate(),
+    },
+    opts,
+  );
+}
