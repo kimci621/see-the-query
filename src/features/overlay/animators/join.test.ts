@@ -58,3 +58,46 @@ describe('joinAnimator: INNER', () => {
     expect(p[p.length - 1].frame.tables.at(-1)?.rows).toHaveLength(3);
   });
 });
+
+describe('joinAnimator: LEFT / RIGHT / FULL', () => {
+  const run = (type: 'left' | 'right' | 'full') => {
+    const trace = joinTrace(type);
+    const stage = trace.stages[2] as StageOf<'join'>;
+    const before = runUpTo(trace, 2, testCtx());
+    return { before, phases: joinAnimator(before, stage, 2, testCtx()) };
+  };
+  const rowOf = (
+    phase: { frame: { tables: { id: string; rows: { key: string }[] }[] } },
+    id: string,
+    key: string,
+  ) =>
+    phase.frame.tables.find((t) => t.id === id)?.rows.find((r) => r.key === key) as
+      | { state: string; values: unknown[] }
+      | undefined;
+
+  it('LEFT: левая строка без пары остаётся с NULL-половиной, правые без пары уходят', () => {
+    const { phases } = run('left');
+    expect(rowOf(phases[2], 't:b', 'b=(0,10)')?.state).toBe('null-filled');
+    expect(rowOf(phases[2], 't:a', 'a=(0,6)')?.state).toBe('dropped');
+    const noPair = rowOf(phases[3], 't:b|a', 'b=(0,10)|a=∅');
+    expect(noPair?.state).toBe('null-filled');
+    expect(noPair?.values.slice(3)).toEqual([null, null]);
+    expect(rowOf(phases[3], 't:b|a', 'b=(0,1)|a=(0,1)')?.state).toBe('normal');
+  });
+  it('RIGHT: зеркально, левая таблица подъезжает к правой, правая без пары остаётся', () => {
+    const { before, phases } = run('right');
+    const [left, right] = phases[0].frame.tables;
+    expect(right.x).toBe(before.tables[1].x);
+    expect(left.x).toBeGreaterThan(before.tables[0].x);
+    expect(rowOf(phases[2], 't:b', 'b=(0,10)')?.state).toBe('dropped');
+    const noPair = rowOf(phases[3], 't:b|a', 'b=∅|a=(0,6)');
+    expect(noPair?.state).toBe('null-filled');
+    expect(noPair?.values.slice(0, 3)).toEqual([null, null, null]);
+  });
+  it('FULL: обе стороны без пар остаются', () => {
+    const { phases } = run('full');
+    expect(rowOf(phases[3], 't:b|a', 'b=(0,10)|a=∅')?.state).toBe('null-filled');
+    expect(rowOf(phases[3], 't:b|a', 'b=∅|a=(0,6)')?.state).toBe('null-filled');
+    expect(phases[3].frame.tables[0].rows).toHaveLength(5);
+  });
+});

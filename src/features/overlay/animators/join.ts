@@ -27,22 +27,37 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     decorations,
   });
 
-  // 1. сближение: левая стоит, правая подъезжает вплотную на ту же высоту
+  // 1. сближение: ведущая сторона стоит, другая подъезжает вплотную на ту же высоту.
+  // RIGHT зеркалит LEFT: стоит правая, к ней едет левая
   const [leftKey, rightKey] = keyColumns(stage, left, right);
   const markKeys = (t: GhostTable, col: string) =>
     mapColumns(clearMarks(t), (c) => ({ state: c.name === col ? 'key' : 'normal' }));
-  const l1 = markKeys(left, leftKey);
-  const r1 = { ...markKeys(right, rightKey), x: left.x + ghostWidth(left) + JOIN_GAP, y: left.y };
+  const mirrored = stage.joinType === 'right';
+  const l1 = mirrored
+    ? { ...markKeys(left, leftKey), x: right.x - ghostWidth(left) - JOIN_GAP, y: right.y }
+    : markKeys(left, leftKey);
+  const r1 = mirrored
+    ? markKeys(right, rightKey)
+    : { ...markKeys(right, rightKey), x: left.x + ghostWidth(left) + JOIN_GAP, y: left.y };
   const result = rebuildTable(
     {
       id: joinTableId([...stage.leftAliases, stage.rightAlias]),
       title: `${left.title} + ${right.title}`,
-      x: left.x,
-      y: left.y,
+      x: l1.x,
+      y: l1.y,
     },
     stage.output,
     undefined,
     stageRows(stage),
+  );
+  // Строки без пары, которые тип JOIN сохраняет: в итоге у них NULL-половина
+  const keepsLeft = stage.joinType === 'left' || stage.joinType === 'full';
+  const keepsRight = stage.joinType === 'right' || stage.joinType === 'full';
+  const lonelyRows = new Set(
+    stage.pairs.flatMap(([l, r]) => (l === null || r === null ? [pairKey(stage, l, r)] : [])),
+  );
+  const merged = mapRows(withBadges(result, stage), (r) =>
+    lonelyRows.has(r.key) ? { state: 'null-filled' } : {},
   );
   const merge: Phase = {
     id: `${stageIndex}:merge`,
@@ -50,7 +65,7 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     caption: stage.caption,
     durationMs: 700,
     frame: {
-      tables: [...others, withBadges(result, stage.pairs)],
+      tables: [...others, merged],
       decorations: [counterNear(result, `${stageIndex}:counter`, `${stageRows(stage)} строк`)],
     },
   };
@@ -75,6 +90,7 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
   const hasPair = new Set(matched.flat());
   const mark = (t: GhostTable, lonely: GhostRow['state']) =>
     mapRows(t, (r) => ({ state: hasPair.has(r.key) ? 'matched' : lonely }));
+  const kept = keepsLeft || keepsRight;
 
   // 3. строки без пары краснеют и уходят
   return [
@@ -89,13 +105,25 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     {
       id: `${stageIndex}:unmatched`,
       stageIndex,
-      caption: `${label}: строки без пары уходят`,
+      caption: kept
+        ? `${label}: строки без пары ${keepsLeft && keepsRight ? 'с обеих сторон' : keepsLeft ? 'слева' : 'справа'} остаются, их вторая половина будет NULL`
+        : `${label}: строки без пары уходят`,
       durationMs: 600,
-      frame: frameOf(mark(l1, 'dropped'), mark(r1, 'dropped'), lines),
+      frame: frameOf(
+        mark(l1, keepsLeft ? 'null-filled' : 'dropped'),
+        mark(r1, keepsRight ? 'null-filled' : 'dropped'),
+        lines,
+      ),
     },
     merge,
   ];
 };
+
+// Ключ строки результата для пары, как в трассировщике: 'b=(0,10)|a=∅'
+function pairKey(stage: StageOf<'join'>, l: RowKey | null, r: RowKey | null): RowKey {
+  const left = l ?? stage.leftAliases.map((a) => `${a}=∅`).join('|');
+  return `${left}|${r ?? `${stage.rightAlias}=∅`}`;
+}
 
 // Колонки ключей для линий: из ON ('b.author_id') или первая USING-колонка
 function keyColumns(stage: StageOf<'join'>, left: GhostTable, right: GhostTable): [string, string] {
@@ -107,7 +135,8 @@ function keyColumns(stage: StageOf<'join'>, left: GhostTable, right: GhostTable)
 }
 
 // Клоны: строка, которая встретилась в N парах, размножилась на N строк результата
-function withBadges(t: GhostTable, pairs: Array<[RowKey | null, RowKey | null]>): GhostTable {
+function withBadges(t: GhostTable, stage: StageOf<'join'>): GhostTable {
+  const { pairs } = stage;
   const seen = new Map<RowKey, number>();
   for (const [l, r] of pairs) {
     if (l === null || r === null) continue;
@@ -117,7 +146,7 @@ function withBadges(t: GhostTable, pairs: Array<[RowKey | null, RowKey | null]>)
   const byRow = new Map<RowKey, number>();
   for (const [l, r] of pairs) {
     if (l === null || r === null) continue;
-    byRow.set(`${l}|${r}`, Math.max(seen.get(l) ?? 1, seen.get(r) ?? 1));
+    byRow.set(pairKey(stage, l, r), Math.max(seen.get(l) ?? 1, seen.get(r) ?? 1));
   }
   return mapRows(t, (r) => {
     const n = byRow.get(r.key) ?? 1;

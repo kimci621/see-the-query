@@ -10,6 +10,7 @@
 .vs-row--kept { background: color-mix(in oklab, var(--kept) 18%, transparent); }
 .vs-row--dropped { background: color-mix(in oklab, var(--dropped) 18%, transparent); text-decoration: line-through; }
 .vs-row--unknown { background: color-mix(in oklab, var(--null) 22%, transparent); }
+.vs-row--null-filled { background: color-mix(in oklab, var(--null) 14%, transparent); }
 .vs-row--matched { background: color-mix(in oklab, var(--match) 18%, transparent); }
 .vs-row--new { background: color-mix(in oklab, var(--new) 18%, transparent); }
 .vs-row--changed { background: color-mix(in oklab, var(--changed) 22%, transparent); }
