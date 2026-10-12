@@ -3,7 +3,7 @@ import { captions } from '../captions';
 import { sqlOf } from '../probe';
 import type { RowKey } from '../types';
 import { walk } from '../whitelist';
-import { keyOf, rangeOf, stageId } from './context';
+import { rangeOf, stageId } from './context';
 import type { SelectStep } from './pipeline';
 
 // WHERE: вердикт true / false / null по каждой строке, остаются только true
@@ -13,10 +13,10 @@ export const filterStep: SelectStep = {
   async run(ctx) {
     const where = ctx.sel.whereClause as Node;
     const r = await ctx.prober.rows(
-      `SELECT ${ctx.sql.lineage}, (${sqlOf(where)}) AS __vs_pred${ctx.sql.from}`,
+      `SELECT ${ctx.sql.rowKey}, (${sqlOf(where)}) AS __vs_pred${ctx.sql.from}`,
     );
     const verdicts: Record<RowKey, true | false | null> = {};
-    for (const [ctid, verdict] of r.rows) verdicts[keyOf(ctx, ctid as string)] = verdict as boolean | null;
+    for (const [key, verdict] of r.rows) verdicts[key as RowKey] = verdict as boolean | null;
     const before = ctx.rows.length;
     ctx.rows = ctx.rows.filter((row) => verdicts[row.key] === true);
     const predicateColumns = new Set<string>();

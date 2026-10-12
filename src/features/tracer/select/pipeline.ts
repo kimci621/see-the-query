@@ -1,6 +1,7 @@
 import type { SelectCtx } from './context';
 import { distinctStep } from './distinct';
 import { filterStep } from './filter';
+import { joinStep } from './join';
 import { limitStep } from './limit';
 import { projectStep } from './project';
 import { scanStep } from './scan';
@@ -15,6 +16,7 @@ export interface SelectStep {
 
 export const SELECT_PIPELINE: SelectStep[] = [
   scanStep,
+  joinStep,
   filterStep,
   projectStep,
   distinctStep,

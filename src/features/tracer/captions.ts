@@ -14,6 +14,13 @@ const colsWord = (n: number) => `${n} ${plural(n, 'колонка', 'колон�
 export const captions = {
   scan: (table: string, alias: string, n: number) =>
     `FROM ${table}${alias !== table ? ` AS ${alias}` : ''}: ${rowsWord(n)}`,
+  join: (type: string, pairs: number, noLeft: number, noRight: number) => {
+    const parts = [`${type} JOIN: ${pairs} ${plural(pairs, 'пара', 'пары', 'пар')}`];
+    if (noLeft) parts.push(`${rowsWord(noLeft)} слева без пары`);
+    if (noRight) parts.push(`${rowsWord(noRight)} справа без пары`);
+    return parts.join(', ');
+  },
+  joinCompressed: (type: string, n: number) => `${type} JOIN: ${rowsWord(n)}`,
   filter: (before: number, after: number, unknown: number) =>
     `WHERE: осталось ${after} из ${rowsWord(before)}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   project: (kept: number, from: number, computed: number) =>

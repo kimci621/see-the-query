@@ -1,4 +1,4 @@
-import type { FuncCall, Node, SelectStmt } from '@pgsql/types';
+import type { FuncCall, JoinExpr, Node, SelectStmt } from '@pgsql/types';
 import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import type { ParsedStatement, StatementKind } from '@/features/sql/types';
 
@@ -68,6 +68,9 @@ export type Feature =
   | 'volatile-other'
   | 'volatile-order-limit'
   | 'join'
+  | 'join-right'
+  | 'join-full'
+  | 'join-cross'
   | 'subquery'
   | 'function-from'
   | 'other-from'
@@ -92,6 +95,7 @@ export const SUPPORTED = new Set<Feature>([
   'order',
   'limit',
   'volatile',
+  'join',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {
@@ -107,6 +111,9 @@ const FEATURE_LABELS: Record<Feature, string> = {
   'volatile-other': 'volatile-функция в WHERE, DISTINCT или LIMIT',
   'volatile-order-limit': 'volatile-функция в ORDER BY вместе с LIMIT или OFFSET',
   join: 'JOIN',
+  'join-right': 'RIGHT JOIN',
+  'join-full': 'FULL JOIN',
+  'join-cross': 'CROSS JOIN',
   subquery: 'подзапрос',
   'function-from': 'функция в FROM',
   'other-from': 'сложный FROM',
@@ -174,9 +181,9 @@ export function selectFeatures(sel: SelectStmt): Set<Feature> {
     f.add('no-from');
     if (sel.whereClause || sel.distinctClause || sel.sortClause || sel.limitCount || sel.limitOffset)
       f.add('no-from-clauses');
-  } else if (sel.fromClause.length > 1) f.add('join');
+  } else if (sel.fromClause.length > 1) f.add('join-cross');
   for (const item of sel.fromClause ?? []) {
-    if ('JoinExpr' in item) f.add('join');
+    if ('JoinExpr' in item) joinFeatures(item, f);
     else if ('RangeSubselect' in item) f.add('subquery');
     else if ('RangeFunction' in item) f.add('function-from');
     else if (!('RangeVar' in item)) f.add('other-from');
@@ -206,6 +213,19 @@ export function selectFeatures(sel: SelectStmt): Set<Feature> {
   // Окно над случайным порядком выбирает другие строки, чем эталон
   if (f.has('limit') && volatileSort(sel)) f.add('volatile-order-limit');
   return f;
+}
+
+// Виды соединений по всему дереву FROM; что внутри - разбирает flattenFrom
+function joinFeatures(node: Node, f: Set<Feature>): void {
+  walk(node, (key, value) => {
+    if (key !== 'JoinExpr') return;
+    const je = value as JoinExpr;
+    if (je.jointype === 'JOIN_RIGHT') f.add('join-right');
+    else if (je.jointype === 'JOIN_FULL') f.add('join-full');
+    else if (je.jointype === 'JOIN_INNER' && !je.quals && !je.usingClause && !je.isNatural)
+      f.add('join-cross');
+    else f.add('join');
+  });
 }
 
 // Ключ ORDER BY volatile сам или ссылается на volatile-колонку выхода по имени или номеру

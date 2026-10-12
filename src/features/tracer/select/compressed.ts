@@ -1,6 +1,6 @@
 import type { Node } from '@pgsql/types';
 import { captions, limitLabel } from '../captions';
-import { sqlOf } from '../probe';
+import { ident, sqlOf } from '../probe';
 import type { Column, Stage } from '../types';
 import { rangeOf, type SelectCtx, stageId } from './context';
 import { projection } from './project';
@@ -16,24 +16,46 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     output: { columns, rows: [] },
   });
 
-  const head = await ctx.prober.run(`SELECT ${sql.alias}.*${sql.from} LIMIT 0`);
-  const types = await ctx.typeNames(head.fields.map((f) => f.dataTypeID));
-  ctx.scanColumns = head.fields.map((f) => f.name);
-  const scanCols = head.fields.map((f) => ({
-    name: f.name,
-    type: types.get(f.dataTypeID) ?? 'unknown',
-    source: { alias: ctx.alias, column: f.name },
-  }));
-  let n = await count(`SELECT 1${sql.from}`);
-  ctx.stages.push({
-    ...base('scan', scanCols),
-    kind: 'scan',
-    alias: ctx.alias,
-    tableId: ctx.table.id,
-    rowCount: n,
-    sourceRange: rangeOf(ctx.stmt, 'from'),
-    caption: captions.scan(ctx.table.name, ctx.alias, n),
-  });
+  let n = 0;
+  for (const [i, { alias, table }] of ctx.sources.entries()) {
+    const head = await ctx.prober.run(`SELECT ${ident(alias)}.*${sql.fromSource(i)} LIMIT 0`);
+    const types = await ctx.typeNames(head.fields.map((f) => f.dataTypeID));
+    const cols = head.fields.map((f) => ({
+      name: f.name,
+      type: types.get(f.dataTypeID) ?? 'unknown',
+      source: { alias, column: f.name },
+    }));
+    ctx.sourceColumns.push(cols);
+    ctx.scanColumns.push(...cols.map((c) => c.name));
+    n = await count(`SELECT 1${sql.fromSource(i)}`);
+    ctx.stages.push({
+      ...base('scan', cols),
+      kind: 'scan',
+      alias,
+      tableId: table.id,
+      rowCount: n,
+      sourceRange: rangeOf(ctx.stmt, 'from'),
+      caption: captions.scan(table.name, alias, n),
+    });
+  }
+  for (const [k, j] of ctx.joins.entries()) {
+    const cols = ctx.sourceColumns.slice(0, k + 2).flat();
+    n = await count(`SELECT 1${sql.fromUpTo(k)}`);
+    ctx.stages.push({
+      ...base('join', cols),
+      kind: 'join',
+      joinType: j.jointype,
+      leftAliases: ctx.aliasOrder.slice(0, k + 1),
+      rightAlias: j.right.alias,
+      pairs: [],
+      onColumns: [],
+      usingColumns: j.using ?? [],
+      rowCount: n,
+      sourceRange: rangeOf(ctx.stmt, 'from'),
+      caption: captions.joinCompressed(j.jointype.toUpperCase(), n),
+    });
+  }
+  const scanCols = ctx.sourceColumns.flat();
 
   if (sel.whereClause) {
     const before = n;

@@ -1,18 +1,23 @@
 import type { Node, SelectStmt, SortBy } from '@pgsql/types';
-import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { QueryResult } from '@/features/db/types';
 import { clauseRanges } from '@/features/sql/clauses';
 import type { ClauseName, ParsedStatement } from '@/features/sql/types';
 import { ident, type Prober, sqlOf, TraceFallback, typeNames } from '../probe';
-import { rowKeyOf } from '../rowkey';
 import type { Column, Row, RowKey, SourceRange, Stage } from '../types';
 import { canon, rowCanon } from '../verify';
 import { hasVolatile } from '../whitelist';
 import { alignWindow } from './align';
+import { type JoinNode, joinFragment, type Source } from './join';
 
 export interface Output {
   columns: Column[]; // выходные колонки запроса
-  kinds: Array<{ kind: 'kept' | 'renamed' | 'computed'; column: string | null; expr: Node | null }>;
+  kinds: Array<{
+    kind: 'kept' | 'renamed' | 'computed';
+    column: string | null;
+    alias: string | null; // источник колонки
+    expr: Node | null;
+  }>;
   stable: boolean[]; // false у volatile-колонки: её значения в пробе и в эталоне разные
 }
 
@@ -37,10 +42,19 @@ export interface SelectCtx {
   prober: Prober;
   reference: QueryResult;
   volatile: boolean;
-  table: TableInfo;
-  alias: string; // алиас или имя таблицы, ключ lineage
-  sql: { alias: string; lineage: string; from: string; where: string; targets: string };
-  scanColumns: string[];
+  sources: Source[];
+  joins: JoinNode[];
+  aliasOrder: string[]; // алиасы источников по порядку, ключ lineage
+  sql: {
+    rowKey: string; // выражение SQL, дающее RowKey строки
+    from: string;
+    fromUpTo: (k: number) => string; // FROM до k-го JOIN включительно
+    fromSource: (i: number) => string;
+    where: string;
+    targets: string;
+  };
+  scanColumns: string[]; // имена колонок всех источников по порядку
+  sourceColumns: Column[][]; // колонки каждого источника, их заполняет scan
   columns: Column[];
   rows: Row[];
   stages: Stage[];
@@ -64,25 +78,31 @@ export function createSelectCtx(args: {
   prober: Prober;
   reference: QueryResult;
   volatile: boolean;
-  table: TableInfo;
+  sources: Source[];
+  joins: JoinNode[];
   schema: SchemaSnapshot;
 }): SelectCtx {
-  const { sel, prober } = args;
-  const rv = sel.fromClause?.[0];
-  const alias = rv && 'RangeVar' in rv ? (rv.RangeVar.alias?.aliasname ?? rv.RangeVar.relname ?? '') : '';
-  const a = ident(alias);
+  const { sel, prober, sources, joins } = args;
+  const aliasOrder = sources.map((s) => s.alias);
   const types = new Map<number, string>();
+  const fromUpTo = (k: number) =>
+    ` FROM ${sqlOf(sources[0].rv)}${joins
+      .slice(0, k + 1)
+      .map(joinFragment)
+      .join('')}`;
   const ctx: SelectCtx = {
     ...args,
-    alias,
+    aliasOrder,
     sql: {
-      alias: a,
-      lineage: `${a}.ctid::text AS __vs_l0`,
-      from: rv ? ` FROM ${sqlOf(rv)}` : '',
+      rowKey: rowKeySql(aliasOrder),
+      from: fromUpTo(joins.length - 1),
+      fromUpTo,
+      fromSource: (i) => ` FROM ${sqlOf(sources[i].rv)}`,
       where: sel.whereClause ? ` WHERE ${sqlOf(sel.whereClause)}` : '',
       targets: (sel.targetList ?? []).map(sqlOf).join(', '),
     },
     scanColumns: [],
+    sourceColumns: [],
     columns: [],
     rows: [],
     stages: [],
@@ -94,8 +114,13 @@ export function createSelectCtx(args: {
   return ctx;
 }
 
-export function keyOf(ctx: SelectCtx, ctid: string): RowKey {
-  return rowKeyOf({ [ctx.alias]: ctid }, [ctx.alias]);
+// RowKey прямо в SQL, как rowKeyOf: 'b=(0,3)|a=∅'
+export function rowKeySql(aliases: string[]): string {
+  const parts = aliases.map((a, i) => {
+    const label = `${i ? '|' : ''}${a}=`.replaceAll("'", "''");
+    return `'${label}', coalesce(${ident(a)}.ctid::text, '∅')`;
+  });
+  return `concat(${parts.join(', ')})`;
 }
 
 export function stageId(ctx: SelectCtx, kind: Stage['kind']): string {
@@ -118,14 +143,22 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
     const rt = 'ResTarget' in node ? node.ResTarget : {};
     const ref = rt.val && 'ColumnRef' in rt.val ? rt.val.ColumnRef : null;
     const last = ref?.fields?.at(-1);
+    const qualifier = ref?.fields?.length === 2 ? ref.fields[0] : undefined;
+    const alias = qualifier && 'String' in qualifier ? (qualifier.String.sval ?? null) : null;
     if (last && 'A_Star' in last) {
-      for (const column of ctx.scanColumns) kinds.push({ kind: 'kept', column, expr: null });
+      // * раскрывается во все источники, b.* только в свой
+      ctx.sourceColumns.forEach((cols, i) => {
+        if (alias !== null && ctx.aliasOrder[i] !== alias) return;
+        for (const c of cols)
+          kinds.push({ kind: 'kept', column: c.name, alias: ctx.aliasOrder[i], expr: null });
+      });
       continue;
     }
     const column = last && 'String' in last ? (last.String.sval ?? null) : null;
-    if (column && ctx.scanColumns.includes(column))
-      kinds.push({ kind: 'kept', column, expr: rt.val ?? null });
-    else kinds.push({ kind: 'computed', column: null, expr: rt.val ?? null });
+    const owner = column === null ? -1 : sourceOf(ctx, alias, column);
+    if (column && owner >= 0)
+      kinds.push({ kind: 'kept', column, alias: ctx.aliasOrder[owner], expr: rt.val ?? null });
+    else kinds.push({ kind: 'computed', column: null, alias: null, expr: rt.val ?? null });
   }
   // (t).* и подобное раскрываются в несколько колонок, сопоставить их с целями списка нельзя
   if (kinds.length !== probe.fields.length)
@@ -136,10 +169,18 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
     return {
       name: f.name,
       type: types.get(f.dataTypeID) ?? 'unknown',
-      ...(k.column ? { source: { alias: ctx.alias, column: k.column } } : {}),
+      ...(k.column && k.alias ? { source: { alias: k.alias, column: k.column } } : {}),
     };
   });
   return { columns, kinds, stable: kinds.map((k) => !hasVolatile(k.expr)) };
+}
+
+// Индекс источника колонки: по квалификатору или единственный источник с таким именем
+export function sourceOf(ctx: SelectCtx, alias: string | null, column: string): number {
+  const owners = ctx.sourceColumns.flatMap((cols, i) =>
+    (alias === null || ctx.aliasOrder[i] === alias) && cols.some((c) => c.name === column) ? [i] : [],
+  );
+  return owners.length === 1 ? owners[0] : -1;
 }
 
 // Ключ ORDER BY / DISTINCT ON → индекс выходной колонки (номер или имя выхода) или null (выражение над входом)
@@ -182,21 +223,21 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
       // Выражение считается один раз в той же пробе: random() даёт согласованный порядок
       extra.push(`(${sb.node ? sqlOf(sb.node) : 'NULL'}) AS __vs_k${i}`);
       orderParts.push(`__vs_k${i}${dir}${nulls}`);
-      tupleIdx.push(n + extra.length);
+      tupleIdx.push(n + extra.length); // после колонок SELECT идёт ключ строки, затем выражения
       leading = false;
     }
   }
   // ctid последним ключом: порядок равных строк детерминирован
-  orderParts.push(`${ctx.sql.alias}.ctid`);
+  for (const a of ctx.aliasOrder) orderParts.push(`${ident(a)}.ctid`);
   const extraSql = extra.map((e) => `, ${e}`).join('');
   const r = await ctx.prober.rows(
-    `SELECT ${ctx.sql.targets}, ${ctx.sql.lineage}${extraSql}${ctx.sql.from}${ctx.sql.where} ORDER BY ${orderParts.join(', ')}`,
+    `SELECT ${ctx.sql.targets}, ${ctx.sql.rowKey} AS __vs_key${extraSql}${ctx.sql.from}${ctx.sql.where} ORDER BY ${orderParts.join(', ')}`,
   );
   const order: RowKey[] = [];
   const values = new Map<RowKey, unknown[]>();
   const tuple = new Map<RowKey, string>();
   for (const row of r.rows) {
-    const key = keyOf(ctx, row[n] as string);
+    const key = row[n] as RowKey;
     // Повтор ctid: функция в SELECT размножила строку, lineage неоднозначен
     if (values.has(key))
       throw new TraceFallback('Пока не анимируется: функция, возвращающая несколько строк');

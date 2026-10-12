@@ -5,10 +5,11 @@ import { createProber, ProbeOverflow, TraceFallback, typeNames } from './probe';
 import { resultKey } from './rowkey';
 import { runCompressed } from './select/compressed';
 import { createSelectCtx, rangeOf, stableCanon } from './select/context';
+import { flattenFrom } from './select/join';
 import { runSelect } from './select/pipeline';
 import type { Stage, Trace, TraceOptions } from './types';
 import { sameResult } from './verify';
-import { findTable, selectFeatures, touchedOf, unsupportedReason } from './whitelist';
+import { selectFeatures, touchedOf, unsupportedReason } from './whitelist';
 
 // Вызывающий обязан обернуть вызов в sandbox.preview: транзакция уже открыта
 export async function traceStatement(
@@ -100,15 +101,11 @@ export async function traceStatement(
     return finish({ mode: 'full', stages: [stage], result: reference, error: null });
   }
 
-  const rv = sel.fromClause[0];
-  const table =
-    'RangeVar' in rv ? findTable(opts.schema, rv.RangeVar.schemaname, rv.RangeVar.relname ?? '') : null;
-  if (!table) return finalOnly('Таблица не найдена в схеме');
-  // У представления нет ctid, у секций родителя ctid повторяются
-  if (table.kind === 'view') return finalOnly('Пока не анимируется: представление');
-  if (table.kind === 'partitioned') return finalOnly('Пока не анимируется: секционированная таблица');
+  const from = flattenFrom(sel, opts.schema);
+  if (!from.ok) return finalOnly(from.reason);
 
-  const args = { stmt, sel, prober, reference, volatile, table, schema: opts.schema };
+  const { sources, joins } = from;
+  const args = { stmt, sel, prober, reference, volatile, sources, joins, schema: opts.schema };
   let ctx = createSelectCtx(args);
   let compressed = false;
   try {

@@ -41,8 +41,11 @@ describe('whitelist', () => {
       'Пока не анимируется: агрегатные функции',
     );
     expect(unsupportedReason(await stmt('select b.title from book b join author a using (author_id)'))).toBe(
-      'Пока не анимируется: JOIN',
+      null,
     );
+    expect(
+      unsupportedReason(await stmt('select b.title from book b full join author a using (author_id)')),
+    ).toBe('Пока не анимируется: FULL JOIN');
     expect(
       unsupportedReason(await stmt('select * from book where price > (select avg(price) from book)')),
     ).toBe('Пока не анимируется: подзапрос, агрегатные функции');
