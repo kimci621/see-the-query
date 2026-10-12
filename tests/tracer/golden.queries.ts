@@ -143,3 +143,77 @@ export const GOLDEN: Array<{ sql: string; stages: string }> = [
     stages: 'scan:11 > project:11 > sort:11 > limit:3',
   },
 ];
+
+// Golden-набор Ф7: JOIN всех видов, GROUP BY, агрегаты, HAVING
+export const GOLDEN_F7: Array<{ sql: string; stages: string }> = [
+  {
+    sql: 'select b.title, a.name from book b join author a on b.author_id = a.author_id',
+    stages: 'scan:11 > scan:6 > join:9 > project:9',
+  },
+  {
+    sql: 'select b.title, a.name from book b left join author a on b.author_id = a.author_id',
+    stages: 'scan:11 > scan:6 > join:11 > project:11',
+  },
+  {
+    sql: 'select a.name, b.title from author a right join book b on a.author_id = b.author_id',
+    stages: 'scan:6 > scan:11 > join:11 > project:11',
+  },
+  {
+    sql: 'select b.title, a.name from book b full join author a on b.author_id = a.author_id',
+    stages: 'scan:11 > scan:6 > join:12 > project:12',
+  },
+  {
+    sql: 'select b.title, c.name from book b cross join customer c',
+    stages: 'scan:11 > scan:6 > join:66 > project:66',
+  },
+  {
+    sql: 'select b.title, c.name from book b, customer c limit 10',
+    stages: 'scan:11 > scan:6 > join:66 > project:66 > limit:10',
+  },
+  {
+    sql: 'select * from book b join author a using (author_id)',
+    stages: 'scan:11 > scan:6 > join:9 > project:9',
+  },
+  {
+    sql: 'select b.title, a.name from book b natural join author a',
+    stages: 'scan:11 > scan:6 > join:9 > project:9',
+  },
+  {
+    sql: 'select e.name, m.name from employee e join employee m on e.manager_id = m.employee_id',
+    stages: 'scan:8 > scan:8 > join:7 > project:7',
+  },
+  {
+    sql: 'select b.title, c.name, o.order_id from orders o join order_item oi on o.order_id = oi.order_id join book b on oi.book_id = b.book_id join customer c on o.customer_id = c.customer_id',
+    stages: 'scan:8 > scan:15 > scan:11 > scan:6 > join:15 > join:15 > join:15 > project:15',
+  },
+  {
+    sql: "select b.title from book b join author a on b.author_id = a.author_id where a.country = 'Россия'",
+    stages: 'scan:11 > scan:6 > join:9 > filter:6 > project:6',
+  },
+  {
+    sql: 'select b.title from book b left join author a on b.author_id = a.author_id and a.country is null',
+    stages: 'scan:11 > scan:6 > join:11 > project:11',
+  },
+  { sql: 'select author_id, count(*) from book group by author_id', stages: 'scan:11 > group:6 > project:6' },
+  { sql: 'select count(*), count(price) from book', stages: 'scan:11 > group:1 > project:1' },
+  {
+    sql: 'select author_id, sum(price) as total from book group by author_id order by total desc',
+    stages: 'scan:11 > group:6 > project:6 > sort:6',
+  },
+  {
+    sql: 'select author_id, count(*) from book group by author_id having count(*) > 1',
+    stages: 'scan:11 > group:6 > filter:5 > project:5',
+  },
+  {
+    sql: 'select a.country, count(*) from book b join author a on b.author_id = a.author_id group by a.country order by count(*) desc limit 2',
+    stages: 'scan:11 > scan:6 > join:9 > group:3 > project:3 > sort:3 > limit:2',
+  },
+  {
+    sql: 'select c.name, count(*) from customer c left join orders o on c.customer_id = o.customer_id group by c.name order by count(*) desc',
+    stages: 'scan:6 > scan:8 > join:9 > group:5 > project:5 > sort:5',
+  },
+  {
+    sql: 'select o.status, sum(oi.qty * oi.price) from orders o join order_item oi on o.order_id = oi.order_id group by o.status',
+    stages: 'scan:8 > scan:15 > join:15 > group:4 > project:4',
+  },
+];
