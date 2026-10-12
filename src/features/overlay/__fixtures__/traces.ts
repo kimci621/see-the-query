@@ -365,3 +365,66 @@ export function crossJoinTrace(n = 3, m = 2): Trace {
   ];
   return { ...joinTrace(), sql: 'select * from book b cross join customer c', stages };
 }
+
+// select author_id, count(*) from book group by author_id: 4 книги (авторы 1, 1, 3, NULL) → 3 группы
+export function groupTrace(aggregates = ['count(*)']): Trace {
+  const groupCols = [bCols[2], { name: 'count', type: 'int8' }];
+  const groupRows: Row[] = [
+    { key: 'g:0', lineage: {}, values: [1, 2] },
+    { key: 'g:1', lineage: {}, values: [3, 1] },
+    { key: 'g:2', lineage: {}, values: [null, 1] },
+  ];
+  const stages: Stage[] = [
+    {
+      id: 's0',
+      kind: 'scan',
+      alias: 'b',
+      tableId: 'public.book',
+      caption: 'FROM book AS b: 4 строки',
+      output: { columns: bCols, rows: JOIN_BOOKS },
+    },
+    {
+      id: 's1',
+      kind: 'group',
+      keys: ['author_id'],
+      aggregates,
+      groups: [
+        { key: 'g:0', members: ['b=(0,1)', 'b=(0,3)'] },
+        { key: 'g:1', members: ['b=(0,4)'] },
+        { key: 'g:2', members: ['b=(0,10)'] },
+      ],
+      caption: 'GROUP BY author_id: 4 строки → 3 группы',
+      output: { columns: groupCols, rows: groupRows },
+    },
+    {
+      id: 's2',
+      kind: 'project',
+      kept: ['author_id', 'count'],
+      removed: [],
+      computed: [],
+      renamed: {},
+      caption: 'SELECT: 2 колонки из 2',
+      output: { columns: groupCols, rows: groupRows },
+    },
+  ];
+  return { ...joinTrace(), sql: 'select author_id, count(*) from book b group by author_id', stages };
+}
+
+// select count(*) from book b: агрегат без GROUP BY, одна группа из всех строк
+export function aggregateTrace(): Trace {
+  const countCols = [{ name: 'count', type: 'int8' }];
+  const rows: Row[] = [{ key: 'g:0', lineage: {}, values: [4] }];
+  const stages: Stage[] = [
+    groupTrace().stages[0],
+    {
+      id: 's1',
+      kind: 'group',
+      keys: [],
+      aggregates: ['count(*)'],
+      groups: [{ key: 'g:0', members: JOIN_BOOKS.map((r) => r.key) }],
+      caption: 'Агрегат без GROUP BY: 4 строки → 1 строка',
+      output: { columns: countCols, rows },
+    },
+  ];
+  return { ...joinTrace(), sql: 'select count(*) from book b', stages };
+}

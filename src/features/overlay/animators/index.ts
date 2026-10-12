@@ -2,6 +2,7 @@ import type { Stage } from '@/features/tracer/types';
 import type { Animator } from '../types';
 import { distinctAnimator } from './distinct';
 import { filterAnimator } from './filter';
+import { groupAnimator } from './group';
 import { joinAnimator } from './join';
 import { limitAnimator } from './limit';
 import { projectAnimator } from './project';
@@ -13,6 +14,7 @@ export const ANIMATORS: { [K in Stage['kind']]?: Animator<Extract<Stage, { kind:
   scan: scanAnimator,
   join: joinAnimator,
   filter: filterAnimator,
+  group: groupAnimator,
   project: projectAnimator,
   distinct: distinctAnimator,
   sort: sortAnimator,
