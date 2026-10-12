@@ -9,7 +9,7 @@ import { flattenFrom } from './select/join';
 import { runSelect } from './select/pipeline';
 import type { Stage, Trace, TraceOptions } from './types';
 import { sameResult } from './verify';
-import { selectFeatures, touchedOf, unsupportedReason } from './whitelist';
+import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason } from './whitelist';
 
 // Вызывающий обязан обернуть вызов в sandbox.preview: транзакция уже открыта
 export async function traceStatement(
@@ -51,7 +51,7 @@ export async function traceStatement(
       id: '0:error',
       kind: 'error',
       error,
-      focus: touched,
+      focus: (error.code === '42803' && groupingErrorFocus(error.message, stmt.ast, opts.schema)) || touched,
       caption: captions.error(error.code, error.message),
       output: { columns: [], rows: [] },
     };

@@ -6,9 +6,11 @@ import type { Animator, AnimatorContext, Frame, Phase, Playback } from './types'
 export type { Playback };
 export { ANIMATORS };
 
-// Прогоняет стадии трассы через аниматоры и собирает плоский список фаз
+// Прогоняет стадии трассы через аниматоры и собирает плоский список фаз.
+// У трассы с ошибкой единственная стадия error: её сцену решает errorAnimator
 export function buildPlayback(trace: Trace, ctx: AnimatorContext): Playback {
-  if (trace.mode !== 'full' || trace.stages.length === 0) return { phases: [], stageStarts: [] };
+  if ((trace.mode !== 'full' && !trace.error) || trace.stages.length === 0)
+    return { phases: [], stageStarts: [] };
   let frame: Frame = { tables: [], decorations: [] };
   const phases: Phase[] = [];
   const stageStarts: number[] = [];

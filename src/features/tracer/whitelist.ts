@@ -272,6 +272,25 @@ export function findTable(
   return matches.find((t) => t.kind === 'temp') ?? matches[0] ?? null;
 }
 
+// 42803: column "b.title" must appear in the GROUP BY clause → фокус ровно на этой колонке
+export function groupingErrorFocus(
+  message: string,
+  ast: Node,
+  schema: SchemaSnapshot,
+): { tableIds: string[]; columns: string[] } | null {
+  const parts = message.match(/column "([^"]+)" must appear/)?.[1].split('.') ?? [];
+  if (parts.length < 2) return null;
+  const [qualifier, column] = parts.slice(-2);
+  const tables: TableInfo[] = [];
+  walk(ast, (key, value) => {
+    if (key !== 'RangeVar') return;
+    const rv = value as { schemaname?: string; relname?: string; alias?: { aliasname?: string } };
+    const table = rv.relname ? findTable(schema, rv.schemaname, rv.relname) : null;
+    if (table && (rv.alias?.aliasname ?? rv.relname) === qualifier) tables.push(table);
+  });
+  return tables.length ? { tableIds: [tables[0].id], columns: [`${tables[0].id}.${column}`] } : null;
+}
+
 // Что подсветить на доске: все упомянутые таблицы и колонки
 export function touchedOf(ast: Node, schema: SchemaSnapshot): { tableIds: string[]; columns: string[] } {
   const tables = new Map<string, TableInfo>(); // алиас или имя → таблица

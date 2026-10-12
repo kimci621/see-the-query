@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { introspect } from '@/features/db/introspect';
 import type { Trace } from '@/features/tracer/types';
 import { inPreview, withDataset } from '../../../tests/helpers/db';
 import { traceSql } from '../../../tests/helpers/trace';
@@ -83,6 +84,19 @@ describe('buildPlayback на трассе Ф5', () => {
         expect(last.tables[0].rows).toEqual([]);
         expect(last.tables[0].hiddenRows).toBe(3);
         expect(last.decorations).toContainEqual(expect.objectContaining({ kind: 'counter', text: '7 → 3' }));
+      }),
+    ));
+
+  it('ошибка 42803 проигрывается одной сценой, другие ошибки сцены не дают', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const ctx = { ...testCtx(), schema: await introspect(db) };
+        const grouping = await traceSql(db, 'select title, count(*) from book group by author_id');
+        const p = buildPlayback(grouping, ctx);
+        expect(p.phases.map((ph) => ph.id)).toEqual(['0:error']);
+        const book = p.phases[0].frame.tables.find((t) => t.id === 't:book');
+        expect(book?.columns.find((c) => c.name === 'title')?.state).toBe('removed');
+        expect(buildPlayback(await traceSql(db, 'select nme from book'), ctx).phases).toEqual([]);
       }),
     ));
 });
