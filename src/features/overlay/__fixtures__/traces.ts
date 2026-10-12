@@ -205,3 +205,114 @@ export function testCtx(
 ): AnimatorContext {
   return { nodeRect: (id) => rects[id] ?? null, workArea: { x: 500, y: 0 }, schema: EMPTY_SCHEMA };
 }
+
+// select b.title, a.name from book b <тип> join author a on b.author_id = a.author_id (4 книги, 3 автора)
+const bCols = [
+  { name: 'book_id', type: 'int8', source: { alias: 'b', column: 'book_id' } },
+  { name: 'title', type: 'text', source: { alias: 'b', column: 'title' } },
+  { name: 'author_id', type: 'int8', source: { alias: 'b', column: 'author_id' } },
+];
+const aCols = [
+  { name: 'author_id', type: 'int8', source: { alias: 'a', column: 'author_id' } },
+  { name: 'name', type: 'text', source: { alias: 'a', column: 'name' } },
+];
+const bRow = (ctid: string, id: number, title: string, author: number | null): Row => ({
+  key: `b=${ctid}`,
+  lineage: { b: ctid },
+  values: [id, title, author],
+});
+const aRow = (ctid: string, id: number, name: string): Row => ({
+  key: `a=${ctid}`,
+  lineage: { a: ctid },
+  values: [id, name],
+});
+const JOIN_BOOKS = [
+  bRow('(0,1)', 1, 'Тихий Дон', 1),
+  bRow('(0,3)', 3, 'Судьба человека', 1),
+  bRow('(0,4)', 4, 'Капитанская дочка', 3),
+  bRow('(0,10)', 10, 'Простой Python', null),
+];
+const JOIN_AUTHORS = [
+  aRow('(0,1)', 1, 'Михаил Шолохов'),
+  aRow('(0,3)', 3, 'Александр Пушкин'),
+  aRow('(0,6)', 6, 'Борис Пастернак'),
+];
+const joined = (b: Row | null, a: Row | null): Row => ({
+  key: `${b?.key ?? 'b=∅'}|${a?.key ?? 'a=∅'}`,
+  lineage: { b: b?.lineage.b ?? null, a: a?.lineage.a ?? null },
+  values: [...(b?.values ?? [null, null, null]), ...(a?.values ?? [null, null])],
+});
+const MATCHED: Array<[Row, Row]> = [
+  [JOIN_BOOKS[0], JOIN_AUTHORS[0]],
+  [JOIN_BOOKS[1], JOIN_AUTHORS[0]],
+  [JOIN_BOOKS[2], JOIN_AUTHORS[1]],
+];
+
+export function joinTrace(joinType: 'inner' | 'left' | 'right' | 'full' = 'inner'): Trace {
+  const lonelyLeft = joinType === 'left' || joinType === 'full' ? [JOIN_BOOKS[3]] : [];
+  const lonelyRight = joinType === 'right' || joinType === 'full' ? [JOIN_AUTHORS[2]] : [];
+  const rows = [
+    ...MATCHED.map(([b, a]) => joined(b, a)),
+    ...lonelyLeft.map((b) => joined(b, null)),
+    ...lonelyRight.map((a) => joined(null, a)),
+  ];
+  const pairs: Array<[string | null, string | null]> = [
+    ...MATCHED.map(([b, a]): [string, string] => [b.key, a.key]),
+    ...lonelyLeft.map((b): [string, null] => [b.key, null]),
+    ...lonelyRight.map((a): [null, string] => [null, a.key]),
+  ];
+  const stages: Stage[] = [
+    {
+      id: 's0',
+      kind: 'scan',
+      alias: 'b',
+      tableId: 'public.book',
+      caption: 'FROM book AS b: 4 строки',
+      output: { columns: bCols, rows: JOIN_BOOKS },
+    },
+    {
+      id: 's1',
+      kind: 'scan',
+      alias: 'a',
+      tableId: 'public.author',
+      caption: 'FROM author AS a: 3 строки',
+      output: { columns: aCols, rows: JOIN_AUTHORS },
+    },
+    {
+      id: 's2',
+      kind: 'join',
+      joinType,
+      leftAliases: ['b'],
+      rightAlias: 'a',
+      pairs,
+      onColumns: ['b.author_id', 'a.author_id'],
+      usingColumns: [],
+      caption: `${joinType.toUpperCase()} JOIN: 3 пары`,
+      output: { columns: [...bCols, ...aCols], rows },
+    },
+    {
+      id: 's3',
+      kind: 'project',
+      kept: ['title', 'name'],
+      removed: ['book_id', 'author_id', 'author_id'],
+      computed: [],
+      renamed: {},
+      caption: 'SELECT: 2 колонки из 5',
+      output: {
+        columns: [bCols[1], aCols[1]],
+        rows: rows.map((r) => ({ ...r, values: [r.values[1], r.values[4]] })),
+      },
+    },
+  ];
+  return {
+    sql: `select b.title, a.name from book b ${joinType} join author a on b.author_id = a.author_id`,
+    statementType: 'select',
+    mode: 'full',
+    touched: { tableIds: ['public.book', 'public.author'], columns: [] },
+    stages,
+    result: null,
+    error: null,
+    notices: [],
+    timingMs: 10,
+  };
+}
