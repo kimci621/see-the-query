@@ -20,6 +20,7 @@ export const captions = {
     if (noRight) parts.push(`${rowsWord(noRight)} справа без пары`);
     return parts.join(', ');
   },
+  cross: (left: number, right: number) => `CROSS JOIN: ${left} × ${right} = ${rowsWord(left * right)}`,
   joinCompressed: (type: string, n: number) => `${type} JOIN: ${rowsWord(n)}`,
   filter: (before: number, after: number, unknown: number) =>
     `WHERE: осталось ${after} из ${rowsWord(before)}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,

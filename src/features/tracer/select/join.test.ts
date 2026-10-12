@@ -83,21 +83,86 @@ describe('стадия join: INNER и LEFT', () => {
         expect(stageOf(trace, 'join').output.columns).toHaveLength(13);
       }),
     ));
-  it('right / full / cross пока честно уходят в final-only', () =>
+  it('RIGHT JOIN: у строки без пары слева NULL-ctid, пара [null, right]', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
-        const right = await traceSql(
+        const trace = await traceSql(
           db,
-          'select a.name from author a right join book b on a.author_id = b.author_id',
+          'select a.name, b.title from author a right join book b on a.author_id = b.author_id',
         );
-        expect(right).toMatchObject({
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:6 > scan:11 > join:11 > project:11');
+        const join = stageOf(trace, 'join');
+        expect(join).toMatchObject({ joinType: 'right', leftAliases: ['a'], rightAlias: 'b' });
+        // две книги без автора: левая половина NULL
+        expect(join.pairs).toContainEqual([null, 'b=(0,10)']);
+        expect(join.pairs).toContainEqual([null, 'b=(0,11)']);
+        const noPair = join.output.rows.find((r) => r.key === 'a=∅|b=(0,10)');
+        expect(noPair?.lineage).toEqual({ a: null, b: '(0,10)' });
+        expect(join.caption).toBe('RIGHT JOIN: 9 пар, 2 строки справа без пары');
+      }),
+    ));
+  it('FULL JOIN: NULL с обеих сторон, 12 строк', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select b.title, a.name from book b full join author a on b.author_id = a.author_id',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:12 > project:12');
+        const join = stageOf(trace, 'join');
+        expect(join.joinType).toBe('full');
+        expect(join.pairs).toContainEqual(['b=(0,10)', null]);
+        expect(join.pairs).toContainEqual([null, 'a=(0,6)']); // Пастернак без книг
+        expect(join.output.rows.find((r) => r.key === 'b=∅|a=(0,6)')?.values.slice(9)).toEqual([
+          6,
+          'Борис Пастернак',
+          'Россия',
+          1890,
+        ]);
+      }),
+    ));
+  it('CROSS JOIN: сетка всех пар и подпись N × M', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select b.title, c.name from book b cross join customer c');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:66 > project:66');
+        const join = stageOf(trace, 'join');
+        expect(join).toMatchObject({ joinType: 'cross', onColumns: [], usingColumns: [] });
+        expect(join.pairs).toHaveLength(66);
+        expect(new Set(join.pairs.map(([l]) => l)).size).toBe(11); // каждый left ровно 6 раз
+        expect(join.pairs).toContainEqual(['b=(0,1)', 'c=(0,1)']);
+        expect(join.caption).toBe('CROSS JOIN: 11 × 6 = 66 строк');
+      }),
+    ));
+  it('запятая в FROM - это CROSS JOIN', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select b.title, c.name from book b, customer c');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:66 > project:66');
+        expect(stageOf(trace, 'join').joinType).toBe('cross');
+      }),
+    ));
+  it('сложный FROM честно уходит в final-only', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const nested = await traceSql(
+          db,
+          'select b.title from book b join (author a join book b2 on a.author_id = b2.author_id) on b.book_id = b2.book_id',
+        );
+        expect(nested).toMatchObject({
           mode: 'final-only',
-          fallbackReason: 'Пока не анимируется: RIGHT JOIN',
+          fallbackReason: 'Пока не анимируется: сложный FROM',
         });
-        const cross = await traceSql(db, 'select b.title from book b, customer c');
-        expect(cross).toMatchObject({
+        const commaJoin = await traceSql(
+          db,
+          'select c.name from customer c, book b join author a on b.author_id = a.author_id',
+        );
+        expect(commaJoin).toMatchObject({
           mode: 'final-only',
-          fallbackReason: 'Пока не анимируется: CROSS JOIN',
+          fallbackReason: 'Пока не анимируется: сложный FROM',
         });
       }),
     ));

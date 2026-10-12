@@ -45,7 +45,10 @@ describe('whitelist', () => {
     );
     expect(
       unsupportedReason(await stmt('select b.title from book b full join author a using (author_id)')),
-    ).toBe('Пока не анимируется: FULL JOIN');
+    ).toBe(null);
+    expect(unsupportedReason(await stmt('select * from (select 1) s'))).toBe(
+      'Пока не анимируется: подзапрос',
+    );
     expect(
       unsupportedReason(await stmt('select * from book where price > (select avg(price) from book)')),
     ).toBe('Пока не анимируется: подзапрос, агрегатные функции');

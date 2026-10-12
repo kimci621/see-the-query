@@ -96,6 +96,9 @@ export const SUPPORTED = new Set<Feature>([
   'limit',
   'volatile',
   'join',
+  'join-right',
+  'join-full',
+  'join-cross',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {

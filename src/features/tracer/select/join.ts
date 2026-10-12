@@ -120,6 +120,9 @@ export const joinStep: SelectStep = {
   name: 'join',
   applies: (ctx) => ctx.joins.length > 0,
   async run(ctx) {
+    // Строк в каждом источнике: для подписи CROSS JOIN «N × M»
+    const scanned = ctx.stages.flatMap((s) => (s.kind === 'scan' ? [s.output.rows.length] : []));
+    let leftCount = scanned[0];
     for (const [k, j] of ctx.joins.entries()) {
       const aliases = ctx.aliasOrder.slice(0, k + 2);
       const leftAliases = aliases.slice(0, -1);
@@ -142,8 +145,9 @@ export const joinStep: SelectStep = {
       });
       // Колонки пробы идут источниками подряд: те же, что в их scan-стадиях
       ctx.columns = aliases.flatMap((_, i): Column[] => ctx.sourceColumns[i]);
-      const noLeft = pairs.filter(([l]) => l === null).length;
-      const noRight = pairs.filter(([, rr]) => rr === null).length;
+      // [left, null]: левой строке не нашлась пара; [null, right]: правой
+      const lonelyLeft = pairs.filter(([, rr]) => rr === null).length;
+      const lonelyRight = pairs.filter(([l]) => l === null).length;
       ctx.stages.push({
         id: stageId(ctx, 'join'),
         kind: 'join',
@@ -154,9 +158,18 @@ export const joinStep: SelectStep = {
         onColumns: onColumnNames(j),
         usingColumns: j.using ?? [],
         sourceRange: rangeOf(ctx.stmt, 'from'),
-        caption: captions.join(j.jointype.toUpperCase(), pairs.length - noLeft - noRight, noLeft, noRight),
+        caption:
+          j.jointype === 'cross'
+            ? captions.cross(leftCount, scanned[k + 1])
+            : captions.join(
+                j.jointype.toUpperCase(),
+                pairs.length - lonelyLeft - lonelyRight,
+                lonelyLeft,
+                lonelyRight,
+              ),
         output: { columns: ctx.columns, rows: ctx.rows },
       });
+      leftCount = ctx.rows.length;
     }
   },
 };
