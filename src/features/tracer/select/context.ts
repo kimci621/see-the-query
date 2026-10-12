@@ -51,10 +51,13 @@ export interface SelectCtx {
     fromUpTo: (k: number) => string; // FROM до k-го JOIN включительно
     fromSource: (i: number) => string;
     where: string;
+    group: string; // ' GROUP BY …' после стадии group, пробы над группами дописывают его после WHERE
     targets: string;
   };
   scanColumns: string[]; // имена колонок всех источников по порядку
   sourceColumns: Column[][]; // колонки каждого источника, их заполняет scan
+  // После group: выражения ключей и агрегатов и имена колонок группы (ключи, затем агрегаты)
+  grouped: { keys: string[]; aggregates: string[]; columns: string[] } | null;
   columns: Column[];
   rows: Row[];
   stages: Stage[];
@@ -99,10 +102,12 @@ export function createSelectCtx(args: {
       fromUpTo,
       fromSource: (i) => ` FROM ${sqlOf(sources[i].rv)}`,
       where: sel.whereClause ? ` WHERE ${sqlOf(sel.whereClause)}` : '',
+      group: '',
       targets: (sel.targetList ?? []).map(sqlOf).join(', '),
     },
     scanColumns: [],
     sourceColumns: [],
+    grouped: null,
     columns: [],
     rows: [],
     stages: [],
@@ -136,7 +141,7 @@ export function rangeOf(stmt: ParsedStatement, ...clauses: ClauseName[]): Source
 
 async function loadOutputs(ctx: SelectCtx): Promise<Output> {
   // Имена и типы выходных колонок отдаёт сам Postgres: звёздочки, неявные имена вроде upper, ?column?
-  const probe = await ctx.prober.run(`SELECT ${ctx.sql.targets}${ctx.sql.from} LIMIT 0`);
+  const probe = await ctx.prober.run(`SELECT ${ctx.sql.targets}${ctx.sql.from}${ctx.sql.group} LIMIT 0`);
   const types = await ctx.typeNames(probe.fields.map((f) => f.dataTypeID));
   const kinds: Output['kinds'] = [];
   for (const node of ctx.sel.targetList ?? []) {
@@ -153,8 +158,13 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
     }
     const column = last && 'String' in last ? (last.String.sval ?? null) : null;
     const owner = column === null ? -1 : sourceOf(ctx, alias, column);
-    if (column && owner >= 0)
+    // После group колонка живёт, только если это ключ или агрегат группы
+    const { grouped } = ctx;
+    const g = grouped ? [...grouped.keys, ...grouped.aggregates].indexOf(rt.val ? sqlOf(rt.val) : '') : -1;
+    if (column && owner >= 0 && (!grouped || grouped.columns.slice(0, grouped.keys.length).includes(column)))
       kinds.push({ kind: 'kept', column, alias: ctx.aliasOrder[owner], expr: rt.val ?? null });
+    else if (grouped && g >= 0)
+      kinds.push({ kind: 'kept', column: grouped.columns[g], alias: null, expr: rt.val ?? null });
     else kinds.push({ kind: 'computed', column: null, alias: null, expr: rt.val ?? null });
   }
   // (t).* и подобное раскрываются в несколько колонок, сопоставить их с целями списка нельзя
@@ -247,11 +257,12 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
       leading = false;
     }
   }
-  // ctid последним ключом: порядок равных строк детерминирован
-  for (const a of ctx.aliasOrder) orderParts.push(`${ident(a)}.ctid`);
+  // ctid (у групп ключи группы) последним ключом: порядок равных строк детерминирован
+  orderParts.push(...(ctx.grouped?.keys ?? ctx.aliasOrder.map((a) => `${ident(a)}.ctid`)));
   const extraSql = extra.map((e) => `, ${e}`).join('');
+  const orderSql = orderParts.length ? ` ORDER BY ${orderParts.join(', ')}` : '';
   const r = await ctx.prober.rows(
-    `SELECT ${ctx.sql.targets}, ${ctx.sql.rowKey} AS __vs_key${extraSql}${ctx.sql.from}${ctx.sql.where} ORDER BY ${orderParts.join(', ')}`,
+    `SELECT ${ctx.sql.targets}, ${ctx.sql.rowKey} AS __vs_key${extraSql}${ctx.sql.from}${ctx.sql.where}${ctx.sql.group}${orderSql}`,
   );
   const order: RowKey[] = [];
   const values = new Map<RowKey, unknown[]>();

@@ -20,7 +20,7 @@ export const distinctStep: SelectStep = {
     if (!isOn) {
       // Группы по всем выходным колонкам; GROUP BY сводит NULL вместе, как DISTINCT
       const cols = out.columns.map((_, i) => `c${i}`).join(', ');
-      groupsSql = `SELECT array_agg(__vs_s.__vs_key) FROM (SELECT ${sql.targets}, ${sql.rowKey}${sql.from}${sql.where}) AS __vs_s(${cols}, __vs_key) GROUP BY ${cols}`;
+      groupsSql = `SELECT array_agg(__vs_s.__vs_key) FROM (SELECT ${sql.targets}, ${sql.rowKey}${sql.from}${sql.where}${sql.group}) AS __vs_s(${cols}, __vs_key) GROUP BY ${cols}`;
     } else {
       const nodes = ctx.sel.distinctClause as Node[];
       on = nodes.map(sqlOf);
@@ -30,7 +30,9 @@ export const distinctStep: SelectStep = {
         const k = out.kinds[i];
         return k.expr ? sqlOf(k.expr) : `${ident(k.alias ?? '')}.${ident(k.column ?? '')}`;
       });
-      groupsSql = `SELECT array_agg(${sql.rowKey})${sql.from}${sql.where} GROUP BY ${exprs.join(', ')}`;
+      // Подзапрос: над группами ключ строки сам содержит выражения GROUP BY
+      const cols = exprs.map((_, i) => `d${i}`).join(', ');
+      groupsSql = `SELECT array_agg(__vs_s.__vs_key) FROM (SELECT ${exprs.join(', ')}, ${sql.rowKey}${sql.from}${sql.where}${sql.group}) AS __vs_s(${cols}, __vs_key) GROUP BY ${cols}`;
     }
     const r = await ctx.prober.rows(groupsSql);
     const pos = new Map(ordered.order.map((k, i) => [k, i]));

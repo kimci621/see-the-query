@@ -26,6 +26,9 @@ export const captions = {
     `WHERE: осталось ${after} из ${rowsWord(before)}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   project: (kept: number, from: number, computed: number) =>
     `SELECT: ${colsWord(kept)} из ${from}${computed ? `, вычислено ${computed}` : ''}`,
+  group: (keys: string[], groups: number, rows: number) =>
+    `GROUP BY ${keys.join(', ')}: ${rowsWord(rows)} → ${groups} ${plural(groups, 'группа', 'группы', 'групп')}`,
+  aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
     `DISTINCT: ${rowsWord(before)} → ${after} ${plural(after, 'уникальная', 'уникальные', 'уникальных')}`,

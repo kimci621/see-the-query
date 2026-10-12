@@ -24,10 +24,10 @@ describe('traceStatement', () => {
   it('неподдерживаемый оператор: final-only с эталоном и touched', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
-        const trace = await traceSql(db, 'select count(*) from book');
+        const trace = await traceSql(db, 'with t as (select count(*) from book) select * from t');
         expect(trace).toMatchObject({
           mode: 'final-only',
-          fallbackReason: 'Пока не анимируется: агрегатные функции',
+          fallbackReason: 'Пока не анимируется: WITH',
           stages: [],
         });
         expect(trace.result?.rows).toEqual([[11]]);

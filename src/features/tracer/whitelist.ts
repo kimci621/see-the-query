@@ -99,6 +99,8 @@ export const SUPPORTED = new Set<Feature>([
   'join-right',
   'join-full',
   'join-cross',
+  'group',
+  'aggregate',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {
@@ -111,7 +113,7 @@ const FEATURE_LABELS: Record<Feature, string> = {
   order: 'ORDER BY',
   limit: 'LIMIT',
   volatile: 'volatile-функции',
-  'volatile-other': 'volatile-функция в WHERE, DISTINCT или LIMIT',
+  'volatile-other': 'volatile-функция в WHERE, DISTINCT, LIMIT или агрегате',
   'volatile-order-limit': 'volatile-функция в ORDER BY вместе с LIMIT или OFFSET',
   join: 'JOIN',
   'join-right': 'RIGHT JOIN',
@@ -213,6 +215,8 @@ export function selectFeatures(sel: SelectStmt): Set<Feature> {
   if (hasVolatile([sel.whereClause, sel.distinctClause, sel.limitCount, sel.limitOffset]))
     f.add('volatile-other');
   if (f.has('volatile') && (f.has('distinct') || f.has('distinct-on'))) f.add('volatile-other');
+  // Агрегат над volatile считает групповая проба, а эталон получает другие значения
+  if (f.has('volatile') && (f.has('group') || f.has('having') || f.has('aggregate'))) f.add('volatile-other');
   // Окно над случайным порядком выбирает другие строки, чем эталон
   if (f.has('limit') && volatileSort(sel)) f.add('volatile-order-limit');
   return f;

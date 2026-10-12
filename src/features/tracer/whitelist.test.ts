@@ -32,13 +32,14 @@ describe('whitelist', () => {
   it('volatile в SELECT и ORDER BY допустим, в WHERE и с DISTINCT нет', async () => {
     expect(unsupportedReason(await stmt('select random() from t order by random()'))).toBeNull();
     expect(unsupportedReason(await stmt('select a from t where random() < 0.5'))).toBe(
-      'Пока не анимируется: volatile-функция в WHERE, DISTINCT или LIMIT',
+      'Пока не анимируется: volatile-функция в WHERE, DISTINCT, LIMIT или агрегате',
     );
     expect(await features('select distinct random() from t')).toContain('volatile-other');
   });
   it('неподдерживаемое → причина на русском', async () => {
-    expect(unsupportedReason(await stmt('select count(*) from book'))).toBe(
-      'Пока не анимируется: агрегатные функции',
+    expect(unsupportedReason(await stmt('select count(*) from book'))).toBe(null);
+    expect(unsupportedReason(await stmt('select sum(random()) from book'))).toBe(
+      'Пока не анимируется: volatile-функция в WHERE, DISTINCT, LIMIT или агрегате',
     );
     expect(unsupportedReason(await stmt('select b.title from book b join author a using (author_id)'))).toBe(
       null,
@@ -51,7 +52,7 @@ describe('whitelist', () => {
     );
     expect(
       unsupportedReason(await stmt('select * from book where price > (select avg(price) from book)')),
-    ).toBe('Пока не анимируется: подзапрос, агрегатные функции');
+    ).toBe('Пока не анимируется: подзапрос');
     expect(unsupportedReason(await stmt('select 1 where false'))).toBe(
       'Пока не анимируется: WHERE, ORDER BY или LIMIT без FROM',
     );

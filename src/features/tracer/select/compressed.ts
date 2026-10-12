@@ -3,6 +3,7 @@ import { captions, limitLabel } from '../captions';
 import { ident, sqlOf } from '../probe';
 import type { Column, Stage } from '../types';
 import { rangeOf, type SelectCtx, stageId } from './context';
+import { groupCaption, groupParts, groupStep, setGroupColumns } from './group';
 import { joinLayout } from './join';
 import { projection } from './project';
 
@@ -73,19 +74,34 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     });
   }
 
+  if (groupStep.applies(ctx)) {
+    const parts = groupParts(ctx);
+    const head = await ctx.prober.run(`SELECT ${parts.select}${sql.from}${sql.group} LIMIT 0`);
+    await setGroupColumns(ctx, parts, head.fields, []);
+    const before = n;
+    n = await count(`SELECT 1${sql.from}${sql.where}${sql.group}`);
+    ctx.stages.push({
+      ...base('group', ctx.columns),
+      kind: 'group',
+      keys: parts.keys,
+      groups: [],
+      aggregates: parts.aggregates,
+      rowCount: n,
+      sourceRange: rangeOf(ctx.stmt, parts.keys.length ? 'group' : 'select'),
+      caption: groupCaption(parts.keys, n, before),
+    });
+  }
+
   const out = await ctx.outputs();
-  const p = projection(out, ctx.scanColumns);
+  const input = ctx.grouped?.columns ?? ctx.scanColumns;
+  const p = projection(out, input);
   ctx.stages.push({
     ...base('project', out.columns),
     kind: 'project',
     ...p,
     rowCount: n,
     sourceRange: rangeOf(ctx.stmt, 'select'),
-    caption: captions.project(
-      p.kept.length + Object.keys(p.renamed).length,
-      ctx.scanColumns.length,
-      p.computed.length,
-    ),
+    caption: captions.project(p.kept.length + Object.keys(p.renamed).length, input.length, p.computed.length),
   });
 
   if (sel.distinctClause) {
@@ -93,7 +109,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     const on = Object.keys(nodes[0]).length ? nodes.map(sqlOf) : null;
     const before = n;
     n = await count(
-      `SELECT DISTINCT${on ? ` ON (${on.join(', ')})` : ''} ${sql.targets}${sql.from}${sql.where}`,
+      `SELECT DISTINCT${on ? ` ON (${on.join(', ')})` : ''} ${sql.targets}${sql.from}${sql.where}${sql.group}`,
     );
     ctx.stages.push({
       ...base('distinct', out.columns),

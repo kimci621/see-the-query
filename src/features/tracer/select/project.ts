@@ -27,7 +27,8 @@ export const projectStep: SelectStep = {
   async run(ctx) {
     const out = await ctx.outputs();
     const ordered = await ctx.ordered();
-    const p = projection(out, ctx.scanColumns);
+    const input = ctx.grouped?.columns ?? ctx.scanColumns;
+    const p = projection(out, input);
     ctx.columns = out.columns;
     ctx.rows = ctx.rows.map((row) => ({ ...row, values: ordered.values.get(row.key) ?? [] }));
     ctx.stages.push({
@@ -38,7 +39,7 @@ export const projectStep: SelectStep = {
       sourceRange: rangeOf(ctx.stmt, 'select'),
       caption: captions.project(
         p.kept.length + Object.keys(p.renamed).length,
-        ctx.scanColumns.length,
+        input.length,
         p.computed.length,
       ),
       output: { columns: ctx.columns, rows: ctx.rows },
