@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runUpTo } from '../__fixtures__/runUpTo';
-import { joinTrace, testCtx } from '../__fixtures__/traces';
+import { crossJoinTrace, joinTrace, testCtx } from '../__fixtures__/traces';
 import { ghostWidth } from '../geometry';
 import type { StageOf } from '../types';
 import { joinAnimator } from './join';
@@ -99,5 +99,38 @@ describe('joinAnimator: LEFT / RIGHT / FULL', () => {
     expect(rowOf(phases[3], 't:b|a', 'b=(0,10)|a=∅')?.state).toBe('null-filled');
     expect(rowOf(phases[3], 't:b|a', 'b=∅|a=(0,6)')?.state).toBe('null-filled');
     expect(phases[3].frame.tables[0].rows).toHaveLength(5);
+  });
+});
+
+describe('joinAnimator: CROSS', () => {
+  const run = (n: number, m: number) => {
+    const trace = crossJoinTrace(n, m);
+    const stage = trace.stages[2] as StageOf<'join'>;
+    return { stage, phases: joinAnimator(runUpTo(trace, 2, testCtx()), stage, 2, testCtx()) };
+  };
+
+  it('веер линий от каждой левой строки ко всем правым, затем сетка со счётчиком', () => {
+    const { stage, phases } = run(3, 2);
+    expect(phases.map((p) => p.id)).toEqual(['2:fan', '2:grid']);
+    const fan = phases[0].frame.decorations.flatMap((d) => (d.kind === 'pair-line' ? [d] : []));
+    expect(fan).toHaveLength(6);
+    expect(fan.filter((l) => l.from.row === 'b=(0,1)')).toHaveLength(2);
+    const grid = phases[1].frame.tables;
+    expect(grid.map((t) => t.id)).toEqual(['t:b|c']);
+    expect(grid[0].rows).toHaveLength(6);
+    expect(phases[1].frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'counter', text: '3 × 2 = 6' }),
+    );
+    expect(phases[1].caption).toBe(stage.caption);
+  });
+  it('большая сетка: сжатый вид и не больше сотни линий веера', () => {
+    const { phases } = run(11, 20);
+    expect(phases[0].frame.decorations.filter((d) => d.kind === 'pair-line').length).toBeLessThanOrEqual(100);
+    const grid = phases[1].frame.tables[0];
+    expect(grid.rows).toHaveLength(20);
+    expect(grid.hiddenRows).toBe(200);
+    expect(phases[1].frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'counter', text: '11 × 20 = 220' }),
+    );
   });
 });

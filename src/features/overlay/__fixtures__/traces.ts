@@ -316,3 +316,52 @@ export function joinTrace(joinType: 'inner' | 'left' | 'right' | 'full' = 'inner
     timingMs: 10,
   };
 }
+
+// select b.title, c.name from book b cross join customer c: n книг × m покупателей
+export function crossJoinTrace(n = 3, m = 2): Trace {
+  const books = Array.from({ length: n }, (_, i) => bRow(`(0,${i + 1})`, i + 1, `Книга ${i + 1}`, null));
+  const cCols = [{ name: 'name', type: 'text', source: { alias: 'c', column: 'name' } }];
+  const customers: Row[] = Array.from({ length: m }, (_, i) => ({
+    key: `c=(0,${i + 1})`,
+    lineage: { c: `(0,${i + 1})` },
+    values: [`Покупатель ${i + 1}`],
+  }));
+  const rows: Row[] = books.flatMap((b) =>
+    customers.map((c) => ({
+      key: `${b.key}|${c.key}`,
+      lineage: { b: b.lineage.b, c: c.lineage.c },
+      values: [...b.values, ...c.values],
+    })),
+  );
+  const stages: Stage[] = [
+    {
+      id: 's0',
+      kind: 'scan',
+      alias: 'b',
+      tableId: 'public.book',
+      caption: `FROM book AS b: ${n}`,
+      output: { columns: bCols, rows: books },
+    },
+    {
+      id: 's1',
+      kind: 'scan',
+      alias: 'c',
+      tableId: 'public.customer',
+      caption: `FROM customer AS c: ${m}`,
+      output: { columns: cCols, rows: customers },
+    },
+    {
+      id: 's2',
+      kind: 'join',
+      joinType: 'cross',
+      leftAliases: ['b'],
+      rightAlias: 'c',
+      pairs: rows.map((r): [string, string] => [`b=${r.lineage.b}`, `c=${r.lineage.c}`]),
+      onColumns: [],
+      usingColumns: [],
+      caption: `CROSS JOIN: ${n} × ${m} = ${n * m}`,
+      output: { columns: [...bCols, ...cCols], rows },
+    },
+  ];
+  return { ...joinTrace(), sql: 'select * from book b cross join customer c', stages };
+}

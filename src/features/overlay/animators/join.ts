@@ -1,5 +1,5 @@
 import type { RowKey } from '@/features/tracer/types';
-import { clearMarks, counterNear, mapColumns, mapRows, rebuildTable, stageRows } from '../frame';
+import { clearMarks, counterNear, mapColumns, mapRows, rebuildTable, stageRows, totalRows } from '../frame';
 import { ghostWidth, TABLE_GAP } from '../geometry';
 import { stageLabel } from '../labels';
 import type { Animator, Decoration, Frame, GhostRow, GhostTable, Phase, StageOf } from '../types';
@@ -13,13 +13,12 @@ const JOIN_GAP = TABLE_GAP / 2;
 
 // INNER / LEFT / RIGHT / FULL JOIN: сближение, линии пар, отсев непарных, слияние в одну таблицу
 export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex, ctx) => {
-  // ponytail: веер CROSS JOIN (задача 7), пока мгновенный итог
-  if (stage.joinType === 'cross') return genericAnimator(prev, stage, stageIndex, ctx);
   const leftId = joinTableId(stage.leftAliases);
   const rightId = joinTableId([stage.rightAlias]);
   const left = prev.tables.find((t) => t.id === leftId);
   const right = prev.tables.find((t) => t.id === rightId);
   if (!left || !right) return genericAnimator(prev, stage, stageIndex, ctx);
+  if (stage.joinType === 'cross') return crossPhases(prev, stage, stageIndex, left, right);
   const label = stageLabel(stage);
   const others = prev.tables.filter((t) => t.id !== leftId && t.id !== rightId);
   const frameOf = (l: GhostTable, r: GhostTable, decorations: Decoration[] = []): Frame => ({
@@ -118,6 +117,64 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     merge,
   ];
 };
+
+// ponytail: веер рисуем не больше чем на 100 линий, дальше он превращается в сплошную заливку
+const MAX_FAN_LINES = 100;
+
+// CROSS JOIN: каждая левая строка веером расходится ко всем правым, затем сетка N × M
+function crossPhases(
+  prev: Frame,
+  stage: StageOf<'join'>,
+  stageIndex: number,
+  left: GhostTable,
+  right: GhostTable,
+): Phase[] {
+  const near = { ...clearMarks(right), x: left.x + ghostWidth(left) + JOIN_GAP, y: left.y };
+  const others = prev.tables.filter((t) => t.id !== left.id && t.id !== right.id);
+  const visible = new Set([...left.rows, ...right.rows].map((r) => r.key));
+  const lines: Decoration[] = stage.pairs
+    .filter(
+      (p): p is [RowKey, RowKey] => p[0] !== null && p[1] !== null && visible.has(p[0]) && visible.has(p[1]),
+    )
+    .slice(0, MAX_FAN_LINES)
+    .map(([l, r], i) => ({
+      kind: 'pair-line',
+      id: `${stageIndex}:fan${i}`,
+      from: { table: left.id, row: l, col: left.columns.at(-1)?.name ?? '' },
+      to: { table: right.id, row: r, col: right.columns[0]?.name ?? '' },
+    }));
+  const grid = rebuildTable(
+    {
+      id: joinTableId([...stage.leftAliases, stage.rightAlias]),
+      title: `${left.title} × ${right.title}`,
+      x: left.x,
+      y: left.y,
+    },
+    stage.output,
+    undefined,
+    stageRows(stage),
+  );
+  const counter = `${totalRows(left)} × ${totalRows(right)} = ${stageRows(stage)}`;
+  return [
+    {
+      id: `${stageIndex}:fan`,
+      stageIndex,
+      caption: 'CROSS JOIN: каждая строка слева соединяется с каждой строкой справа',
+      durationMs: 800,
+      frame: { tables: [...others, clearMarks(left), near], decorations: lines },
+    },
+    {
+      id: `${stageIndex}:grid`,
+      stageIndex,
+      caption: stage.caption,
+      durationMs: 700,
+      frame: {
+        tables: [...others, grid],
+        decorations: [counterNear(grid, `${stageIndex}:counter`, counter)],
+      },
+    },
+  ];
+}
 
 // Ключ строки результата для пары, как в трассировщике: 'b=(0,10)|a=∅'
 function pairKey(stage: StageOf<'join'>, l: RowKey | null, r: RowKey | null): RowKey {
