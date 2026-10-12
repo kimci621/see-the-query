@@ -146,12 +146,9 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
     const qualifier = ref?.fields?.length === 2 ? ref.fields[0] : undefined;
     const alias = qualifier && 'String' in qualifier ? (qualifier.String.sval ?? null) : null;
     if (last && 'A_Star' in last) {
-      // * раскрывается во все источники, b.* только в свой
-      ctx.sourceColumns.forEach((cols, i) => {
-        if (alias !== null && ctx.aliasOrder[i] !== alias) return;
-        for (const c of cols)
-          kinds.push({ kind: 'kept', column: c.name, alias: ctx.aliasOrder[i], expr: null });
-      });
+      // * раскрывается как в Postgres, b.* только в свой источник
+      for (const c of alias === null ? starColumns(ctx) : starOf(ctx, alias))
+        kinds.push({ kind: 'kept', column: c.column, alias: c.alias, expr: null });
       continue;
     }
     const column = last && 'String' in last ? (last.String.sval ?? null) : null;
@@ -180,7 +177,30 @@ export function sourceOf(ctx: SelectCtx, alias: string | null, column: string): 
   const owners = ctx.sourceColumns.flatMap((cols, i) =>
     (alias === null || ctx.aliasOrder[i] === alias) && cols.some((c) => c.name === column) ? [i] : [],
   );
-  return owners.length === 1 ? owners[0] : -1;
+  if (owners.length === 1) return owners[0];
+  // Слитая USING-колонка без квалификатора принадлежит левой стороне
+  const merged = alias === null && ctx.joins.some((j) => j.using?.includes(column));
+  return merged && owners.length ? owners[0] : -1;
+}
+
+type StarColumn = { alias: string; column: string };
+
+function starOf(ctx: SelectCtx, alias: string): StarColumn[] {
+  const i = ctx.aliasOrder.indexOf(alias);
+  return (ctx.sourceColumns[i] ?? []).map((c) => ({ alias, column: c.name }));
+}
+
+// SELECT * над соединением: у USING-узла сначала слитые колонки, потом левые, потом правые без них
+function starColumns(ctx: SelectCtx): StarColumn[] {
+  let cols = starOf(ctx, ctx.aliasOrder[0]);
+  for (const [m, j] of ctx.joins.entries()) {
+    const right = starOf(ctx, ctx.aliasOrder[m + 1]);
+    const using = j.using ?? [];
+    const merged = using.flatMap((name) => cols.find((c) => c.column === name) ?? []);
+    const rest = (c: StarColumn) => !using.includes(c.column);
+    cols = [...merged, ...cols.filter(rest), ...right.filter(rest)];
+  }
+  return cols;
 }
 
 // Ключ ORDER BY / DISTINCT ON → индекс выходной колонки (номер или имя выхода) или null (выражение над входом)

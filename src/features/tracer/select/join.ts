@@ -5,7 +5,7 @@ import { ident, sqlOf } from '../probe';
 import { rowKeyOf } from '../rowkey';
 import type { Column, Lineage, RowKey } from '../types';
 import { findTable, walk } from '../whitelist';
-import { rangeOf, stageId } from './context';
+import { rangeOf, type SelectCtx, stageId } from './context';
 import type { SelectStep } from './pipeline';
 
 export interface Source {
@@ -54,14 +54,22 @@ export function flattenFrom(
     if (!rv || je.alias || je.join_using_alias) return complex;
     const err = pushSource(rv);
     if (err) return err;
-    const using = (je.usingClause ?? []).flatMap((n) => ('String' in n ? [n.String.sval ?? ''] : []));
-    const cross = !je.quals && !using.length && !je.isNatural && je.jointype === 'JOIN_INNER';
+    const right = sources[sources.length - 1];
+    let using = (je.usingClause ?? []).flatMap((n) => ('String' in n ? [n.String.sval ?? ''] : []));
+    if (je.isNatural) {
+      // NATURAL = USING по общим именам колонок, в порядке левой стороны
+      const rightNames = new Set(right.table.columns.map((c) => c.name));
+      const leftNames = sources.slice(0, -1).flatMap((s) => s.table.columns.map((c) => c.name));
+      using = [...new Set(leftNames)].filter((n) => rightNames.has(n));
+    }
+    // NATURAL без общих колонок Postgres выполняет как CROSS JOIN
+    const cross = !je.quals && !using.length && je.jointype === 'JOIN_INNER';
     joins.push({
       jointype: cross ? 'cross' : (JOIN_TYPES[je.jointype ?? ''] ?? 'inner'),
-      right: sources[sources.length - 1],
+      right,
       on: je.quals ?? null,
       using: using.length ? using : null,
-      natural: Boolean(je.isNatural),
+      natural: Boolean(je.isNatural) && !cross,
     });
     return null;
   };
@@ -101,6 +109,38 @@ export function joinFragment(j: JoinNode): string {
   return ` ${kw} ${rel} ON ${j.on ? sqlOf(j.on) : 'TRUE'}`;
 }
 
+// Колонки после k-го JOIN: правые USING-колонки выброшены, слитая колонка остаётся на месте левой.
+// Значение слитой = coalesce сторон: у строки без пары слева (RIGHT, FULL) оно берётся справа
+export function joinLayout(
+  ctx: Pick<SelectCtx, 'sourceColumns' | 'joins'>,
+  k: number,
+): { columns: Column[]; values: (raw: unknown[]) => unknown[] } {
+  const starts: number[] = [];
+  const raw = ctx.sourceColumns.slice(0, k + 2).flatMap((cols, i) => {
+    starts[i] = i ? starts[i - 1] + ctx.sourceColumns[i - 1].length : 0;
+    return cols;
+  });
+  const keep = raw.map(() => true);
+  const merges: Array<[number, number]> = [];
+  for (const [m, j] of ctx.joins.slice(0, k + 1).entries()) {
+    for (const name of j.using ?? []) {
+      const r = starts[m + 1] + ctx.sourceColumns[m + 1].findIndex((c) => c.name === name);
+      const l = raw.findIndex((c, i) => keep[i] && i < starts[m + 1] && c.name === name);
+      keep[r] = false;
+      if (l >= 0) merges.push([l, r]);
+    }
+  }
+  const kept = raw.flatMap((_, i) => (keep[i] ? [i] : []));
+  return {
+    columns: kept.map((i) => raw[i]),
+    values: (row) => {
+      const v = [...row];
+      for (const [l, r] of merges) v[l] ??= v[r];
+      return kept.map((i) => v[i]);
+    },
+  };
+}
+
 // Квалифицированные 'alias.column' из ON-условия в порядке вхождения
 function onColumnNames(j: JoinNode): string[] {
   const out: string[] = [];
@@ -112,6 +152,13 @@ function onColumnNames(j: JoinNode): string[] {
     if (parts.length) out.push(parts.join('.'));
   });
   return out;
+}
+
+// «INNER JOIN USING (author_id)», «NATURAL LEFT JOIN»
+function joinLabel(j: JoinNode): string {
+  const type = `${j.jointype.toUpperCase()} JOIN`;
+  if (j.natural) return `NATURAL ${type}`;
+  return j.using ? `${type} USING (${j.using.join(', ')})` : type;
 }
 
 // JOIN: стадия на каждый узел. Проба с FROM до k-го JOIN включительно, пары читаются из lineage:
@@ -132,6 +179,8 @@ export const joinStep: SelectStep = {
       const r = await ctx.prober.rows(
         `SELECT ${lineageSql}, ${colsSql}${ctx.sql.fromUpTo(k)} ORDER BY ${orderSql}`,
       );
+      // Колонки пробы идут источниками подряд, как в их scan-стадиях
+      const layout = joinLayout(ctx, k);
       const pairs: Array<[RowKey | null, RowKey | null]> = [];
       ctx.rows = r.rows.map((row) => {
         const lineage: Lineage = {};
@@ -141,10 +190,9 @@ export const joinStep: SelectStep = {
         const leftKey = leftAliases.every((a) => lineage[a] === null) ? null : rowKeyOf(lineage, leftAliases);
         const rightKey = lineage[j.right.alias] === null ? null : rowKeyOf(lineage, [j.right.alias]);
         pairs.push([leftKey, rightKey]);
-        return { key: rowKeyOf(lineage, aliases), lineage, values: row.slice(aliases.length) };
+        return { key: rowKeyOf(lineage, aliases), lineage, values: layout.values(row.slice(aliases.length)) };
       });
-      // Колонки пробы идут источниками подряд: те же, что в их scan-стадиях
-      ctx.columns = aliases.flatMap((_, i): Column[] => ctx.sourceColumns[i]);
+      ctx.columns = layout.columns;
       // [left, null]: левой строке не нашлась пара; [null, right]: правой
       const lonelyLeft = pairs.filter(([, rr]) => rr === null).length;
       const lonelyRight = pairs.filter(([l]) => l === null).length;
@@ -161,12 +209,7 @@ export const joinStep: SelectStep = {
         caption:
           j.jointype === 'cross'
             ? captions.cross(leftCount, scanned[k + 1])
-            : captions.join(
-                j.jointype.toUpperCase(),
-                pairs.length - lonelyLeft - lonelyRight,
-                lonelyLeft,
-                lonelyRight,
-              ),
+            : captions.join(joinLabel(j), pairs.length - lonelyLeft - lonelyRight, lonelyLeft, lonelyRight),
         output: { columns: ctx.columns, rows: ctx.rows },
       });
       leftCount = ctx.rows.length;

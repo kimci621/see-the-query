@@ -3,6 +3,7 @@ import { captions, limitLabel } from '../captions';
 import { ident, sqlOf } from '../probe';
 import type { Column, Stage } from '../types';
 import { rangeOf, type SelectCtx, stageId } from './context';
+import { joinLayout } from './join';
 import { projection } from './project';
 
 // Сжатый режим: таблица больше maxRows. Стадии без строк, только точные счётчики (оверлей рисует полосы)
@@ -39,7 +40,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     });
   }
   for (const [k, j] of ctx.joins.entries()) {
-    const cols = ctx.sourceColumns.slice(0, k + 2).flat();
+    const cols = joinLayout(ctx, k).columns;
     n = await count(`SELECT 1${sql.fromUpTo(k)}`);
     ctx.stages.push({
       ...base('join', cols),

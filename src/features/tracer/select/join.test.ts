@@ -224,3 +224,98 @@ describe('стадия join: цепочки и SELF JOIN', () => {
       }),
     ));
 });
+
+describe('стадия join: USING и NATURAL', () => {
+  it('USING: колонка-ключ слилась, в выходе 12 колонок, пары по ключу', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select * from book b join author a using (author_id)');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const join = stageOf(trace, 'join');
+        expect(join.usingColumns).toEqual(['author_id']);
+        expect(join.onColumns).toEqual([]);
+        expect(join.output.columns.map((c) => c.name)).toEqual([
+          'book_id',
+          'title',
+          'author_id',
+          'category_id',
+          'price',
+          'pages',
+          'published_at',
+          'tags',
+          'meta',
+          'name',
+          'country',
+          'born_year',
+        ]);
+        expect(join.output.rows[0].values).toHaveLength(12);
+        expect(join.pairs).toContainEqual(['b=(0,1)', 'a=(0,1)']);
+        expect(join.caption).toBe('INNER JOIN USING (author_id): 9 пар');
+        expect(trace.result?.rows).toHaveLength(9);
+        // эталон: слитая author_id от Postgres идёт первой
+        expect(trace.result?.fields.map((f) => f.name).slice(0, 3)).toEqual([
+          'author_id',
+          'book_id',
+          'title',
+        ]);
+      }),
+    ));
+  it('USING без квалификатора в SELECT: колонка слитая, не вычисленная', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select author_id, title from book b join author a using (author_id)',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(stageOf(trace, 'project')).toMatchObject({ computed: [] });
+      }),
+    ));
+  it('NATURAL JOIN: общие колонки по схеме, здесь author_id', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select b.title, a.name from book b natural join author a');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:9 > project:9');
+        const join = stageOf(trace, 'join');
+        expect(join.usingColumns).toEqual(['author_id']);
+        expect(join.caption).toContain('NATURAL');
+      }),
+    ));
+  it('NATURAL без общих колонок - это CROSS JOIN', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select b.title, c.email from book b natural join customer c');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:66 > project:66');
+        expect(stageOf(trace, 'join')).toMatchObject({ joinType: 'cross', usingColumns: [] });
+      }),
+    ));
+  it('FULL JOIN USING: слитая колонка = coalesce сторон', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select * from book b full join author a using (author_id)');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const join = stageOf(trace, 'join');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:12 > project:12');
+        // автор без книг: слитая колонка из правой половины
+        const orphan = join.output.rows.find((r) => r.key === 'b=∅|a=(0,6)');
+        expect(orphan?.values[2]).toBe(6);
+      }),
+    ));
+  it('RIGHT JOIN USING в цепочке: SELECT * совпадает с эталоном', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select * from author a right join book b using (author_id) join book_category c using (category_id)',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(
+          stageOf(trace, 'project')
+            .output.columns.map((c) => c.name)
+            .slice(0, 2),
+        ).toEqual(['category_id', 'author_id']);
+      }),
+    ));
+});
