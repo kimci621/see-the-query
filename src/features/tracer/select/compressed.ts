@@ -91,6 +91,21 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
       caption: groupCaption(parts.keys, n, before),
     });
   }
+  if (sel.havingClause) {
+    const before = n;
+    sql.group += ` HAVING ${sqlOf(sel.havingClause)}`;
+    n = await count(`SELECT 1${sql.from}${sql.where}${sql.group}`);
+    ctx.stages.push({
+      ...base('filter', ctx.columns),
+      kind: 'filter',
+      clause: 'having',
+      verdicts: {},
+      predicateColumns: [],
+      rowCount: n,
+      sourceRange: rangeOf(ctx.stmt, 'having'),
+      caption: captions.having(before, n, 0),
+    });
+  }
 
   const out = await ctx.outputs();
   const input = ctx.grouped?.columns ?? ctx.scanColumns;

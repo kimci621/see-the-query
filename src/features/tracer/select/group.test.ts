@@ -108,3 +108,62 @@ describe('стадия group', () => {
       }),
     ));
 });
+
+describe('стадия having', () => {
+  it('HAVING: фильтр по группам, вердикты по g:N', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select author_id, count(*) from book group by author_id having count(*) > 1',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > group:6 > filter:5 > project:5');
+        const filter = stageOf(trace, 'filter');
+        expect(filter.clause).toBe('having');
+        expect(filter.verdicts['g:1']).toBe(false); // author 2: одна книга
+        expect(Object.values(filter.verdicts).filter((v) => v === true)).toHaveLength(5);
+        expect(filter.predicateColumns).toEqual(['count']);
+        expect(filter.caption).toBe('HAVING: осталось 5 из 6 групп');
+      }),
+    ));
+  it('HAVING по ключу: NULL-группа проходит отдельно', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select author_id, count(*) from book group by author_id having author_id is null',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > group:6 > filter:1 > project:1');
+        expect(column(stageOf(trace, 'filter'), 'count')).toEqual([2]);
+      }),
+    ));
+  it('HAVING после join, затем ORDER BY', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select a.country, count(*) from book b join author a on b.author_id = a.author_id group by a.country having count(*) >= 2 order by count(*)',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > scan:6 > join:9 > group:3 > filter:2 > project:2 > sort:2');
+        expect(column(stageOf(trace, 'sort'), 'country')).toEqual(['Франция', 'Россия']);
+      }),
+    ));
+  it('HAVING без GROUP BY и в сжатом режиме', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const none = await traceSql(db, 'select count(*) from book having count(*) > 100');
+        expect(none.mode, none.fallbackReason).toBe('full');
+        expect(summary(none)).toBe('scan:11 > group:1 > filter:0 > project:0');
+        const big = await traceSql(
+          db,
+          'select author_id, count(*) from book group by author_id having count(*) > 1',
+          { maxRows: 5 },
+        );
+        expect(big.mode, big.fallbackReason).toBe('full');
+        expect(summary(big)).toBe('scan:11 > group:6 > filter:5 > project:5');
+      }),
+    ));
+});

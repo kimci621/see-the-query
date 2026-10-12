@@ -100,6 +100,7 @@ export const SUPPORTED = new Set<Feature>([
   'join-full',
   'join-cross',
   'group',
+  'having',
   'aggregate',
 ]);
 

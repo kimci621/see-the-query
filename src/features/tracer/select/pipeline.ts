@@ -2,6 +2,7 @@ import type { SelectCtx } from './context';
 import { distinctStep } from './distinct';
 import { filterStep } from './filter';
 import { groupStep } from './group';
+import { havingStep } from './having';
 import { joinStep } from './join';
 import { limitStep } from './limit';
 import { projectStep } from './project';
@@ -20,6 +21,7 @@ export const SELECT_PIPELINE: SelectStep[] = [
   joinStep,
   filterStep,
   groupStep,
+  havingStep,
   projectStep,
   distinctStep,
   sortStep,

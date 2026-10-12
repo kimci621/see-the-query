@@ -28,6 +28,8 @@ export const captions = {
     `SELECT: ${colsWord(kept)} из ${from}${computed ? `, вычислено ${computed}` : ''}`,
   group: (keys: string[], groups: number, rows: number) =>
     `GROUP BY ${keys.join(', ')}: ${rowsWord(rows)} → ${groups} ${plural(groups, 'группа', 'группы', 'групп')}`,
+  having: (before: number, after: number, unknown: number) =>
+    `HAVING: осталось ${after} из ${before} ${plural(before, 'группа', 'группы', 'групп')}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
