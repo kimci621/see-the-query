@@ -1,4 +1,5 @@
 import type { FuncCall, SelectStmt } from '@pgsql/types';
+import { DbException } from '@/features/db/types';
 import { captions } from '../captions';
 import { ident, sqlOf, TraceFallback } from '../probe';
 import { groupKey } from '../rowkey';
@@ -58,6 +59,22 @@ export async function setGroupColumns(
     : `'g:0'`;
 }
 
+// Без GROUP BY: значения агрегатов «набегают» по строкам. Считает Postgres окном в порядке стопки.
+// Агрегат, который окном не считается (DISTINCT, WITHIN GROUP), или несовпадение с итогом: набегания нет
+async function runningValues(ctx: SelectCtx, aggregates: string[], ctids: string, totals: unknown[]) {
+  const over = `OVER (ORDER BY ${ctids} ROWS UNBOUNDED PRECEDING)`;
+  try {
+    const r = await ctx.prober.rows(
+      `SELECT ${aggregates.map((a) => `${a} ${over}`).join(', ')}${ctx.sql.from}${ctx.sql.where} ORDER BY ${ctids}`,
+    );
+    const last = r.rows.at(-1);
+    return last && aggregates.every((_, i) => String(last[i]) === String(totals[i])) ? r.rows : undefined;
+  } catch (e) {
+    if (e instanceof DbException) return undefined;
+    throw e;
+  }
+}
+
 export function groupCaption(keys: string[], groups: number, before: number): string {
   return keys.length ? captions.group(keys, groups, before) : captions.aggregateNoGroup(before);
 }
@@ -87,12 +104,15 @@ export const groupStep: SelectStep = {
     }));
     const before = ctx.rows.length;
     ctx.rows = r.rows.map((row, i) => ({ key: groupKey(i), lineage: {}, values: row.slice(0, n) }));
+    const running =
+      keys.length || !before ? undefined : await runningValues(ctx, aggregates, ctids, ctx.rows[0].values);
     ctx.stages.push({
       id: stageId(ctx, 'group'),
       kind: 'group',
       keys,
       groups,
       aggregates,
+      ...(running ? { running } : {}),
       sourceRange: rangeOf(ctx.stmt, keys.length ? 'group' : 'select'),
       caption: groupCaption(keys, groups.length, before),
       output: { columns: ctx.columns, rows: ctx.rows },

@@ -4,6 +4,7 @@ import {
   counterNear,
   currentTable,
   mapColumns,
+  mapRows,
   rebuildTable,
   stageRows,
   totalRows,
@@ -80,6 +81,37 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   }));
 
   const head = stage.keys.length ? `GROUP BY ${stage.keys.join(', ')}` : 'Агрегат без GROUP BY';
+
+  // Без GROUP BY значение набегает: фаза на строку стопки, счётчик рядом с таблицей, NULL в count(col) серый.
+  // ponytail: не больше 20 фаз, на большой стопке шаг через несколько строк
+  const runAt = new Map((stage.groups[0]?.members ?? []).map((m, j) => [m, stage.running?.[j]]));
+  const skipped = (r: GhostRow) => nullCols.some((c) => r.values[c] === null);
+  const counted = stage.running ? stacked.rows.flatMap((r, i) => (runAt.get(r.key) ? [i] : [])) : [];
+  const step = Math.ceil(counted.length / 20);
+  const ticks = counted
+    .filter((_, n) => (counted.length - 1 - n) % step === 0)
+    .map((at, n): Phase => {
+      const now = runAt.get(stacked.rows[at].key) ?? [];
+      const text = stage.aggregates.map((a, k) => `${a} = ${now[k]}`).join(', ');
+      const t = mapRows(stacked, (r, i) => ({
+        state: i > at ? 'normal' : skipped(r) ? 'unknown' : i === at ? 'matched' : 'kept',
+      }));
+      return {
+        id: `${stageIndex}:tick:${n}`,
+        stageIndex,
+        caption: `${head}: ${text}`,
+        durationMs: 350,
+        frame: {
+          tables: withTable(prev, t).tables,
+          decorations: [
+            ...brackets,
+            { kind: 'scanner', table: cur.id, rowIndex: at },
+            counterNear(t, `${stageIndex}:counter`, text),
+          ],
+        },
+      };
+    });
+
   return [
     {
       id: `${stageIndex}:color`,
@@ -95,6 +127,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
       durationMs: 800,
       frame: { tables: withTable(prev, stacked).tables, decorations: brackets },
     },
+    ...ticks,
     collapse,
   ];
 };

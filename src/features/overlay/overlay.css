@@ -19,6 +19,7 @@
 .vs-row-icon { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 11px; }
 .vs-row-badge { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 10px; padding: 0 4px; border-radius: 4px; background: var(--secondary); }
 .vs-col--removed { opacity: 0.35; text-decoration: line-through; }
+.vs-col--error { background: color-mix(in oklab, var(--dropped) 22%, transparent); color: var(--dropped); }
 .vs-col--highlight, .vs-col--key { background: color-mix(in oklab, var(--match) 20%, transparent); }
 .vs-col--computed, .vs-col--added { background: color-mix(in oklab, var(--new) 18%, transparent); }
 .vs-null { font-style: italic; color: var(--muted-foreground); outline: 1px dashed var(--null); outline-offset: -4px; border-radius: 4px; }

@@ -7,7 +7,7 @@ export type { Playback };
 export { ANIMATORS };
 
 // Прогоняет стадии трассы через аниматоры и собирает плоский список фаз.
-// У трассы с ошибкой единственная стадия error: её сцену решает errorAnimator
+// У трассы с ошибкой последняя стадия error: её сцену решает errorAnimator
 export function buildPlayback(trace: Trace, ctx: AnimatorContext): Playback {
   if ((trace.mode !== 'full' && !trace.error) || trace.stages.length === 0)
     return { phases: [], stageStarts: [] };

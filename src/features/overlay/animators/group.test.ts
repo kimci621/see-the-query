@@ -92,3 +92,42 @@ describe('groupAnimator: агрегат без GROUP BY', () => {
     expect(p[2].frame.decorations).toContainEqual(expect.objectContaining({ text: '0 → 1' }));
   });
 });
+
+describe('groupAnimator: агрегат набегает по строкам', () => {
+  const trace = aggregateTrace();
+  const stage = {
+    ...trace.stages[1],
+    aggregates: ['count(*)', 'count(author_id)'],
+    running: [
+      [1, 1],
+      [2, 2],
+      [3, 3],
+      [4, 3],
+    ],
+    output: { ...trace.stages[1].output, rows: [{ key: 'g:0', lineage: {}, values: [4, 3] }] },
+  } as StageOf<'group'>;
+  const phases = groupAnimator(runUpTo(trace, 1, testCtx()), stage, 1, testCtx());
+  const states = (i: number) => phases[i].frame.tables[0].rows.map((r) => r.state);
+
+  it('между стопкой и схлопыванием фаза на каждую строку', () => {
+    expect(phases.map((p) => p.id)).toEqual([
+      '1:color',
+      '1:stack',
+      '1:tick:0',
+      '1:tick:1',
+      '1:tick:2',
+      '1:tick:3',
+      '1:collapse',
+    ]);
+  });
+  it('подпись и счётчик показывают значение после строки', () => {
+    expect(phases[3].caption).toBe('Агрегат без GROUP BY: count(*) = 2, count(author_id) = 2');
+    expect(phases[5].frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'counter', text: 'count(*) = 4, count(author_id) = 3' }),
+    );
+  });
+  it('текущая строка подсвечена, NULL в count(col) серый и не засчитан', () => {
+    expect(states(3)).toEqual(['kept', 'matched', 'normal', 'normal']);
+    expect(states(5)).toEqual(['kept', 'kept', 'kept', 'unknown']);
+  });
+});

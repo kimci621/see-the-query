@@ -87,15 +87,17 @@ describe('buildPlayback на трассе Ф5', () => {
       }),
     ));
 
-  it('ошибка 42803 проигрывается одной сценой, другие ошибки сцены не дают', () =>
+  it('ошибка 42803: FROM, стопки групп, красная колонка; другие ошибки сцены не дают', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
         const ctx = { ...testCtx(), schema: await introspect(db) };
         const grouping = await traceSql(db, 'select title, count(*) from book group by author_id');
         const p = buildPlayback(grouping, ctx);
-        expect(p.phases.map((ph) => ph.id)).toEqual(['0:error']);
-        const book = p.phases[0].frame.tables.find((t) => t.id === 't:book');
-        expect(book?.columns.find((c) => c.name === 'title')?.state).toBe('removed');
+        expect(p.stageStarts).toHaveLength(2);
+        expect(p.phases.slice(-3).map((ph) => ph.id)).toEqual(['1:color', '1:stack', '1:error']);
+        const last = p.phases[p.phases.length - 1].frame;
+        expect(last.tables[0].columns.find((c) => c.name === 'title')?.state).toBe('error');
+        expect(last.decorations.filter((d) => d.kind === 'bracket')).toHaveLength(6);
         expect(buildPlayback(await traceSql(db, 'select nme from book'), ctx).phases).toEqual([]);
       }),
     ));

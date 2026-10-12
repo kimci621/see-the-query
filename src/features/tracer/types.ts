@@ -55,6 +55,7 @@ export type Stage = StageBase &
         keys: string[];
         groups: Array<{ key: RowKey; members: RowKey[] }>;
         aggregates: string[];
+        running?: unknown[][]; // без GROUP BY: значения агрегатов после каждого члена стопки
       }
     | { kind: 'window'; partitions: Array<{ members: RowKey[] }>; computed: string[]; frame?: string }
     | {
@@ -91,7 +92,13 @@ export type Stage = StageBase &
         cascades: Array<{ tableId: string; deleted: RowKey[]; updated: RowKey[] }>;
       }
     | { kind: 'ddl'; diff: SchemaDiff }
-    | { kind: 'error'; error: DbError; focus: { tableIds: string[]; columns: string[] } }
+    | {
+        kind: 'error';
+        error: DbError;
+        focus: { tableIds: string[]; columns: string[] };
+        // 42803 «must appear»: состав групп, чтобы показать колонку вне GROUP BY в стопке
+        group?: { keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> };
+      }
   );
 
 export interface SchemaDiff {

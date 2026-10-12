@@ -18,7 +18,7 @@ export interface GhostColumn {
   name: string;
   type?: string;
   source?: Column['source']; // откуда колонка: различает одноимённые колонки JOIN
-  state: 'normal' | 'highlight' | 'removed' | 'computed' | 'key' | 'added';
+  state: 'normal' | 'highlight' | 'removed' | 'computed' | 'key' | 'added' | 'error';
 }
 
 export interface GhostRow {

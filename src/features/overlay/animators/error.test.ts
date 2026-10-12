@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SchemaSnapshot } from '@/features/db/introspect';
-import { testCtx } from '../__fixtures__/traces';
+import { runUpTo } from '../__fixtures__/runUpTo';
+import { groupTrace, testCtx } from '../__fixtures__/traces';
 import type { StageOf } from '../types';
 import { errorAnimator } from './error';
 
@@ -59,7 +60,7 @@ describe('errorAnimator', () => {
     expect(t).toMatchObject({ x: 0, y: 0, rows: [] });
     expect(Object.fromEntries(t?.columns.map((c) => [c.name, c.state]) ?? [])).toEqual({
       book_id: 'normal',
-      title: 'removed',
+      title: 'error',
       author_id: 'normal',
     });
     expect(phases[0].caption).toContain('42803');
@@ -86,5 +87,31 @@ describe('errorAnimator', () => {
       ctx,
     );
     expect(phases).toEqual([]);
+  });
+});
+
+describe('errorAnimator: 42803 в стопке группы', () => {
+  const trace = groupTrace();
+  const group = trace.stages[1] as StageOf<'group'>;
+  const stage = {
+    ...errorStage('42803', ['public.book.title'], 'column "b.title" must appear in the GROUP BY clause'),
+    group: { keys: group.keys, groups: group.groups },
+  };
+  const phases = errorAnimator(runUpTo(trace, 1, ctx), stage, 1, ctx);
+  const last = phases[phases.length - 1];
+
+  it('строки съезжаются в стопки групп, затем фаза ошибки', () => {
+    expect(phases.map((p) => p.id)).toEqual(['1:color', '1:stack', '1:error']);
+    expect(last.frame.decorations.filter((d) => d.kind === 'bracket')).toHaveLength(3);
+  });
+  it('колонка вне GROUP BY красная, ключ подсвечен, подпись объясняет', () => {
+    const t = last.frame.tables[0];
+    expect(Object.fromEntries(t.columns.map((c) => [c.name, c.state]))).toEqual({
+      book_id: 'normal',
+      title: 'error',
+      author_id: 'key',
+    });
+    expect(last.caption).toContain('Колонка вне GROUP BY');
+    expect(last.caption).toContain('title');
   });
 });

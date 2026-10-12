@@ -428,7 +428,8 @@ type Stage = StageBase & (
       pairs: Array<[RowKey | null, RowKey | null]>; onColumns: string[] }
   | { kind: 'filter'; clause: 'where' | 'having';
       verdicts: Record<RowKey, true | false | null> }
-  | { kind: 'group'; keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> }
+  | { kind: 'group'; keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }>;
+      running?: unknown[][] }            // без GROUP BY: значения агрегатов после каждой строки (окно в Postgres)
   | { kind: 'window'; partitions: Array<{ members: RowKey[] }>; computed: string[] }
   | { kind: 'project'; kept: string[]; removed: string[]; computed: string[]; renamed: Record<string, string> }
   | { kind: 'distinct'; stacks: Array<{ winner: RowKey; members: RowKey[] }> }
@@ -443,7 +444,8 @@ type Stage = StageBase & (
       cascades: Array<{ table: string; deleted: RowKey[]; updated: RowKey[] }> }
   | { kind: 'ddl'; diff: SchemaDiff }
   | { kind: 'error'; sqlstate: string; message: string; detail?: string;
-      constraint?: string; focus?: { table?: string; column?: string; position?: number } }
+      constraint?: string; focus?: { table?: string; column?: string; position?: number };
+      group?: { keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> } } // 42803: стопки групп
 );
 
 interface Trace {

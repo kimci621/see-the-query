@@ -88,6 +88,19 @@ describe('Timeline', () => {
     );
   });
 
+  it('ошибка со сценой (42803): чипы и подпись как у обычной трассы', () => {
+    const s = useSceneStore.getState();
+    const error = { code: '42803', message: 'column "b.title" must appear in the GROUP BY clause' };
+    const trace = { ...fullPipelineTrace(), mode: 'final-only' as const, result: null, error };
+    act(() => {
+      s.setTrace(trace, s.nextGeneration());
+      useSceneStore.getState().setPlayback(buildPlayback(trace, testCtx()));
+    });
+    render(<Timeline />);
+    expect(screen.queryByTestId('final-only-note')).toBeNull();
+    expect(screen.getAllByTestId('stage-chip').length).toBeGreaterThan(0);
+  });
+
   it('volatile-стадия помечена значком и подсказкой', () => {
     const trace = fullPipelineTrace();
     trace.stages[2] = { ...trace.stages[2], volatile: true };

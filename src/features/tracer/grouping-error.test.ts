@@ -25,6 +25,25 @@ describe('42803 grouping_error', () => {
           tableIds: ['public.author'],
           columns: ['public.author.name'],
         });
+        expect(trace.stages.map((s) => s.kind)).toEqual(['scan', 'scan', 'join', 'error']);
+      }),
+    ));
+  it('перед ошибкой настоящие стадии до GROUP BY, в стадии ошибки состав групп', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select title from book where price > 500 group by author_id');
+        expect(trace.stages.map((s) => s.kind)).toEqual(['scan', 'filter', 'error']);
+        const kept = Object.values(stageOf(trace, 'filter').verdicts).filter((v) => v === true).length;
+        const { group } = stageOf(trace, 'error');
+        expect(group?.keys).toEqual(['author_id']);
+        expect(group?.groups.flatMap((g) => g.members)).toHaveLength(kept);
+      }),
+    ));
+  it('другие 42803 без стадий до ошибки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select title from book where count(price) > 1');
+        expect(trace.stages.map((s) => s.kind)).toEqual(['error']);
       }),
     ));
 });

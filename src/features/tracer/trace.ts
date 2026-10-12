@@ -1,12 +1,16 @@
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
+import type { Prober } from './probe';
 import { createProber, ProbeOverflow, TraceFallback, typeNames } from './probe';
 import { resultKey } from './rowkey';
 import { runCompressed } from './select/compressed';
 import { createSelectCtx, rangeOf, stableCanon } from './select/context';
-import { flattenFrom } from './select/join';
+import { filterStep } from './select/filter';
+import { groupStep } from './select/group';
+import { flattenFrom, joinStep } from './select/join';
 import { runSelect } from './select/pipeline';
+import { scanStep } from './select/scan';
 import type { Stage, Trace, TraceOptions } from './types';
 import { sameResult } from './verify';
 import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason } from './whitelist';
@@ -47,18 +51,21 @@ export async function traceStatement(
   } catch (e) {
     if (!(e instanceof DbException)) throw e;
     const error = e.db;
+    const focus = error.code === '42803' ? groupingErrorFocus(error.message, stmt.ast, opts.schema) : null;
+    const before = focus ? await groupingStages(stmt, prober, opts.schema) : { stages: [] };
     const stage: Stage = {
-      id: '0:error',
+      id: `${before.stages.length}:error`,
       kind: 'error',
       error,
-      focus: (error.code === '42803' && groupingErrorFocus(error.message, stmt.ast, opts.schema)) || touched,
+      focus: focus ?? touched,
+      ...('group' in before ? { group: before.group } : {}),
       caption: captions.error(error.code, error.message),
       output: { columns: [], rows: [] },
     };
     return finish({
       mode: 'final-only',
       fallbackReason: 'Запрос завершился ошибкой',
-      stages: [stage],
+      stages: [...before.stages, stage],
       result: null,
       error,
     });
@@ -139,4 +146,32 @@ export async function traceStatement(
     return finalOnly('Сверка с прямым выполнением не сошлась');
   }
   return finish({ mode: 'full', stages: ctx.stages, result: reference, error: null });
+}
+
+// 42803 «must appear»: стадии до GROUP BY настоящими пробами и состав групп, чтобы показать колонку в стопке.
+// Не вышло (сложный FROM, volatile, переполнение, ошибка пробы): только стадия ошибки
+async function groupingStages(
+  stmt: ParsedStatement,
+  prober: Prober,
+  schema: TraceOptions['schema'],
+): Promise<{ stages: Stage[]; group?: Extract<Stage, { kind: 'error' }>['group'] }> {
+  const sel = 'SelectStmt' in stmt.ast ? stmt.ast.SelectStmt : null;
+  if (!sel?.fromClause || !sel.groupClause || unsupportedReason(stmt) !== null) return { stages: [] };
+  if (selectFeatures(sel).has('volatile')) return { stages: [] };
+  const from = flattenFrom(sel, schema);
+  if (!from.ok) return { stages: [] };
+  const reference = { fields: [], rows: [] };
+  const ctx = createSelectCtx({ stmt, sel, prober, reference, volatile: false, ...from, schema });
+  try {
+    for (const step of [scanStep, joinStep, filterStep, groupStep])
+      if (step.applies(ctx)) await step.run(ctx);
+  } catch (e) {
+    if (e instanceof ProbeOverflow || e instanceof TraceFallback || e instanceof DbException)
+      return { stages: [] };
+    throw e;
+  }
+  const g = ctx.stages.pop();
+  return g?.kind === 'group'
+    ? { stages: ctx.stages, group: { keys: g.keys, groups: g.groups } }
+    : { stages: [] };
 }

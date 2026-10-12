@@ -26,7 +26,8 @@ export function Timeline() {
     );
   }
 
-  if (trace.mode === 'final-only') {
+  // У ошибки со сценой (42803) плеер как у обычной трассы
+  if (trace.mode === 'final-only' && !playback?.phases.length) {
     return (
       <div data-testid="timeline" className="flex h-full items-center px-3 text-sm">
         <p data-testid="final-only-note" aria-live="polite">

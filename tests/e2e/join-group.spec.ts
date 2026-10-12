@@ -73,4 +73,28 @@ test.describe('сцены JOIN и GROUP BY', () => {
     await page.getByTestId('player-prev').click();
     await expect(page.getByTestId('deco-bracket')).toHaveCount(6);
   });
+
+  test('агрегат без GROUP BY: значение набегает, NULL в count(col) серый', async ({ page }) => {
+    await openBoard(page);
+    await typeQuery(page, 'select count(*), count(price) from book');
+    await waitSceneEnd(page, 1);
+    // конец стадии агрегата и шаг назад со схлопывания: последняя строка стопки уже посчитана
+    await page.getByTestId('stage-chip').nth(1).click();
+    await page.getByTestId('player-prev').click();
+    await expect(page.getByTestId('timeline-caption')).toHaveText(
+      'Агрегат без GROUP BY: count(*) = 11, count(price) = 10',
+    );
+    await expect(page.locator('.vs-ghost .vs-row--unknown')).toHaveCount(1);
+  });
+
+  test('42803: колонка вне GROUP BY красная в стопках групп', async ({ page }) => {
+    await openBoard(page);
+    await typeQuery(page, 'select title, count(*) from book group by author_id');
+    await expect(page.getByTestId('stage-chip')).toHaveText(['FROM', 'ОШИБКА'], { timeout: 5_000 });
+    await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('deco-bracket')).toHaveCount(6);
+    await expect(page.getByTestId('timeline-caption')).toContainText('разные значения title');
+  });
 });

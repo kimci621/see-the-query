@@ -42,6 +42,29 @@ describe('стадия group', () => {
         expect(group.output.rows.map((r) => r.values)).toEqual([[11, 10]]);
       }),
     ));
+  it('агрегат без GROUP BY: значения набегают по строкам в порядке стопки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const group = stageOf(await traceSql(db, 'select count(*), count(price) from book'), 'group');
+        const running = group.running ?? [];
+        expect(running).toHaveLength(group.groups[0].members.length);
+        expect(running.map((v) => v[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        expect(running.at(-1)).toEqual([11, 10]);
+        // строка с NULL в price: count(*) растёт, count(price) стоит
+        expect(running.some((v, j) => j > 0 && v[1] === running[j - 1][1])).toBe(true);
+      }),
+    ));
+  it('агрегат, который не считается окном (DISTINCT), остаётся без набегания', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select count(distinct author_id) from book');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(stageOf(trace, 'group').running).toBeUndefined();
+        expect(
+          stageOf(await traceSql(db, 'select author_id, count(*) from book group by 1'), 'group').running,
+        ).toBeUndefined();
+      }),
+    ));
   it('выражение над агрегатами: значения из пробы P, агрегаты в списке стадии', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
