@@ -36,13 +36,11 @@ const schema: SchemaSnapshot = {
   sequences: [],
 };
 const ctx = { ...testCtx(), schema };
-const errorStage = (code: string, columns: string[]): StageOf<'error'> => ({
+const MUST_APPEAR = 'column "book.title" must appear in the GROUP BY clause';
+const errorStage = (code: string, columns: string[], message = MUST_APPEAR): StageOf<'error'> => ({
   id: '0:error',
   kind: 'error',
-  error: {
-    code,
-    message: 'column "book.title" must appear in the GROUP BY clause',
-  } as StageOf<'error'>['error'],
+  error: { code, message } as StageOf<'error'>['error'],
   focus: { tableIds: ['public.book'], columns },
   caption: `Ошибка ${code}: column "book.title" must appear in the GROUP BY clause`,
   output: { columns: [], rows: [] },
@@ -71,6 +69,19 @@ describe('errorAnimator', () => {
     const phases = errorAnimator(
       { tables: [], decorations: [] },
       errorStage('42703', ['public.book.title']),
+      0,
+      ctx,
+    );
+    expect(phases).toEqual([]);
+  });
+  it('42803 без «must appear» (агрегат в WHERE) сцены не даёт', () => {
+    const phases = errorAnimator(
+      { tables: [], decorations: [] },
+      errorStage(
+        '42803',
+        ['public.book.title', 'public.book.author_id'],
+        'aggregate functions are not allowed in WHERE',
+      ),
       0,
       ctx,
     );

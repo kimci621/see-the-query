@@ -1,11 +1,13 @@
 import { explainError } from '@/features/errors/explain';
 import type { Animator, GhostTable, StageOf } from '../types';
 
-// 42803: призрак таблицы у её ноды на доске, колонка вне GROUP BY перечёркнута.
-// У остальных ошибок сцены нет: всё объясняет панель «Сообщения»
+// 42803 «column … must appear»: призрак таблицы у её ноды на доске, колонка вне GROUP BY перечёркнута.
+// У остальных ошибок (и у 42803 без найденной колонки) сцены нет: всё объясняет панель «Сообщения»
 export const errorAnimator: Animator<StageOf<'error'>> = (prev, stage, stageIndex, ctx) => {
   const table = ctx.schema.tables.find((t) => t.id === stage.focus.tableIds[0]);
-  if (stage.error.code !== '42803' || !table) return [];
+  const column = stage.error.message.match(/column "(?:[^"]*\.)?([^".]+)" must appear/)?.[1];
+  if (stage.error.code !== '42803' || !table || stage.focus.columns.join() !== `${table.id}.${column}`)
+    return [];
   const rect = ctx.nodeRect(table.id);
   const focus = new Set(stage.focus.columns);
   const ghost: GhostTable = {

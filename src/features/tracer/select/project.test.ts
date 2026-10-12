@@ -25,6 +25,44 @@ describe('стадия project', () => {
         expect(column(project, 'sale')[0]).toBe('801.000');
       }),
     ));
+  it('одноимённые колонки разных источников различаются по алиасу', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const self = stageOf(
+          await traceSql(
+            db,
+            'select c.name as child, p.name as parent from book_category c left join book_category p on c.parent_id = p.category_id',
+          ),
+          'project',
+        );
+        expect(self).toMatchObject({
+          kept: [],
+          removed: ['c.category_id', 'c.parent_id', 'p.category_id', 'p.parent_id'],
+          renamed: { 'c.name': 'child', 'p.name': 'parent' },
+          caption: 'SELECT: 2 колонки из 6',
+        });
+        const join = stageOf(
+          await traceSql(
+            db,
+            'select b.author_id, a.name from book b join author a on b.author_id = a.author_id',
+          ),
+          'project',
+        );
+        expect(join.removed).toContain('a.author_id');
+        expect(join.removed).not.toContain('b.author_id');
+      }),
+    ));
+  it('одноимённые агрегаты: подпись считает обе колонки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const project = stageOf(
+          await traceSql(db, 'select count(*) as total, count(price) as priced from book'),
+          'project',
+        );
+        expect(project.removed).toEqual([]);
+        expect(project.caption).toBe('SELECT: 2 колонки из 2');
+      }),
+    ));
   it('звёздочка с алиасом оставляет все колонки', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

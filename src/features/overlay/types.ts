@@ -1,5 +1,5 @@
 import type { SchemaSnapshot } from '@/features/db/introspect';
-import type { RowKey, Stage } from '@/features/tracer/types';
+import type { Column, RowKey, Stage } from '@/features/tracer/types';
 
 // Состояние строки на сцене: от него зависят цвет, иконка и зачёркивание
 export type RowState =
@@ -17,6 +17,7 @@ export type RowState =
 export interface GhostColumn {
   name: string;
   type?: string;
+  source?: Column['source']; // откуда колонка: различает одноимённые колонки JOIN
   state: 'normal' | 'highlight' | 'removed' | 'computed' | 'key' | 'added';
 }
 

@@ -1,4 +1,12 @@
-import { clearMarks, currentTable, mapColumns, rebuildTable, stageRows, withTable } from '../frame';
+import {
+  clearMarks,
+  columnIds,
+  currentTable,
+  mapColumns,
+  rebuildTable,
+  stageRows,
+  withTable,
+} from '../frame';
 import type { Animator, GhostColumn, StageOf } from '../types';
 import { genericAnimator } from './generic';
 
@@ -7,9 +15,10 @@ export const projectAnimator: Animator<StageOf<'project'>> = (prev, stage, stage
   const cur = currentTable(prev);
   if (!cur) return genericAnimator(prev, stage, stageIndex, ctx);
 
-  const base = mapColumns(clearMarks(cur), (c) => {
-    if (stage.removed.includes(c.name)) return { state: 'removed' };
-    if (c.name in stage.renamed) return { state: 'highlight' };
+  const ids = columnIds(cur.columns);
+  const base = mapColumns(clearMarks(cur), (_, i) => {
+    if (stage.removed.includes(ids[i])) return { state: 'removed' };
+    if (ids[i] in stage.renamed) return { state: 'highlight' };
     return { state: 'normal' };
   });
 

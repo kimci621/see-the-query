@@ -29,6 +29,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     }));
     ctx.sourceColumns.push(cols);
     ctx.scanColumns.push(...cols.map((c) => c.name));
+    ctx.columns = cols;
     n = await count(`SELECT 1${sql.fromSource(i)}`);
     ctx.stages.push({
       ...base('scan', cols),
@@ -42,6 +43,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
   }
   for (const [k, j] of ctx.joins.entries()) {
     const cols = joinLayout(ctx, k).columns;
+    ctx.columns = cols;
     n = await count(`SELECT 1${sql.fromUpTo(k)}`);
     ctx.stages.push({
       ...base('join', cols),
@@ -108,7 +110,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
   }
 
   const out = await ctx.outputs();
-  const input = ctx.grouped?.columns ?? ctx.scanColumns;
+  const input = ctx.columns;
   const p = projection(out, input);
   ctx.stages.push({
     ...base('project', out.columns),
@@ -116,7 +118,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     ...p,
     rowCount: n,
     sourceRange: rangeOf(ctx.stmt, 'select'),
-    caption: captions.project(p.kept.length + Object.keys(p.renamed).length, input.length, p.computed.length),
+    caption: captions.project(out.columns.length - p.computed.length, input.length, p.computed.length),
   });
 
   if (sel.distinctClause) {

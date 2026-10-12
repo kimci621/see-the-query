@@ -22,6 +22,12 @@ async function waitSceneEnd(page: Page, rows: number) {
   });
 }
 
+// Эталоны сняты на macOS; в CI (Linux) другие шрифты, там снимок не сверяем
+async function expectBoardShot(page: Page, name: string) {
+  if (process.platform !== 'darwin') return;
+  await expect(page.getByTestId('board-area')).toHaveScreenshot(name, { maxDiffPixelRatio: 0.02 });
+}
+
 const ON = 'on b.author_id = a.author_id';
 
 test.describe('сцены JOIN и GROUP BY', () => {
@@ -32,9 +38,7 @@ test.describe('сцены JOIN и GROUP BY', () => {
       timeout: 5_000,
     });
     await waitSceneEnd(page, 9);
-    await expect(page.getByTestId('board-area')).toHaveScreenshot('inner-join-final.png', {
-      maxDiffPixelRatio: 0.02,
-    });
+    await expectBoardShot(page, 'inner-join-final.png');
     await page.getByTestId('stage-chip').nth(2).click();
     await expect(page.getByTestId('timeline-caption')).toContainText('INNER JOIN: 9 пар');
   });
@@ -44,9 +48,7 @@ test.describe('сцены JOIN и GROUP BY', () => {
     await typeQuery(page, `select b.title, a.name from book b left join author a ${ON}`);
     await waitSceneEnd(page, 11);
     await expect(page.locator('.vs-ghost .vs-null')).toHaveCount(2);
-    await expect(page.getByTestId('board-area')).toHaveScreenshot('left-join-final.png', {
-      maxDiffPixelRatio: 0.02,
-    });
+    await expectBoardShot(page, 'left-join-final.png');
   });
 
   test('FULL JOIN: NULL с обеих сторон, 12 строк', async ({ page }) => {
@@ -64,9 +66,7 @@ test.describe('сцены JOIN и GROUP BY', () => {
       timeout: 5_000,
     });
     await waitSceneEnd(page, 6);
-    await expect(page.getByTestId('board-area')).toHaveScreenshot('group-by-final.png', {
-      maxDiffPixelRatio: 0.02,
-    });
+    await expectBoardShot(page, 'group-by-final.png');
     await page.getByTestId('stage-chip').nth(1).click();
     await expect(page.getByTestId('timeline-caption')).toContainText('11 строк → 6 групп');
     // шаг назад: фаза стопок, скобка на каждую группу

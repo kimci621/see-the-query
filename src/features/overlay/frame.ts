@@ -2,6 +2,13 @@ import type { Relation, Row, RowKey, Stage } from '@/features/tracer/types';
 import { COMPRESS_THRESHOLD, COMPRESSED_VISIBLE_ROWS, ghostWidth } from './geometry';
 import type { Decoration, Frame, GhostColumn, GhostRow, GhostTable, RowState } from './types';
 
+// Имя колонки, как его пишет трассировщик в removed/renamed (tracer/select/project.ts, columnIds)
+export function columnIds(columns: GhostColumn[]): string[] {
+  return columns.map((c) =>
+    c.source && columns.filter((d) => d.name === c.name).length > 1 ? `${c.source.alias}.${c.name}` : c.name,
+  );
+}
+
 // Рабочая таблица сцены: последняя добавленная
 export function currentTable(frame: Frame): GhostTable | null {
   return frame.tables.length ? frame.tables[frame.tables.length - 1] : null;
@@ -48,7 +55,12 @@ export function rebuildTable(
     title: base.title,
     x: base.x,
     y: base.y,
-    columns: rel.columns.map((c) => ({ name: c.name, type: c.type, state: 'normal' as const })),
+    columns: rel.columns.map((c) => ({
+      name: c.name,
+      type: c.type,
+      source: c.source,
+      state: 'normal' as const,
+    })),
     rows: g.rows,
     hiddenRows: Math.max(g.hiddenRows, total - g.rows.length),
   };

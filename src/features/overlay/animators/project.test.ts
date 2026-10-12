@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fullPipelineTrace, testCtx } from '../__fixtures__/traces';
+import { rebuildTable } from '../frame';
 import type { Frame, StageOf } from '../types';
 import { filterAnimator } from './filter';
 import { projectAnimator } from './project';
@@ -49,5 +50,30 @@ describe('projectAnimator', () => {
     const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
     expect(p[0].frame.tables[0].columns.find((c) => c.name === 'title')?.state).toBe('highlight');
     expect(p[0].caption).toContain('title → name');
+  });
+});
+
+describe('projectAnimator: одноимённые колонки JOIN', () => {
+  it('убирается колонка своего источника, а не все с тем же именем', () => {
+    const col = (alias: string, name: string) => ({ name, type: 'int4', source: { alias, column: name } });
+    const joined = rebuildTable(
+      { id: 'cur', title: 'b ⋈ a', x: 0, y: 0 },
+      {
+        columns: [col('b', 'author_id'), col('b', 'title'), col('a', 'author_id'), col('a', 'name')],
+        rows: [],
+      },
+    );
+    const stage: StageOf<'project'> = {
+      id: '3:project',
+      kind: 'project',
+      kept: ['author_id', 'name'],
+      removed: ['title', 'a.author_id'],
+      computed: [],
+      renamed: {},
+      caption: 'SELECT: 2 колонки из 4',
+      output: { columns: [col('b', 'author_id'), col('a', 'name')], rows: [] },
+    };
+    const t = projectAnimator({ tables: [joined], decorations: [] }, stage, 3, testCtx())[0].frame.tables[0];
+    expect(t.columns.map((c) => c.state)).toEqual(['normal', 'removed', 'removed', 'normal']);
   });
 });
