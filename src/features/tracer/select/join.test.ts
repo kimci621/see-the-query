@@ -167,3 +167,60 @@ describe('стадия join: INNER и LEFT', () => {
       }),
     ));
 });
+
+describe('стадия join: цепочки и SELF JOIN', () => {
+  it('цепочка из 4 таблиц: три join-стадии с промежуточными результатами', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select b.title, c.name, o.order_id from orders o join order_item oi on o.order_id = oi.order_id join book b on oi.book_id = b.book_id join customer c on o.customer_id = c.customer_id',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe(
+          'scan:8 > scan:15 > scan:11 > scan:6 > join:15 > join:15 > join:15 > project:15',
+        );
+        const joins = trace.stages.flatMap((s) => (s.kind === 'join' ? [s] : []));
+        expect(joins.map((j) => j.leftAliases)).toEqual([['o'], ['o', 'oi'], ['o', 'oi', 'b']]);
+        expect(joins[1].pairs[0][0]).toMatch(/^o=\(0,\d+\)\|oi=\(0,\d+\)$/);
+        // колонки с одинаковыми именами различаются источником
+        const orderIds = joins[2].output.columns.filter((c) => c.name === 'order_id');
+        expect(orderIds.map((c) => c.source?.alias)).toEqual(['o', 'oi']);
+        expect(trace.result?.rows).toHaveLength(15);
+      }),
+    ));
+  it('SELF JOIN: две копии employee, ключи строк различаются алиасами', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select e.name, m.name from employee e join employee m on e.manager_id = m.employee_id',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:8 > scan:8 > join:7 > project:7');
+        const join = stageOf(trace, 'join');
+        expect(join.onColumns).toEqual(['e.manager_id', 'm.employee_id']);
+        expect(join.pairs).toContainEqual(['e=(0,2)', 'm=(0,1)']);
+        expect(join.output.rows.find((r) => r.key === 'e=(0,2)|m=(0,1)')?.values[2]).toBe(1); // e.manager_id
+        expect(trace.stages.flatMap((s) => (s.kind === 'scan' ? [s.alias] : []))).toEqual(['e', 'm']);
+        // e.name и m.name в выходе: обе колонки с источником
+        expect(stageOf(trace, 'project').output.columns.map((c) => c.source)).toEqual([
+          { alias: 'e', column: 'name' },
+          { alias: 'm', column: 'name' },
+        ]);
+      }),
+    ));
+  it('цепочка с LEFT JOIN посередине: NULL-половина не теряет левую часть', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select b.title, a.name, c.name from book b left join author a on b.author_id = a.author_id join book_category c on b.category_id = c.category_id',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const joins = trace.stages.flatMap((s) => (s.kind === 'join' ? [s] : []));
+        // книга без автора доходит до второго join с левым ключом 'b=…|a=∅'
+        expect(joins[1].pairs.some(([l]) => l === 'b=(0,11)|a=∅')).toBe(true);
+      }),
+    ));
+});
