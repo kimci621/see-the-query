@@ -19,6 +19,19 @@ describe('useBoardStore', () => {
     expect(useBoardStore.getState().focusRequest).toBe(1);
   });
 
+  it('frameStart ставит набор и просит стартовый кадр, даже если набор не изменился', () => {
+    const s = useBoardStore.getState();
+    s.focus(['public.book']);
+    s.frameStart(['public.book']);
+    expect(useBoardStore.getState()).toMatchObject({
+      focused: ['public.book'],
+      startRequest: 1,
+      focusRequest: 1,
+    });
+    s.frameStart([]);
+    expect(useBoardStore.getState()).toMatchObject({ focused: [], startRequest: 2, focusRequest: 1 });
+  });
+
   it('highlightColumns с тем же списком не меняет состояние', () => {
     useBoardStore.getState().highlightColumns(['public.book.title']);
     const before = useBoardStore.getState();

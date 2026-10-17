@@ -4,22 +4,26 @@ import { SCHEMA } from '@/features/editor/__fixtures__/schema';
 import { initParser } from '@/features/sql/parser';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
+import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
 import { EditorPane } from './EditorPane';
 
 // CodeMirror в этом тесте не нужен: проверяем эффекты связи, редактор подменён
 vi.mock('./SqlEditor', () => ({ SqlEditor: () => null }));
 const sandboxState = vi.hoisted(() => ({ sandbox: null as unknown }));
+const route = vi.hoisted(() => ({ lessonId: null as string | null }));
 vi.mock('@/features/db/SandboxProvider', () => ({
   useSandbox: () => ({ sandbox: sandboxState.sandbox, status: 'ready', version: null }),
 }));
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
-  useParams: () => ({ lessonId: null }),
+  useParams: () => ({ lessonId: route.lessonId }),
 }));
 
 beforeEach(async () => {
   sandboxState.sandbox = null;
+  route.lessonId = null;
+  useLessonStore.setState({ byId: {} });
   useEditorStore.setState(useEditorStore.getInitialState(), true);
   useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
   useBoardStore.setState(useBoardStore.getInitialState(), true);
@@ -134,7 +138,7 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().highlightedColumns).toEqual(['public.book.title']);
   });
 
-  it('hover меняет подсветку, но не свёртку: колонки трейса остаются, наведённая добавляется', async () => {
+  it('hover меняет подсветку, но не свёртку: колонки свёртки остаются колонками трейса', async () => {
     const trace = {
       sql: 'select title, price from book',
       statementType: 'select' as const,
@@ -156,10 +160,53 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     await act(async () => undefined);
     const board = useBoardStore.getState();
     expect(board.highlightedColumns).toEqual(['public.book.author_id']);
-    expect(board.queryColumns).toEqual(['public.book.title', 'public.book.price', 'public.book.author_id']);
+    // свёрнутая колонка от hover не разворачивается: ширина ноды и камера не дёргаются
+    expect(board.queryColumns).toEqual(['public.book.title', 'public.book.price']);
     act(() => useEditorStore.getState().setHoveredColumn(null));
     await act(async () => undefined);
     expect(useBoardStore.getState().queryColumns).toEqual(['public.book.title', 'public.book.price']);
+  });
+
+  it('открытие урока ставит стартовый кадр на таблицы стартового текста', async () => {
+    route.lessonId = 'unknown';
+    useLessonStore
+      .getState()
+      .setLastQuery('unknown', 'select b.title, a.name from book b join author a using (author_id);');
+    render(<EditorPane />);
+    await act(async () => undefined);
+    const board = useBoardStore.getState();
+    expect(board.focused.toSorted()).toEqual(['public.author', 'public.book']);
+    expect(board.startRequest).toBe(1);
+    expect(board.focusRequest).toBe(0);
+  });
+
+  it.each([
+    ['без таблиц', 'select 1;'],
+    ['не разбирается', 'selec title from book'],
+  ])('стартовый текст %s: стартовый кадр на всю доску', async (_, sql) => {
+    route.lessonId = 'unknown';
+    useLessonStore.getState().setLastQuery('unknown', sql);
+    useBoardStore.getState().focus(['public.author']);
+    render(<EditorPane />);
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused).toEqual([]);
+    expect(useBoardStore.getState().startRequest).toBe(1);
+  });
+
+  it('стартовый кадр ждёт схему', async () => {
+    route.lessonId = 'unknown';
+    useLessonStore.getState().setLastQuery('unknown', 'select title from book');
+    useBoardStore.setState({ schema: null });
+    render(<EditorPane />);
+    await act(async () => undefined);
+    expect(useBoardStore.getState().startRequest).toBe(0);
+    act(() => useBoardStore.getState().setSchema(SCHEMA));
+    await act(async () => undefined);
+    expect(useBoardStore.getState()).toMatchObject({ focused: ['public.book'], startRequest: 1 });
+    // новая схема после «Применить» стартовый кадр не повторяет
+    act(() => useBoardStore.getState().setSchema({ ...SCHEMA }));
+    await act(async () => undefined);
+    expect(useBoardStore.getState().startRequest).toBe(1);
   });
 
   it('звёздочка трейса разворачивает таблицу на доске, закрытая сцена сворачивает', async () => {

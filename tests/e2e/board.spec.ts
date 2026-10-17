@@ -190,21 +190,81 @@ async function outsideBoard(page: Page, ids: string[]): Promise<string[]> {
   return out;
 }
 
-// Раскладка select-basics задана в уроке (book и author друг под другом): рядом они не влезают
-// в доску 719×467 px при зуме 0.6, и автоподгонка обрезала бы обе таблицы
-test('стартовый кадр: book, author и подпись схемы целиком, зум не меньше 0.6', async ({ page }) => {
+// Стартовый кадр (спека 3.4): камера на таблицы стартового запроса, текст читается.
+// ⌘0 вписывает все таблицы урока: book и author друг под другом, подпись схемы в кадре
+test('стартовый кадр на book крупно, ⌘0 вписывает book, author и подпись схемы', async ({ page }) => {
   await openBookstore(page);
-  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
+  const start = await zoomOf(page);
+  expect(start).toBeGreaterThanOrEqual(0.85);
+
+  const box = await page.getByTestId('board-canvas').boundingBox();
+  if (!box) throw new Error('нет доски');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.press('ControlOrMeta+0');
   await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
+  const fitted = await zoomOf(page);
+  expect(fitted).toBeLessThan(start);
+  expect(fitted).toBeGreaterThanOrEqual(0.6);
 });
 
-// how-to-use стартует с select * from book: book развёрнута до 1188 единиц, author стоит над ней
-test('how-to-use: развёрнутая book, author и подпись схемы в кадре', async ({ page }) => {
+// how-to-use стартует с select * from book: book развёрнута до 1188 единиц и целиком в кадре
+test('how-to-use: развёрнутая book в кадре, ⌘0 добавляет author и подпись схемы', async ({ page }) => {
   await page.goto('/l/how-to-use');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
   expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
+
+  await book.hover();
+  await page.keyboard.press('ControlOrMeta+0');
   await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
+});
+
+// Первый трейс нового урока сворачивает book: рефит идёт в стартовый кадр нового урока, а не во всю доску
+test('переход how-to-use → select-basics заканчивается стартовым кадром select-basics', async ({ page }) => {
+  await page.goto('/l/how-to-use');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('navigation', { name: 'Соседние уроки' }).getByRole('link').click();
+  await expect(page).toHaveURL(/\/l\/select-basics$/);
+  await expect(book.getByTestId('hidden-columns')).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => zoomOf(page)).toBeGreaterThanOrEqual(0.85);
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
+});
+
+// Сохранённая камера важнее стартового кадра и рефита по развороту book
+test('how-to-use: сохранённая камера переживает перезагрузку и разворот book', async ({ page }) => {
+  await page.goto('/l/how-to-use');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  const viewport = page.locator('.react-flow__viewport');
+  const box = await page.getByTestId('board-canvas').boundingBox();
+  if (!box) throw new Error('нет доски');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -400);
+  // Колесо может прервать рефит по развороту на полпути, и промежуточный кадр тоже сохраняется.
+  // Ждём, пока в хранилище не ляжет кадр после колеса
+  const savedZoom = () =>
+    page.evaluate(
+      () =>
+        (JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['how-to-use']?.viewport?.zoom as
+          | number
+          | undefined) ?? null,
+    );
+  await expect
+    .poll(async () => {
+      const saved = await savedZoom();
+      return saved !== null && Math.abs(saved - (await zoomOf(page))) < 1e-3;
+    })
+    .toBe(true);
+  const zoomed = await viewport.getAttribute('style');
+
+  await page.reload();
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  // рефит анимируется 400 мс: даём ему шанс случиться, камера должна остаться на месте
+  await page.waitForTimeout(800);
+  await expect(viewport).toHaveAttribute('style', zoomed ?? '');
 });
 
 // Разворот свёртки меняет ширину ноды: камера перевписывает кадр

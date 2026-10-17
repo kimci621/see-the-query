@@ -6,6 +6,7 @@ import {
   ControlButton,
   Controls,
   MiniMap,
+  type OnMove,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -51,6 +52,23 @@ const tablesOf = (nodes: { id: string; type?: string }[]) =>
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
 
+// Кадры камеры. Фокус (и стартовый кадр урока): таблицы запроса крупно, не ближе зума 1.
+// Отступ 0.1: при 0.3 свёрнутая book (756) на доске 719 px получала зум 0.73 и мелкий текст
+const focusFrame = (ids: string[], duration = animationMs(400)) => ({
+  nodes: ids.map((id) => ({ id })),
+  padding: 0.1,
+  minZoom: FIT_MIN_ZOOM,
+  maxZoom: 1,
+  duration,
+});
+// Вся доска: все таблицы с запасом по краям
+const boardFrame = (nodes: { id: string; type?: string }[], duration = animationMs(300)) => ({
+  nodes: tablesOf(nodes),
+  padding: 0.15,
+  minZoom: FIT_MIN_ZOOM,
+  duration,
+});
+
 export function BoardCanvas() {
   return (
     <ReactFlowProvider>
@@ -83,7 +101,7 @@ function BoardFlow() {
     return { nodes: buildNodes(schema, visible, positions), edges: buildEdges(schema, visible) };
   }, [schema, visible, meta]);
 
-  useCamera(lessonId, nodes, boardRef, over);
+  const onMoveEnd = useCamera(lessonId, nodes, boardRef, over);
 
   return (
     <div
@@ -115,10 +133,7 @@ function BoardFlow() {
         elementsSelectable={false}
         minZoom={0.25}
         maxZoom={2}
-        onMoveEnd={(event, viewport) => {
-          // event = null у программных движений (fitView), их не запоминаем
-          if (event && lessonId) useLessonStore.getState().setViewport(lessonId, viewport);
-        }}
+        onMoveEnd={onMoveEnd}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
         <Controls showInteractive={false} position="bottom-left">
@@ -142,11 +157,14 @@ function useCamera(
   nodes: BoardNode[],
   boardRef: RefObject<HTMLDivElement | null>,
   over: RefObject<boolean>,
-) {
+): OnMove {
   const flow = useReactFlow();
-  const restoredFor = useRef<string | null>(null);
+  const startedFor = useRef<string | null>(null);
+  // Камера ученика: сохранённая или сдвинутая руками. Рефит по свёртке её не перебивает
+  const userCamera = useRef(false);
   const fitRequest = useBoardStore((s) => s.fitRequest);
   const focusRequest = useBoardStore((s) => s.focusRequest);
+  const startRequest = useBoardStore((s) => s.startRequest);
   const focusMode = useSettingsStore((s) => s.focusMode);
   const prevFocusMode = useRef(focusMode);
   const pendingFit = useRef(false);
@@ -161,46 +179,48 @@ function useCamera(
   );
   const knownWidths = useRef(new Map<string, number>());
 
-  // Сохранённая камера урока ставится один раз; без неё вписываем доску при каждой смене набора нод.
+  // Стартовый кадр урока (спека 3.4): таблицы стартового запроса (focused от редактора через
+  // frameStart), без них вся доска. Ставится без полёта при открытии урока, frameStart и смене набора нод.
+  // Сохранённая камера урока важнее стартового кадра, ставится один раз на открытие урока.
   // fitView React Flow сам откладывает до первого замера нод, ещё не замеренные считает по
   // initialWidth и height. useNodesInitialized не годится: при onlyRenderVisibleElements
   // необрисованные ноды не измеряются и initialized не становится true.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startRequest служит только триггером
   useEffect(() => {
     if (nodeKey === '') return;
+    const opened = startedFor.current !== lessonId;
+    startedFor.current = lessonId;
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.viewport : undefined;
-    if (!saved) {
-      void flow.fitView({ nodes: tablesOf(flow.getNodes()), padding: 0.15, minZoom: FIT_MIN_ZOOM });
-    } else if (restoredFor.current !== lessonId) {
-      restoredFor.current = lessonId;
-      void flow.setViewport(saved);
+    if (saved) {
+      if (opened) {
+        userCamera.current = true;
+        void flow.setViewport(saved);
+      }
+      return;
     }
-  }, [nodeKey, lessonId, flow]);
+    userCamera.current = false;
+    const all = flow.getNodes();
+    const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
+    void flow.fitView(ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
+  }, [nodeKey, lessonId, startRequest, flow]);
 
   useEffect(() => {
-    if (fitRequest > 0)
-      void flow.fitView({
-        nodes: tablesOf(flow.getNodes()),
-        padding: 0.15,
-        minZoom: FIT_MIN_ZOOM,
-        duration: animationMs(300),
-      });
+    if (fitRequest === 0) return;
+    userCamera.current = false;
+    void flow.fitView(boardFrame(flow.getNodes()));
   }, [fitRequest, flow]);
 
   useEffect(() => {
     const ids = useBoardStore.getState().focused;
     if (focusRequest > 0 && ids.length > 0) {
-      void flow.fitView({
-        nodes: ids.map((id) => ({ id })),
-        padding: 0.3,
-        minZoom: FIT_MIN_ZOOM,
-        duration: animationMs(400),
-        maxZoom: 1,
-      });
+      userCamera.current = false;
+      void flow.fitView(focusFrame(ids));
     }
   }, [focusRequest, flow]);
 
   // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
-  // Первый замер ноды не считается, его вписывает эффект выше
+  // При смене урока цель рефита - focused, то есть новый стартовый кадр. Первый замер ноды
+  // не считается, его вписывает эффект выше; камеру ученика не трогаем
   // biome-ignore lint/correctness/useExhaustiveDependencies: tableWidths служит только триггером, ширины читаем из flow
   useEffect(() => {
     let changed = false;
@@ -211,19 +231,9 @@ function useCamera(
       if (known !== undefined && known !== w) changed = true;
       knownWidths.current.set(id, w);
     }
-    if (!changed) return;
+    if (!changed || userCamera.current) return;
     const ids = useBoardStore.getState().focused;
-    void flow.fitView(
-      ids.length > 0
-        ? {
-            nodes: ids.map((id) => ({ id })),
-            padding: 0.3,
-            minZoom: FIT_MIN_ZOOM,
-            duration: animationMs(400),
-            maxZoom: 1,
-          }
-        : { nodes: tablesOf(nodes), padding: 0.15, minZoom: FIT_MIN_ZOOM, duration: animationMs(300) },
-    );
+    void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(nodes));
   }, [tableWidths, nodes, flow]);
 
   // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver
@@ -238,12 +248,8 @@ function useCamera(
   useEffect(() => {
     if (!pendingFit.current) return;
     pendingFit.current = false;
-    void flow.fitView({
-      nodes: tablesOf(flow.getNodes()),
-      padding: 0.15,
-      minZoom: FIT_MIN_ZOOM,
-      duration: animationMs(300),
-    });
+    userCamera.current = false;
+    void flow.fitView(boardFrame(flow.getNodes()));
   }, [width, flow]);
 
   // ⌘0 / Ctrl+0: по event.code, на русской раскладке key другой; preventDefault гасит сброс зума браузера.
@@ -259,4 +265,11 @@ function useCamera(
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [boardRef, over]);
+
+  // event = null у программных движений (fitView), их не запоминаем
+  return (event, viewport) => {
+    if (!event) return;
+    userCamera.current = true;
+    if (lessonId) useLessonStore.getState().setViewport(lessonId, viewport);
+  };
 }

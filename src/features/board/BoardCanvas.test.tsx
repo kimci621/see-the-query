@@ -3,6 +3,7 @@ import type { ReactFlowInstance, useStoreApi } from '@xyflow/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBoardStore } from '@/stores/board';
+import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 import { SCHEMA } from './__fixtures__/schema';
 import { BoardCanvas } from './BoardCanvas';
@@ -57,6 +58,7 @@ describe('BoardCanvas', () => {
     holder.store = null;
     useBoardStore.setState(useBoardStore.getInitialState(), true);
     useBoardStore.getState().setSchema(SCHEMA);
+    useLessonStore.setState({ byId: {} });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -137,5 +139,53 @@ describe('BoardCanvas', () => {
     // Дальнейшие смены ширины без режима фокуса камеру не трогают
     act(() => holder.store?.setState({ width: 800 }));
     expect(flow().fitView).toHaveBeenCalledTimes(1);
+  });
+
+  const fitNodes = () => vi.mocked(flow().fitView).mock.lastCall?.[0]?.nodes?.map((n) => n.id);
+
+  it('стартовый кадр урока: таблицы стартового запроса, крупно и без полёта', () => {
+    mockReducedMotion(false);
+    renderBoard();
+    act(() => useBoardStore.getState().frameStart(['public.book']));
+    expect(fitNodes()).toEqual(['public.book']);
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ padding: 0.1, minZoom: 0.6, maxZoom: 1, duration: 0 }),
+    );
+  });
+
+  it('стартовый кадр без таблиц запроса вписывает всю доску', () => {
+    renderBoard();
+    act(() => useBoardStore.getState().frameStart([]));
+    expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
+    expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ padding: 0.15, duration: 0 }));
+  });
+
+  it('таблиц стартового запроса нет на доске: вписывается вся доска', () => {
+    renderBoard();
+    act(() => useBoardStore.getState().frameStart(['public.nope']));
+    expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
+  });
+
+  it('сохранённая камера урока важнее стартового кадра', async () => {
+    const saved = { x: 12, y: 34, zoom: 1.5 };
+    useLessonStore.getState().setViewport('unknown', saved);
+    renderBoard();
+    act(() => useBoardStore.getState().frameStart(['public.book']));
+    expect(flow().fitView).not.toHaveBeenCalled();
+    await act(async () => undefined);
+    expect(flow().getViewport()).toEqual(saved);
+  });
+
+  it('⌘0 после стартового кадра вписывает все таблицы, фокус анимируется', () => {
+    mockReducedMotion(false);
+    renderBoard();
+    act(() => useBoardStore.getState().frameStart(['public.book']));
+    act(() => useBoardStore.getState().requestFit());
+    expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
+    act(() => useBoardStore.getState().focus(['public.author']));
+    expect(fitNodes()).toEqual(['public.author']);
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ padding: 0.1, maxZoom: 1, duration: 400 }),
+    );
   });
 });

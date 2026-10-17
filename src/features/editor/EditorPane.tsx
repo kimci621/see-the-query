@@ -16,6 +16,7 @@ import './editor.css';
 import { notifyApplied, notifyDbError } from './notifyDbError';
 import { dmlTargetOf, touchedOf } from './touched';
 import { useLiveTrace } from './useLiveTrace';
+import { useParserReady } from './useParsedText';
 
 // CodeMirror тяжёлый: грузим лениво, оболочка его не ждёт (спека 5.12)
 const SqlEditor = lazy(() => import('./SqlEditor').then((m) => ({ default: m.SqlEditor })));
@@ -35,21 +36,21 @@ export function EditorPane() {
   const cursor = useEditorStore((s) => s.cursor);
   const activeClause = useEditorStore((s) => s.activeClause);
   const hoveredColumn = useEditorStore((s) => s.hoveredColumn);
+  const hasSchema = useBoardStore((s) => s.schema !== null);
+  const parserReady = useParserReady();
   const { sandbox } = useSandbox();
   useLiveTrace(sandbox);
 
   const trace = useSceneStore((s) => s.trace);
 
   // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса.
-  // Свёртка таблиц по колонкам трейса плюс наведённой, чтобы hover не прятал остальные.
+  // Свёртка таблиц только по колонкам трейса: hover свёрнутой колонки не меняет ширину ноды и не двигает камеру.
   // Звёздочка последнего трейса разворачивает свёрнутые таблицы
   useEffect(() => {
     const traced = trace?.touched.columns ?? [];
     const board = useBoardStore.getState();
     board.highlightColumns(hoveredColumn ? [hoveredColumn] : traced);
-    board.setQueryColumns(
-      hoveredColumn && !traced.includes(hoveredColumn) ? [...traced, hoveredColumn] : traced,
-    );
+    board.setQueryColumns(traced);
     board.expandTables(trace?.touched.expanded ?? []);
   }, [hoveredColumn, trace]);
 
@@ -96,6 +97,18 @@ export function EditorPane() {
       editor.setCursor(initial.length);
     }
   }, [lessonId, meta]);
+
+  // Стартовый кадр урока: таблицы стартового текста (спека 3.4). Ждёт схему и парсер; новая схема
+  // после «Применить» кадр не повторяет. Нет таблиц или текст не разбирается - кадр на всю доску
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lessonId служит только триггером, текст читаем из стора
+  useEffect(() => {
+    if (!hasSchema || !parserReady) return;
+    const { text, cursor } = useEditorStore.getState();
+    const parsed = parseSql(text);
+    const stmt = parsed.ok ? statementAt(parsed.statements, cursor) : null;
+    const board = useBoardStore.getState();
+    board.frameStart(stmt ? touchedOf(stmt, board.schema).tableIds : []);
+  }, [lessonId, hasSchema, parserReady]);
 
   // Последний запрос урока: сохраняем через секунду после того, как ученик перестал печатать
   useEffect(() => {

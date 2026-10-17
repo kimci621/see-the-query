@@ -6,16 +6,18 @@ export interface BoardStore {
   visibleTables: string[] | null;
   focused: string[];
   highlightedColumns: string[];
-  // Колонки запроса (трейс и наведённая): по ним сворачиваются широкие таблицы, hover их не сужает
+  // Колонки трейса: по ним сворачиваются широкие таблицы. Наведённой здесь нет: hover не меняет ширину ноды
   queryColumns: string[];
   // Таблицы, развёрнутые звёздочкой запроса (select *, t.*)
   expandedTables: string[];
   dimmed: boolean;
   fitRequest: number;
   focusRequest: number;
+  startRequest: number;
   setSchema(s: SchemaSnapshot): void;
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
+  frameStart(tableIds: string[]): void;
   highlightColumns(cols: string[]): void;
   setQueryColumns(cols: string[]): void;
   expandTables(tableIds: string[]): void;
@@ -36,11 +38,15 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   dimmed: false,
   fitRequest: 0,
   focusRequest: 0,
+  startRequest: 0,
   setSchema: (schema) => set({ schema }),
   setVisibleTables: (visibleTables) => set({ visibleTables }),
   // Камера летит только при смене набора: ввод в редакторе вызывает focus на каждый символ
   focus: (tableIds) =>
     set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds, focusRequest: s.focusRequest + 1 })),
+  // Стартовый кадр урока (спека 3.4): таблицы стартового запроса. Ставится и при том же наборе,
+  // доска наводит камеру без полёта
+  frameStart: (tableIds) => set((s) => ({ focused: tableIds, startRequest: s.startRequest + 1 })),
   highlightColumns: (cols) =>
     set((s) => (sameList(s.highlightedColumns, cols) ? s : { highlightedColumns: cols })),
   setQueryColumns: (cols) => set((s) => (sameList(s.queryColumns, cols) ? s : { queryColumns: cols })),
