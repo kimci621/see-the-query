@@ -58,7 +58,8 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
       title={columnTitle(column)}
       className={cn(
         'flex shrink-0 flex-col justify-center gap-0.5 border-r px-2 last:border-r-0',
-        highlighted && 'bg-touched/15',
+        // подложка не плотнее /10: на ней тип колонки 11px держит контраст 4.5 (tests/unit/contrast.test.ts)
+        highlighted && 'bg-touched/10',
       )}
       style={{ width: COLUMN_WIDTH }}
     >

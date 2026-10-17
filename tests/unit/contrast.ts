@@ -61,11 +61,17 @@ function luminance([r, g, b]: Rgb): number {
   return 0.2126 * decode(r) + 0.7152 * decode(g) + 0.0722 * decode(b);
 }
 
-// Контраст WCAG; полупрозрачный fg смешивается с bg в гамма-sRGB, как в браузере
-export function contrast(fg: string, bg: string): number {
-  const back = parse(bg).rgb;
-  const { rgb, alpha } = parse(fg);
-  const mixed = rgb.map((x, i) => x * alpha + (back[i] as number) * (1 - alpha)) as Rgb;
+// Полупрозрачный цвет поверх непрозрачного, смешение в гамма-sRGB, как в браузере
+function over(color: string, back: Rgb): Rgb {
+  const { rgb, alpha } = parse(color);
+  return rgb.map((x, i) => x * alpha + (back[i] as number) * (1 - alpha)) as Rgb;
+}
+
+// Контраст WCAG. bg - один цвет или слои снизу вверх (card, потом muted/50, потом touched/10)
+export function contrast(fg: string, bg: string | string[]): number {
+  const [base = '', ...layers] = typeof bg === 'string' ? [bg] : bg;
+  const back = layers.reduce((acc, layer) => over(layer, acc), parse(base).rgb);
+  const mixed = over(fg, back);
   const [hi, lo] = [luminance(mixed), luminance(back)].sort((x, y) => y - x) as [number, number];
   return (hi + 0.05) / (lo + 0.05);
 }

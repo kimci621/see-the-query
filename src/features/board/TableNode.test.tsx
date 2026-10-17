@@ -175,7 +175,7 @@ describe('TableNode: акцент touched', () => {
     const el = screen.getByTestId('table-node-public.book');
     expect(el.className).toContain('ring-touched');
     const head = el.querySelector('[data-column="title"]');
-    expect(head?.className).toContain('bg-touched/15');
+    expect(head?.className).toContain('bg-touched/10');
     const cell = el.querySelector('.bg-touched\\/10');
     expect(cell).not.toBeNull();
     expect(el.innerHTML).not.toMatch(/primary/);

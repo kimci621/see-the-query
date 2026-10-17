@@ -30,6 +30,20 @@ const NON_TEXT: [string, string, number][] = [
   ['touched', 'card', 3.0],
 ];
 
+// Текст на слоях фона снизу вверх: [текст, слои, минимум]; 'muted/50' = --muted с альфой 50%
+const LAYERED: [string, string[], number][] = [
+  // тип колонки (11px) на подсвеченной шапке таблицы: card, bg-muted/50, bg-touched/10
+  ['muted-foreground', ['card', 'muted/50', 'touched/10'], 4.5],
+  // тип колонки на обычной шапке
+  ['muted-foreground', ['card', 'muted/50'], 4.5],
+];
+
+const withAlpha = (t: Record<string, string>, ref: string) => {
+  const [name = '', alpha] = ref.split('/');
+  const color = t[name] ?? '';
+  return alpha ? color.replace(/\)$/, ` / ${alpha}%)`) : color;
+};
+
 describe('контраст токенов (WCAG AA)', () => {
   it('самопроверка: чёрный на белом ≈ 21', () => {
     expect(contrast('oklch(0 0 0)', 'oklch(1 0 0)')).toBeCloseTo(21, 0);
@@ -38,6 +52,12 @@ describe('контраст токенов (WCAG AA)', () => {
 
   it('полупрозрачный цвет смешивается с фоном', () => {
     expect(contrast('oklch(1 0 0 / 0%)', 'oklch(0 0 0)')).toBeCloseTo(1, 5);
+  });
+
+  it('слои фона: белый на белом с чёрным 50% сверху ≈ 3.98, как серый на белом', () => {
+    expect(Math.abs(contrast('oklch(1 0 0)', ['oklch(1 0 0)', 'oklch(0 0 0 / 50%)']) - 3.98)).toBeLessThan(
+      0.05,
+    );
   });
 
   it('полупрозрачный чёрный 50% на белом: серый 0.5 в гамма-sRGB, 1.05 / (0.214 + 0.05) ≈ 3.98', () => {
@@ -52,6 +72,14 @@ describe('контраст токенов (WCAG AA)', () => {
       expect(b, `нет --${bg}`).toBeDefined();
       const ratio = contrast(f as string, b as string);
       expect(ratio, `--${fg} на --${bg}: ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(min);
+    });
+
+    it.each(LAYERED)('%s на слоях %j ≥ %s', (fg, layers, min) => {
+      const ratio = contrast(
+        t[fg] as string,
+        layers.map((l) => withAlpha(t, l)),
+      );
+      expect(ratio, `--${fg} на ${layers.join(' + ')}: ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(min);
     });
   });
 });
