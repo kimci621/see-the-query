@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SCHEMA } from '@/features/editor/__fixtures__/schema';
+import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import type { Sandbox, SandboxEvent } from './sandbox';
 import { RESTART_MESSAGES, useLessonSandbox } from './useLessonSandbox';
@@ -63,6 +65,18 @@ describe('useLessonSandbox', () => {
     f.emit({ type: 'changed' });
     const saved = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}');
     expect(saved.state.byId['dml-insert'].journal).toEqual(['delete from review']);
+  });
+
+  it('при смене урока сбрасывает схему прошлого урока на доске', () => {
+    useBoardStore.getState().setSchema(SCHEMA);
+    const f = fakeSandbox();
+    const { rerender } = renderHook(({ id }) => useLessonSandbox(f.sandbox, id, 'bookstore'), {
+      initialProps: { id: 'a' },
+    });
+    expect(useBoardStore.getState().schema).toBeNull();
+    useBoardStore.getState().setSchema(SCHEMA);
+    rerender({ id: 'b' });
+    expect(useBoardStore.getState().schema).toBeNull();
   });
 
   it('после перезапуска показывает тост с причиной', () => {

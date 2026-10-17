@@ -57,12 +57,15 @@ export function EditorPane() {
     board.expandTables(trace?.touched.expanded ?? []);
   }, [trace]);
 
-  // INSERT/UPDATE/DELETE: камера летит к целевой таблице, строки базовой доски не двигаются
+  // INSERT/UPDATE/DELETE: камера летит к целевой таблице, строки базовой доски не двигаются.
+  // SELECT: камера не летит, но цель рефита при развороте свёртки становится таблицами трейса
   // Пока курсор в from/into/using, фокус ведёт курсор (ниже): трейс его не перебивает
   useEffect(() => {
     const clause = useEditorStore.getState().activeClause;
     if (clause === 'from' || clause === 'into' || clause === 'using') return;
-    if (trace) focusDmlTarget(trace.sql);
+    if (!trace) return;
+    if (trace.statementType === 'select') useBoardStore.getState().retarget(trace.touched.tableIds);
+    else focusDmlTarget(trace.sql);
   }, [trace]);
 
   // activeClause при изменении текста или курсора

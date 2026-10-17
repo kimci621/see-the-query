@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import type { DatasetId } from './datasets';
 import type { Sandbox } from './sandbox';
@@ -25,6 +26,8 @@ export function useLessonSandbox(
       if (e.type === 'restarted') toast.warning(RESTART_MESSAGES[e.reason]);
       if (e.type === 'changed' && loaded) saveJournal();
     });
+    // схема прошлого урока не должна попасть в стартовый кадр: он ждёт первую схему этого урока
+    useBoardStore.getState().setSchema(null);
     const saved = useLessonStore.getState().byId[lessonId]?.journal ?? [];
     sandbox.loadLesson(datasetId, saved).then(
       () => {

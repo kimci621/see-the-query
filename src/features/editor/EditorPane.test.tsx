@@ -99,16 +99,18 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().focused.toSorted()).toEqual(['public.author', 'public.book']);
   });
 
-  it('трейс SELECT не двигает фокус', async () => {
+  it('трейс SELECT меняет цель рефита на свои таблицы, но камеру не двигает', async () => {
     render(<EditorPane />);
     act(() => useBoardStore.getState().focus(['public.author']));
-    act(() =>
-      useSceneStore
-        .getState()
-        .setTrace(traceOf('select * from book', 'select'), useSceneStore.getState().nextGeneration()),
-    );
+    const requests = useBoardStore.getState().focusRequest;
+    const trace = {
+      ...traceOf('select * from book', 'select'),
+      touched: { tableIds: ['public.book'], columns: [], expanded: [] },
+    };
+    act(() => useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration()));
     await act(async () => undefined);
-    expect(useBoardStore.getState().focused).toEqual(['public.author']);
+    expect(useBoardStore.getState().focused).toEqual(['public.book']);
+    expect(useBoardStore.getState().focusRequest).toBe(requests);
   });
 
   it('hoveredColumn подсвечивает колонку, уход с hover возвращает подсветку трейса', async () => {
@@ -218,6 +220,26 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     act(() => useBoardStore.getState().setSchema({ ...SCHEMA }));
     await act(async () => undefined);
     expect(useBoardStore.getState().startRequest).toBe(1);
+  });
+
+  it('смена урока: кадр по первой схеме нового урока, а не по схеме прошлого', async () => {
+    route.lessonId = 'unknown';
+    useLessonStore.getState().setLastQuery('unknown', 'select title from book');
+    useBoardStore.setState({
+      schema: { ...SCHEMA, tables: SCHEMA.tables.filter((t) => t.id !== 'public.book') },
+    });
+    const { rerender } = render(<EditorPane />);
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused).toEqual([]);
+    // useLessonSandbox при смене урока сбрасывает схему, потом приходит схема нового урока
+    route.lessonId = 'unknown2';
+    useLessonStore.getState().setLastQuery('unknown2', 'select title from book');
+    act(() => useBoardStore.getState().setSchema(null));
+    rerender(<EditorPane />);
+    await act(async () => undefined);
+    act(() => useBoardStore.getState().setSchema(SCHEMA));
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused).toEqual(['public.book']);
   });
 
   it('звёздочка трейса разворачивает таблицу на доске, закрытая сцена сворачивает', async () => {

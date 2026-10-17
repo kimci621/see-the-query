@@ -14,9 +14,10 @@ export interface BoardStore {
   fitRequest: number;
   focusRequest: number;
   startRequest: number;
-  setSchema(s: SchemaSnapshot): void;
+  setSchema(s: SchemaSnapshot | null): void;
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
+  retarget(tableIds: string[]): void;
   frameStart(tableIds: string[]): void;
   highlightColumns(cols: string[]): void;
   setQueryColumns(cols: string[]): void;
@@ -44,6 +45,8 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   // Камера летит только при смене набора: ввод в редакторе вызывает focus на каждый символ
   focus: (tableIds) =>
     set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds, focusRequest: s.focusRequest + 1 })),
+  // Цель камеры без полёта: SELECT-трейс называет свои таблицы, и рефит при развороте целится в них, а не в прошлый фокус
+  retarget: (tableIds) => set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds })),
   // Стартовый кадр урока (спека 3.4): таблицы стартового запроса. Ставится и при том же наборе,
   // доска наводит камеру без полёта
   frameStart: (tableIds) => set((s) => ({ focused: tableIds, startRequest: s.startRequest + 1 })),
