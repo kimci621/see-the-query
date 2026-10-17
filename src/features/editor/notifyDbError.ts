@@ -18,13 +18,16 @@ export function notifyDbError(e: unknown, sql: string): void {
   });
 }
 
-// Тост итога применения: что именно записали, по последнему результату
+// Тост итога применения. Только SELECT (или пусто): «Выполнено», база не менялась.
+// Иначе «Записано в базу», описание по последнему не-SELECT результату.
 export function notifyApplied(results: QueryResult[]): void {
-  const last = results.at(-1);
+  const isSelect = (r: QueryResult) => r.command === 'SELECT';
+  const wrote = results.findLast((r) => !isSelect(r));
+  const last = wrote ?? results.at(-1);
   const description = last?.command
     ? last.rowCount === undefined
       ? last.command
       : `${last.command}: ${rowsWord(last.rowCount)}`
     : undefined;
-  toast.success('Записано в базу', description ? { description } : undefined);
+  toast.success(wrote ? 'Записано в базу' : 'Выполнено', description ? { description } : undefined);
 }

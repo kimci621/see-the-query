@@ -98,11 +98,13 @@ test('применить, отменить и применить всё', async 
   await page.getByTestId('apply-all-button').click();
   await expect(page.getByTestId('preview-status')).toContainText('Превью', { timeout: 5000 });
 
-  // сброс требует подтверждения
+  // сброс требует подтверждения: сначала меняем данные, потом сбрасываем через диалог
+  const authorCount = page.getByTestId('table-node-public.author').getByTestId('row-count');
+  await setEditorText(page, "insert into author (name) values ('Аноним')");
+  await page.getByTestId('apply-button').click();
+  await expect(authorCount).toHaveText('7', { timeout: 5000 });
   await page.getByTestId('reset-button').click();
   await expect(page.getByText('Сбросить урок?')).toBeVisible();
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
-  await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('6', {
-    timeout: 5000,
-  });
+  await expect(authorCount).toHaveText('6', { timeout: 5000 });
 });
