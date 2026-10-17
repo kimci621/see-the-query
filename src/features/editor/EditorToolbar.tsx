@@ -1,14 +1,14 @@
 import { LoaderCircle } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import type { Sandbox } from '@/features/db/sandbox';
 import { DbException } from '@/features/db/types';
-import { parseSql } from '@/features/sql/parser';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useParsedText } from './useParsedText';
 
 const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error', string> = {
   idle: 'Превью',
@@ -42,16 +42,9 @@ export function EditorToolbar({
     });
   }, [sandbox]);
 
-  const statementCount = useMemo(() => {
-    if (text.trim() === '') return 0;
-    const parsed = parseSql(text);
-    return parsed.ok ? parsed.statements.length : 0;
-  }, [text]);
-
-  const statements = useMemo(() => {
-    const parsed = parseSql(text);
-    return parsed.ok ? parsed.statements : [];
-  }, [text]);
+  const parsed = useParsedText(text);
+  const statements = parsed?.ok ? parsed.statements : [];
+  const statementCount = statements.length;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);

@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Sandbox } from '@/features/db/sandbox';
 import type { DbError } from '@/features/db/types';
 import { DbException } from '@/features/db/types';
-import { initParser, isParserReady, parseSql } from '@/features/sql/parser';
+import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { touchedOf } from './touched';
+import { useParserReady } from './useParsedText';
 
 const DEBOUNCE_MS = 250;
 
@@ -18,14 +19,8 @@ export function useLiveTrace(sandbox: Sandbox | null): void {
   const text = useEditorStore((s) => s.text);
   const cursor = useEditorStore((s) => s.cursor);
   const schema = useBoardStore((s) => s.schema);
-  const [parserReady, setParserReady] = useState(isParserReady);
+  const parserReady = useParserReady();
   const [dataVersion, setDataVersion] = useState(0);
-
-  useEffect(() => {
-    if (!isParserReady()) {
-      void initParser().then(() => setParserReady(true));
-    }
-  }, []);
 
   // После apply/undo/reset/loadLesson песочница шлёт changed: данные изменились, превью перевыполняем
   useEffect(() => {

@@ -1,10 +1,33 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sandbox } from '@/features/db/sandbox';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
+
+// Управляемая готовность парсера: до release() parseSql ведёт себя как настоящий без WASM (ok:false)
+const parserState = vi.hoisted(() => ({ ready: true, release: () => {} }));
+vi.mock('@/features/sql/parser', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/sql/parser')>();
+  return {
+    ...actual,
+    isParserReady: () => parserState.ready,
+    initParser: () =>
+      parserState.ready
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            parserState.release = () => {
+              parserState.ready = true;
+              resolve();
+            };
+          }),
+    parseSql: (text: string) =>
+      parserState.ready
+        ? actual.parseSql(text)
+        : { ok: false as const, error: { message: 'parser not ready', position: 0 } },
+  };
+});
 
 function fakeSandbox(applied: string[]): Sandbox {
   return {
@@ -26,6 +49,7 @@ function fakeSandbox(applied: string[]): Sandbox {
 
 describe('EditorToolbar', () => {
   beforeEach(() => {
+    parserState.ready = true;
     useEditorStore.setState(useEditorStore.getInitialState(), true);
     useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
   });
@@ -76,5 +100,16 @@ describe('EditorToolbar', () => {
     useEditorStore.getState().setText('select 1');
     render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
     expect(screen.queryByTestId('apply-all-button')).toBeNull();
+  });
+
+  it('кнопка Применить оживает, когда парсер догрузился', async () => {
+    parserState.ready = false;
+    useEditorStore.getState().setText('select 1;');
+    render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    const applyButton = screen.getByTestId('apply-button');
+    expect(applyButton).toBeDisabled();
+
+    act(() => parserState.release());
+    await waitFor(() => expect(applyButton).toBeEnabled());
   });
 });
