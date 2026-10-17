@@ -52,6 +52,12 @@ test('тёмная тема: автокомплит редактора на то
   await page.keyboard.type(' sel');
   const tooltip = page.locator('.cm-tooltip-autocomplete');
   await expect(tooltip).toBeVisible();
+  // у ключевых слов буква, а не ключ: ключ на доске значит PK
+  const icon = await tooltip
+    .locator('.cm-completionIcon-keyword')
+    .first()
+    .evaluate((el) => getComputedStyle(el, '::after').content);
+  expect(icon).toBe('"K"');
 
   // эталон: вычисленные токены, посчитанные браузером так же, как для стилей редактора
   const token = (name: string) =>

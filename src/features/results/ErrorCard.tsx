@@ -7,7 +7,8 @@ import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 
 // Карточка ошибки: объяснение словаря, подсказка, правка в один клик и оригинал Postgres
-// (оригинал всегда рядом, спека 5.14). sql - оператор, к которому относится position.
+// (оригинал всегда в DOM, свёрнут под «Текст Postgres», спека 5.14).
+// sql - оператор, к которому относится position.
 export function ErrorCard({ error, sql }: { error: DbError; sql: string }) {
   const schema = useBoardStore((s) => s.schema);
   const text = useEditorStore((s) => s.text);
@@ -28,28 +29,35 @@ export function ErrorCard({ error, sql }: { error: DbError; sql: string }) {
       <p data-testid="pg-explain-body" className="mt-1">
         {explanation.body}
       </p>
-      {explanation.suggestion && (
-        <p data-testid="pg-explain-suggestion" className="mt-1 text-muted-foreground">
-          {explanation.suggestion}
-        </p>
+      {(explanation.suggestion || (fix && fixed != null)) && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          {explanation.suggestion && (
+            <p data-testid="pg-explain-suggestion" className="text-muted-foreground">
+              {explanation.suggestion}
+            </p>
+          )}
+          {fix && fixed != null && (
+            <Button
+              size="xs"
+              variant="outline"
+              data-testid="pg-fix-button"
+              onClick={() => useEditorStore.getState().setText(fixed)}
+            >
+              Заменить на {fix.to}
+            </Button>
+          )}
+        </div>
       )}
-      {fix && fixed != null && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="mt-2"
-          data-testid="pg-fix-button"
-          onClick={() => useEditorStore.getState().setText(fixed)}
+      {/* оригинал свёрнут, но остаётся в DOM: скринридер и поиск его находят */}
+      <details className="mt-2 text-xs">
+        <summary className="cursor-pointer text-muted-foreground">Текст Postgres</summary>
+        <pre
+          data-testid="pg-original"
+          className="mt-1 overflow-auto rounded bg-muted/60 p-2 font-mono whitespace-pre-wrap"
         >
-          Заменить на {fix.to}
-        </Button>
-      )}
-      <pre
-        data-testid="pg-original"
-        className="mt-2 overflow-auto rounded bg-muted/60 p-2 font-mono text-xs whitespace-pre-wrap"
-      >
-        {error.message}
-      </pre>
+          {error.message}
+        </pre>
+      </details>
     </div>
   );
 }

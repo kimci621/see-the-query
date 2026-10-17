@@ -18,6 +18,7 @@ import {
   SidebarProvider,
 } from '@/components/ui/sidebar';
 import { LESSONS, lessonsByChapter } from '@/features/lessons/registry';
+import { modKey } from '@/lib/utils';
 import { lessonStatus, useLessonStore } from '@/stores/lesson';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -56,7 +57,7 @@ export function LessonSidebar({
             <span className="flex items-center gap-2">
               <Search className="size-4" /> Поиск
             </span>
-            <Kbd>⌘K</Kbd>
+            <Kbd>{modKey()} K</Kbd>
           </Button>
         </SidebarHeader>
         <nav aria-label="Уроки" className="flex min-h-0 flex-1 flex-col">
@@ -89,7 +90,7 @@ export function LessonSidebar({
                         return (
                           <SidebarMenuItem key={l.id}>
                             <SidebarMenuButton asChild isActive={l.id === activeId}>
-                              <Link to={`/l/${l.id}`}>
+                              <Link to={`/l/${l.id}`} title={l.title}>
                                 <Icon className="size-3.5 shrink-0" aria-label={label} role="img" />
                                 <span className="font-mono text-xs text-muted-foreground">{l.number}</span>
                                 <span className="truncate">{l.title}</span>

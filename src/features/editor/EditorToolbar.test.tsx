@@ -162,6 +162,43 @@ describe('EditorToolbar', () => {
     expect(screen.getByTestId('apply-button')).toHaveAttribute('data-variant', 'default');
   });
 
+  it('после применения «Применено» (outline, активна), правка текста возвращает «Применить»', async () => {
+    // песочница с живым журналом и подпиской, как настоящая
+    let journal: string[] = [];
+    const listeners = new Set<(e: { type: 'changed' }) => void>();
+    const sandbox = {
+      ...fakeSandbox([]),
+      journal: () => journal,
+      subscribe: (l: (e: { type: 'changed' }) => void) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+    } as unknown as Sandbox;
+    const insert = "insert into author(name) values ('x')";
+    act(() => {
+      useEditorStore.getState().setText(insert);
+      useEditorStore.getState().setCursor(insert.length);
+    });
+    const onApplyCurrent = vi.fn(() => {
+      journal = [...journal, insert];
+      for (const l of listeners) l({ type: 'changed' });
+    });
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={onApplyCurrent} />);
+    const button = screen.getByTestId('apply-button');
+    expect(button).toHaveTextContent('Применить');
+    expect(button).toHaveAttribute('data-variant', 'default');
+
+    await user.click(button);
+    expect(button).toHaveTextContent('Применено');
+    expect(button).toHaveAttribute('data-variant', 'outline');
+    expect(button).toBeEnabled();
+
+    act(() => useEditorStore.getState().setText(`${insert} returning *`));
+    expect(button).toHaveTextContent(/^Применить/);
+    expect(button).toHaveAttribute('data-variant', 'default');
+  });
+
   it('Сброс спрашивает подтверждение', async () => {
     const sandbox = fakeSandbox([]);
     const user = userEvent.setup();

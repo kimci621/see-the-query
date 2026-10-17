@@ -33,6 +33,8 @@ export function editorTheme(): Extension[] {
         backgroundColor: 'var(--accent)',
         color: 'var(--accent-foreground)',
       },
+      // ключ на доске значит PK, поэтому у ключевых слов в автокомплите буква
+      '.cm-completionIcon-keyword:after': { content: "'K'" },
       '.cm-clauseActive': {
         backgroundColor: 'color-mix(in oklab, var(--touched) 14%, transparent)',
         borderRadius: '2px',

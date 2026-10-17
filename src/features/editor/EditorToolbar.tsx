@@ -14,7 +14,7 @@ import { Kbd } from '@/components/ui/kbd';
 import type { Sandbox } from '@/features/db/sandbox';
 import type { QueryResult } from '@/features/db/types';
 import { statementAt } from '@/features/sql/statements';
-import { cn } from '@/lib/utils';
+import { cn, modKey } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { notifyApplied, notifyDbError } from './notifyDbError';
@@ -44,12 +44,12 @@ export function EditorToolbar({
   const cursor = useEditorStore((s) => s.cursor);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [journalLength, setJournalLength] = useState(0);
+  const [journal, setJournal] = useState<readonly string[]>([]);
 
-  // длина журнала: для блокировки «Отменить»
+  // журнал: пустой блокирует «Отменить», последняя запись подсказывает «Применено»
   useEffect(() => {
     if (!sandbox) return;
-    const sync = () => setJournalLength(sandbox.journal().length);
+    const sync = () => setJournal(sandbox.journal());
     sync();
     return sandbox.subscribe((e) => {
       if (e.type === 'changed') sync();
@@ -59,8 +59,10 @@ export function EditorToolbar({
   const parsed = useParsedText(text);
   const statements = parsed?.ok ? parsed.statements : [];
   const statementCount = statements.length;
-  // SELECT ничего не пишет в базу, поэтому «Применить» для него вторичная кнопка
-  const kind = statementAt(statements, cursor)?.kind;
+  const current = statementAt(statements, cursor);
+  // Текущий оператор только что применён: кнопка гаснет до «Применено», но остаётся активной,
+  // повторить можно намеренно. SELECT ничего не пишет в базу, для него кнопка тоже вторичная
+  const applied = current != null && journal.at(-1) === current.text;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -113,7 +115,7 @@ export function EditorToolbar({
           variant="outline"
           size="sm"
           data-testid="undo-button"
-          disabled={busy || !sandbox || journalLength === 0}
+          disabled={busy || !sandbox || journal.length === 0}
           onClick={() => void run(() => sandbox?.undo() ?? Promise.resolve())}
         >
           Отменить
@@ -129,12 +131,12 @@ export function EditorToolbar({
         </Button>
         <Button
           size="sm"
-          variant={kind === 'select' ? 'outline' : 'default'}
+          variant={applied || current?.kind === 'select' ? 'outline' : 'default'}
           data-testid="apply-button"
           disabled={busy || !sandbox || statementCount === 0}
           onClick={onApplyCurrent}
         >
-          Применить <Kbd>⌘⏎</Kbd>
+          {applied ? 'Применено' : 'Применить'} <Kbd>{modKey()} ⏎</Kbd>
         </Button>
       </div>
       <Dialog open={confirmReset} onOpenChange={setConfirmReset}>

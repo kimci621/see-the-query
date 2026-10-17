@@ -39,8 +39,13 @@ describe('MessagesList', () => {
     render(<MessagesList trace={traceWith(error)} />);
     // живую область вешает панель результата (Q.11), у самой карточки role нет
     expect(screen.queryByRole('alert')).toBeNull();
-    // оригинал всегда рядом (спека 5.14)
-    expect(screen.getByTestId('pg-original')).toHaveTextContent('column "nme" does not exist');
+    // оригинал всегда в DOM (спека 5.14), свёрнут под «Текст Postgres»
+    const original = screen.getByTestId('pg-original');
+    expect(original).toHaveTextContent('column "nme" does not exist');
+    const details = original.closest('details');
+    expect(details).not.toBeNull();
+    expect(details?.open).toBe(false);
+    expect(details?.querySelector('summary')).toHaveTextContent('Текст Postgres');
     // объяснение от словаря Ф2: непустые заголовок и текст
     expect(screen.getByTestId('pg-explain-title').textContent).toBeTruthy();
     expect(screen.getByTestId('pg-explain-body').textContent).toBeTruthy();
@@ -75,7 +80,11 @@ describe('MessagesList', () => {
     useEditorStore.getState().setText('select titel from book');
     const error = { code: '42703', message: 'column "titel" does not exist', position: 8 };
     render(<MessagesList trace={{ ...traceWith(error), sql: 'select titel from book' }} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Заменить на title' }));
+    const button = screen.getByRole('button', { name: 'Заменить на title' });
+    // кнопка в одной строке с подсказкой
+    expect(button.parentElement).toBe(screen.getByTestId('pg-explain-suggestion').parentElement);
+    expect(button.parentElement).not.toBe(screen.getByTestId('pg-error'));
+    await userEvent.click(button);
     expect(useEditorStore.getState().text).toBe('select title from book');
   });
 });
