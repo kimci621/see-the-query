@@ -100,29 +100,6 @@ test('далёкий зум: строки скрыты, рёбра остают�
   }
 });
 
-test('режим фокуса: после смены ширины доска вписана целиком', async ({ page }) => {
-  await openBookstore(page);
-  await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByText(/Заглушка урока/)).toBeHidden();
-  const board = page.getByTestId('board-canvas');
-  const inside = async () => {
-    const b = await board.boundingBox();
-    if (!b) throw new Error('нет доски');
-    const boxes = await page
-      .locator('[data-testid^="table-node-"]')
-      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
-    return boxes.every(
-      (r) =>
-        r.left >= b.x - 4 &&
-        r.right <= b.x + b.width + 4 &&
-        r.top >= b.y - 4 &&
-        r.bottom <= b.y + b.height + 4,
-    );
-  };
-  // Рефит анимируется 300 мс, ждём, пока камера осядет
-  await expect.poll(inside).toBe(true);
-});
-
 async function setEditorText(page: Page, text: string) {
   await page.locator('.cm-content').click({ position: { x: 8, y: 8 } });
   await page.keyboard.press('ControlOrMeta+a');
@@ -327,4 +304,28 @@ test('подсказки на нодах доступны мыши, drag по н
   await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40, { steps: 5 });
   await page.mouse.up();
   await expect.poll(() => viewport.getAttribute('style')).not.toBe(before);
+});
+
+// Режим фокуса (спека 3.1): сайдбара и теории нет, доска на всю ширину и не мельче, чем до входа.
+// Камера перевписывает таблицы запроса; повтор ⌘\\ возвращает раскладку
+test('режим фокуса: доска на всю ширину, зум не меньше, чем до входа', async ({ page }) => {
+  await openBookstore(page);
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
+  const before = await zoomOf(page);
+  await page.keyboard.press('ControlOrMeta+Backslash');
+  await expect(page.getByText(/Заглушка урока/)).toBeHidden();
+  const workspace = await page.locator('[id="workspace"]').boundingBox();
+  expect(workspace?.width ?? 0).toBeGreaterThanOrEqual(1440 - 2);
+  // рефит анимируется, ждём, пока камера осядет: book в кадре, зум не меньше прежнего
+  await expect
+    .poll(
+      async () =>
+        !(await outsideBoard(page, ['public.book'])).includes('public.book') &&
+        (await zoomOf(page)) >= before,
+    )
+    .toBe(true);
+
+  await page.keyboard.press('ControlOrMeta+Backslash');
+  await expect(page.getByText(/Заглушка урока/)).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toBeVisible();
 });

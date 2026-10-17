@@ -245,7 +245,8 @@ function useCamera(
   }, [tableWidths, nodes, flow]);
 
   // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver
-  // уже после раскладки, поэтому вписываем не сразу, а когда придёт новая ширина
+  // уже после раскладки, поэтому вписываем не сразу, а когда придёт новая ширина. Кадр тот же,
+  // что при развороте: таблицы запроса крупно, без них вся доска
   useEffect(() => {
     if (prevFocusMode.current === focusMode) return;
     prevFocusMode.current = focusMode;
@@ -257,7 +258,8 @@ function useCamera(
     if (!pendingFit.current) return;
     pendingFit.current = false;
     startFold.current = null;
-    void flow.fitView(boardFrame(flow.getNodes()));
+    const ids = useBoardStore.getState().focused;
+    void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(flow.getNodes()));
   }, [width, flow]);
 
   // ⌘0 / Ctrl+0: по event.code, на русской раскладке key другой; preventDefault гасит сброс зума браузера.

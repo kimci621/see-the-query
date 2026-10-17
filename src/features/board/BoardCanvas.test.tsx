@@ -141,6 +141,18 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).toHaveBeenCalledTimes(1);
   });
 
+  it('режим фокуса при таблицах запроса вписывает их крупно, а не всю доску', () => {
+    mockReducedMotion(false);
+    renderBoard();
+    act(() => useBoardStore.getState().frameStart(['public.book']));
+    act(() => useSettingsStore.getState().toggleFocusMode());
+    act(() => holder.store?.setState({ width: 1400 }));
+    expect(vi.mocked(flow().fitView).mock.lastCall?.[0]?.nodes?.map((n) => n.id)).toEqual(['public.book']);
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ padding: 0.1, maxZoom: 1, duration: 400 }),
+    );
+  });
+
   const fitNodes = () => vi.mocked(flow().fitView).mock.lastCall?.[0]?.nodes?.map((n) => n.id);
 
   it('стартовый кадр урока: таблицы стартового запроса, крупно и без полёта', () => {

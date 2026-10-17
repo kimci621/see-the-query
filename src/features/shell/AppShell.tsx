@@ -74,13 +74,14 @@ export function AppShell() {
     <main className="h-svh w-full overflow-hidden bg-background text-foreground">
       <ResizablePanelGroup
         orientation="horizontal"
-        // В режиме фокуса и на узком экране панелей две: такую раскладку не сохраняем, иначе потеряем ширину теории
+        // В режиме фокуса и на узком экране панелей меньше: такую раскладку не сохраняем, иначе потеряем ширины
         onLayoutChanged={(layout, { isUserInteraction }) => {
           if (isUserInteraction && !focusMode && !narrow)
             setMainLayout(MAIN_PANELS.map((id) => layout[id] ?? 0));
         }}
       >
-        {!narrow && (
+        {/* Режим фокуса (спека 3.1): без сайдбара и теории, доска на всю ширину */}
+        {!narrow && !focusMode && (
           <>
             {/* Минимум в rem растёт с размером текста: при 200% «Поиск» и названия уроков не обрезаются */}
             <ResizablePanel id="sidebar" defaultSize={`${mainLayout[0]}%`} minSize="12rem" maxSize="30%">

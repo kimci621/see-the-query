@@ -110,14 +110,17 @@ describe('AppShell', () => {
     ]);
   });
 
-  it('⌘\\ прячет теорию и возвращает её обратно', async () => {
+  it('⌘\\ прячет теорию и сайдбар, доска на всю ширину; повтор возвращает раскладку', async () => {
     renderAt('/l/how-to-use');
     await screen.findByText(/Заглушка урока/);
     // userEvent.keyboard не проставляет code: 'Backslash', поэтому keyDown вручную
     fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
     expect(screen.queryByText(/Заглушка урока/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Уроки' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('separator', { name: 'Ширина списка уроков' })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
     expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
   });
 
   it('ниже 80em панели сайдбара нет, уроки открываются в Sheet', async () => {
