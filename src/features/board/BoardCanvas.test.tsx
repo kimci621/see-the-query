@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactFlowInstance, useStoreApi } from '@xyflow/react';
+import type { Controls, ReactFlowInstance, useStoreApi } from '@xyflow/react';
+import type { ComponentProps } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBoardStore } from '@/stores/board';
@@ -9,14 +10,25 @@ import { SCHEMA } from './__fixtures__/schema';
 import { BoardCanvas } from './BoardCanvas';
 
 // Достаём экземпляр React Flow из useReactFlow, чтобы двигать камеру и шпионить за fitView
-const holder: { flow: ReactFlowInstance | null; store: ReturnType<typeof useStoreApi> | null } = {
+const holder: {
+  flow: ReactFlowInstance | null;
+  store: ReturnType<typeof useStoreApi> | null;
+  controlsProps: ComponentProps<typeof Controls> | null;
+} = {
   flow: null,
   store: null,
+  controlsProps: null,
 };
 vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
+    // Кнопка «Вписать доску» зовёт fitView из своего экземпляра useReactFlow, шпион до него не достаёт:
+    // проверяем кадр, который доска отдала Controls
+    Controls: (props: ComponentProps<typeof Controls>) => {
+      holder.controlsProps = props;
+      return <actual.Controls {...props} />;
+    },
     useReactFlow: () => {
       const flow = actual.useReactFlow();
       holder.store = actual.useStoreApi();
@@ -71,6 +83,7 @@ describe('BoardCanvas', () => {
   beforeEach(() => {
     holder.flow = null;
     holder.store = null;
+    holder.controlsProps = null;
     useBoardStore.setState(useBoardStore.getInitialState(), true);
     useBoardStore.getState().setSchema(SCHEMA);
     useLessonStore.setState({ byId: {} });
@@ -130,6 +143,14 @@ describe('BoardCanvas', () => {
     renderBoard();
     act(() => useBoardStore.getState().requestFit());
     expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 300, minZoom: 0.6 }));
+  });
+
+  it('кнопка «Вписать доску» вписывает тем же кадром, что и ⌘0', () => {
+    mockReducedMotion(false);
+    renderBoard();
+    act(() => useBoardStore.getState().requestFit());
+    const hotkey = vi.mocked(flow().fitView).mock.lastCall?.[0];
+    expect(holder.controlsProps?.fitViewOptions).toEqual(hotkey);
   });
 
   it('кадр берёт только таблицы, без рамок схем', () => {

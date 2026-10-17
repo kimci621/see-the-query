@@ -43,14 +43,14 @@ const ariaLabelConfig = {
   'minimap.ariaLabel': 'Миникарта доски',
 };
 
-// Кадр по таблицам, без рамок схем: рамка резервирует полную ширину свёрнутых таблиц,
-// пустой резерв в стартовый кадр не берём
-// Состояние свёртки доски: колонки трейса и развёрнутые таблицы
+// Ключ состояния свёртки: колонки трейса и развёрнутые таблицы. Смена ключа значит, что ширины нод изменятся
 const foldKey = () => {
   const { queryColumns, expandedTables } = useBoardStore.getState();
   return `${queryColumns.join()}|${expandedTables.join()}`;
 };
 
+// Кадр по таблицам, без рамок схем: рамка резервирует полную ширину свёрнутых таблиц,
+// пустой резерв в кадр не берём
 const tablesOf = (nodes: { id: string; type?: string }[]) =>
   nodes.filter((n) => n.type === 'table').map((n) => ({ id: n.id }));
 
@@ -152,7 +152,12 @@ function BoardFlow() {
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
         {/* Кнопки в строку: вся полоса хрома внизу, её оставляют пустой кадры (chromeBottom) */}
-        <Controls showInteractive={false} position="bottom-left" orientation="horizontal">
+        <Controls
+          showInteractive={false}
+          position="bottom-left"
+          orientation="horizontal"
+          fitViewOptions={boardFrame(nodes)}
+        >
           <ControlButton
             onClick={() => setMiniMap((v) => !v)}
             title="Миникарта"
