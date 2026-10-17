@@ -13,6 +13,7 @@ import {
 import { MapIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import { useResolvedTheme } from '@/app/ThemeProvider';
 import { getLesson } from '@/features/lessons/registry';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
@@ -40,6 +41,7 @@ function BoardFlow() {
   const visible = useBoardStore((s) => s.visibleTables);
   const dimmed = useBoardStore((s) => s.dimmed);
   const [miniMap, setMiniMap] = useState(false);
+  const resolved = useResolvedTheme();
 
   useEffect(() => {
     useBoardStore.getState().setVisibleTables(meta?.board?.tables?.map(normalizeTableId) ?? null);
@@ -64,6 +66,7 @@ function BoardFlow() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        colorMode={resolved}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onlyRenderVisibleElements

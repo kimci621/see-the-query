@@ -4,7 +4,6 @@ import type { Extension } from '@codemirror/state';
 import { EditorView, hoverTooltip, keymap, type ViewUpdate } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
-import { useResolvedTheme } from '@/app/ThemeProvider';
 import { clauseRanges } from '@/features/sql/clauses';
 import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
@@ -35,7 +34,6 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
   const traceSql = useSceneStore((s) => s.trace?.sql ?? null);
   const activeClause = useEditorStore((s) => s.activeClause);
   const schema = useBoardStore((s) => s.schema);
-  const resolved = useResolvedTheme();
   const viewRef = useRef<EditorView | null>(null);
 
   // onApply меняется каждый рендер панели: замыкаем через ref, чтобы extensions не пересоздавались
@@ -132,7 +130,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
     <CodeMirror
       ref={ref}
       value={text}
-      theme={resolved}
+      theme="none"
       height="100%"
       indentWithTab={false}
       extensions={extensions}

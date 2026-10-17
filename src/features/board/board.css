@@ -26,3 +26,13 @@
 .vs-board[data-dimmed] .react-flow__edge {
   opacity: 0.35;
 }
+
+/* Контролы и миникарта React Flow на токенах shadcn: работают в обеих темах */
+.vs-board .react-flow {
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+  --xy-background-color: transparent;
+}

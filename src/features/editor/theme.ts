@@ -24,6 +24,15 @@ export function editorTheme(): Extension[] {
         backgroundColor: 'color-mix(in oklab, var(--primary) 24%, transparent)',
       },
       '.cm-cursor': { borderLeftColor: 'var(--editor-fg)' },
+      '.cm-tooltip': {
+        backgroundColor: 'var(--popover)',
+        color: 'var(--popover-foreground)',
+        border: '1px solid var(--border)',
+      },
+      '.cm-tooltip-autocomplete ul li[aria-selected]': {
+        backgroundColor: 'var(--accent)',
+        color: 'var(--accent-foreground)',
+      },
       '.cm-clauseActive': {
         backgroundColor: 'color-mix(in oklab, var(--primary) 14%, transparent)',
         borderRadius: '2px',
