@@ -57,11 +57,18 @@ const tablesOf = (nodes: { id: string; type?: string }[]) =>
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
 
+// Снизу у доски полоса хрома: кнопки зума и плашка версии Postgres (BoardStatus). Кадры держат её
+// пустой, чтобы хром не ложился на таблицы. Считаем в rem: плашка растёт вместе с текстом
+const chromeBottom = () => {
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  return `${Math.round(3.5 * rem)}px` as const;
+};
+
 // Кадры камеры. Фокус (и стартовый кадр урока): таблицы запроса крупно, не ближе зума 1.
 // Отступ 0.1: при 0.3 свёрнутая book (756) на доске 719 px получала зум 0.73 и мелкий текст
 const focusFrame = (ids: string[], duration = animationMs(400)) => ({
   nodes: ids.map((id) => ({ id })),
-  padding: 0.1,
+  padding: { x: 0.1, top: 0.1, bottom: chromeBottom() },
   minZoom: FIT_MIN_ZOOM,
   maxZoom: 1,
   duration,
@@ -69,7 +76,7 @@ const focusFrame = (ids: string[], duration = animationMs(400)) => ({
 // Вся доска: все таблицы с запасом по краям
 const boardFrame = (nodes: { id: string; type?: string }[], duration = animationMs(300)) => ({
   nodes: tablesOf(nodes),
-  padding: 0.15,
+  padding: { x: 0.15, top: 0.15, bottom: chromeBottom() },
   minZoom: FIT_MIN_ZOOM,
   duration,
 });
@@ -144,7 +151,8 @@ function BoardFlow() {
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
-        <Controls showInteractive={false} position="bottom-left">
+        {/* Кнопки в строку: вся полоса хрома внизу, её оставляют пустой кадры (chromeBottom) */}
+        <Controls showInteractive={false} position="bottom-left" orientation="horizontal">
           <ControlButton
             onClick={() => setMiniMap((v) => !v)}
             title="Миникарта"
@@ -154,7 +162,8 @@ function BoardFlow() {
             <MapIcon />
           </ControlButton>
         </Controls>
-        {miniMap && <MiniMap pannable zoomable />}
+        {/* Справа снизу плашка версии Postgres, миникарта сверху */}
+        {miniMap && <MiniMap pannable zoomable position="top-right" />}
       </ReactFlow>
     </div>
   );

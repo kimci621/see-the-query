@@ -57,7 +57,8 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
         <Badge
           variant="outline"
           data-testid="pg-version"
-          className="absolute top-2 right-2 z-10 bg-background"
+          // Внизу справа над подписью React Flow: сверху лежат таблицы контекста стартового кадра
+          className="absolute right-2 bottom-6 z-10 bg-background"
         >
           {label}
         </Badge>

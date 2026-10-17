@@ -354,3 +354,28 @@ test('how-to-use: стартовый кадр без полёта', async ({ pag
   // исходный вьюпорт, затем кадр; второй мгновенный кадр допустим (замер развёрнутой book), полёта нет
   expect(transforms.length, transforms.join('\n')).toBeLessThanOrEqual(3);
 });
+
+// Хром доски (плашка версии Postgres, кнопки зума) не ложится на таблицы стартового кадра
+for (const lesson of ['select-basics', 'how-to-use']) {
+  test(`${lesson}: плашка и контролы доски не закрывают таблицы на старте`, async ({ page }) => {
+    await page.goto(`/l/${lesson}`);
+    await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 20_000 });
+    await expect(page.getByTestId('pg-version')).toBeVisible();
+    await page.waitForTimeout(600);
+    const boxes = async (selector: string) =>
+      page.locator(selector).evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    const chrome = [
+      ...(await boxes('[data-testid="pg-version"]')),
+      ...(await boxes('.react-flow__controls')),
+    ];
+    const tables = await boxes('[data-testid^="table-node-"]');
+    expect(chrome).toHaveLength(2);
+    expect(tables.length).toBeGreaterThan(0);
+    for (const c of chrome) {
+      for (const t of tables) {
+        const overlap = c.left < t.right && t.left < c.right && c.top < t.bottom && t.top < c.bottom;
+        expect(overlap, `хром ${JSON.stringify(c)} на таблице ${JSON.stringify(t)}`).toBe(false);
+      }
+    }
+  });
+}

@@ -29,6 +29,10 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   };
 });
 
+// Кадры оставляют снизу пустую полосу хрома доски (кнопки зума, плашка версии): 3.5rem при шрифте 16px
+const FOCUS_PAD = { x: 0.1, top: 0.1, bottom: '56px' };
+const BOARD_PAD = { x: 0.15, top: 0.15, bottom: '56px' };
+
 function mockReducedMotion(reduced: boolean) {
   const real = window.matchMedia;
   return vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
@@ -117,7 +121,7 @@ describe('BoardCanvas', () => {
     renderBoard();
     act(() => useBoardStore.getState().requestFit());
     expect(flow().fitView).toHaveBeenLastCalledWith(
-      expect.objectContaining({ duration: 0, minZoom: 0.6, padding: 0.15 }),
+      expect.objectContaining({ duration: 0, minZoom: 0.6, padding: BOARD_PAD }),
     );
   });
 
@@ -145,7 +149,7 @@ describe('BoardCanvas', () => {
     act(() => holder.store?.setState({ width: 900 }));
     expect(flow().fitView).toHaveBeenCalledTimes(1);
     expect(flow().fitView).toHaveBeenCalledWith(
-      expect.objectContaining({ padding: 0.15, minZoom: 0.6, duration: 300 }),
+      expect.objectContaining({ padding: BOARD_PAD, minZoom: 0.6, duration: 300 }),
     );
     // Дальнейшие смены ширины без режима фокуса камеру не трогают
     act(() => holder.store?.setState({ width: 800 }));
@@ -160,7 +164,7 @@ describe('BoardCanvas', () => {
     act(() => holder.store?.setState({ width: 1400 }));
     expect(vi.mocked(flow().fitView).mock.lastCall?.[0]?.nodes?.map((n) => n.id)).toEqual(['public.book']);
     expect(flow().fitView).toHaveBeenLastCalledWith(
-      expect.objectContaining({ padding: 0.1, maxZoom: 1, duration: 400 }),
+      expect.objectContaining({ padding: FOCUS_PAD, maxZoom: 1, duration: 400 }),
     );
   });
 
@@ -172,7 +176,7 @@ describe('BoardCanvas', () => {
     act(() => useBoardStore.getState().frameStart(['public.book']));
     expect(fitNodes()).toEqual(['public.book']);
     expect(flow().fitView).toHaveBeenLastCalledWith(
-      expect.objectContaining({ padding: 0.1, minZoom: 0.6, maxZoom: 1, duration: 0 }),
+      expect.objectContaining({ padding: FOCUS_PAD, minZoom: 0.6, maxZoom: 1, duration: 0 }),
     );
   });
 
@@ -180,7 +184,9 @@ describe('BoardCanvas', () => {
     renderBoard();
     act(() => useBoardStore.getState().frameStart([]));
     expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
-    expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ padding: 0.15, duration: 0 }));
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ padding: BOARD_PAD, duration: 0 }),
+    );
   });
 
   it('таблиц стартового запроса нет на доске: вписывается вся доска', () => {
@@ -199,7 +205,9 @@ describe('BoardCanvas', () => {
     });
     measure('public.book', 1188);
     expect(fitNodes()).toEqual(['public.book']);
-    expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ padding: 0.1, duration: 0 }));
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ padding: FOCUS_PAD, duration: 0 }),
+    );
 
     act(() => useBoardStore.getState().expandTables([]));
     measure('public.book', 756);
@@ -225,7 +233,7 @@ describe('BoardCanvas', () => {
     act(() => useBoardStore.getState().focus(['public.author']));
     expect(fitNodes()).toEqual(['public.author']);
     expect(flow().fitView).toHaveBeenLastCalledWith(
-      expect.objectContaining({ padding: 0.1, maxZoom: 1, duration: 400 }),
+      expect.objectContaining({ padding: FOCUS_PAD, maxZoom: 1, duration: 400 }),
     );
   });
 });
