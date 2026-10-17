@@ -73,3 +73,34 @@ test('Tab с доски фокусирует ноду таблицы с подп
   await page.keyboard.press('Tab');
   await expect(page.getByTestId('rf__node-public.book')).toBeFocused();
 });
+
+test.describe('тулбар не обрезается на узком экране и при 200% текста', () => {
+  const panelRight = async (page: import('@playwright/test').Page) => {
+    const panel = await page.getByRole('region', { name: 'Редактор' }).boundingBox();
+    const apply = await page.getByTestId('apply-button').boundingBox();
+    if (!panel || !apply) throw new Error('нет панели редактора или кнопки');
+    return { panel: panel.x + panel.width, apply: apply.x + apply.width };
+  };
+
+  test('768x1024', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/l/how-to-use');
+    await expect(page.getByTestId('apply-button')).toBeVisible();
+    const { panel, apply } = await panelRight(page);
+    expect(apply).toBeLessThanOrEqual(panel);
+    // сайдбар ушёл в Sheet
+    await page.getByRole('button', { name: 'Уроки' }).click();
+    await expect(page.getByRole('dialog', { name: 'Уроки' })).toBeVisible();
+  });
+
+  test('1280x800 при html font-size 200%', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/l/how-to-use');
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+    await expect(page.getByTestId('apply-button')).toBeVisible();
+    const { panel, apply } = await panelRight(page);
+    expect(apply).toBeLessThanOrEqual(panel);
+  });
+});

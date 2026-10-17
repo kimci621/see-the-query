@@ -84,7 +84,7 @@ export function EditorToolbar({
     });
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-t px-2 py-1">
+    <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t px-2 py-1">
       <Badge
         variant="outline"
         data-testid="preview-status"
@@ -97,7 +97,7 @@ export function EditorToolbar({
         )}
         {STATUS_LABEL[shown]}
       </Badge>
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex flex-wrap items-center gap-x-1.5 gap-y-1">
         {statementCount > 1 && (
           <Button
             variant="outline"

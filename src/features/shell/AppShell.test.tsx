@@ -1,11 +1,22 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '@/app/router';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 
 beforeEach(() => useSettingsStore.setState({ focusMode: false }));
+afterEach(() => vi.restoreAllMocks());
+
+// Подменяет matchMedia: запрос считается совпавшим, если его текст есть в списке
+function mockMedia(matching: string[]) {
+  const real = window.matchMedia;
+  vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => {
+    const mql = real.call(window, query);
+    return Object.assign(mql, { matches: matching.includes(query) });
+  });
+}
 
 function renderAt(url: string) {
   const router = createMemoryRouter(routes, { initialEntries: [url] });
@@ -72,6 +83,51 @@ describe('AppShell', () => {
     fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
     expect(screen.queryByText(/Заглушка урока/)).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
+    expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
+  });
+
+  it('ниже 1024px панели сайдбара нет, уроки открываются в Sheet', async () => {
+    mockMedia(['(max-width: 1023px)']);
+    const user = userEvent.setup();
+    const { container } = render(
+      <RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/l/how-to-use'] })} />,
+    );
+    await screen.findByText(/Заглушка урока/);
+    expect(container.querySelector('[id="sidebar"]')).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Уроки' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Уроки' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Уроки' });
+    expect(within(dialog).getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
+  });
+
+  it('переход по ссылке урока закрывает Sheet', async () => {
+    mockMedia(['(max-width: 1023px)']);
+    const user = userEvent.setup();
+    const router = renderAt('/l/how-to-use');
+    await screen.findByText(/Заглушка урока/);
+    await user.click(screen.getByRole('button', { name: 'Уроки' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Уроки' });
+    // глава с целевым уроком свёрнута: раскрываем
+    await user.click(within(dialog).getByRole('button', { name: /^4\./ }));
+    await user.click(within(dialog).getByRole('link', { name: /SELECT: колонки, выражения, алиасы/ }));
+    expect(router.state.location.pathname).toBe('/l/select-basics');
+    expect(screen.queryByRole('dialog', { name: 'Уроки' })).not.toBeInTheDocument();
+  });
+
+  it('на широком экране сайдбар на месте, кнопки «Уроки» нет', async () => {
+    renderAt('/l/how-to-use');
+    await screen.findByText(/Заглушка урока/);
+    expect(screen.getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Уроки' })).not.toBeInTheDocument();
+  });
+
+  it('ниже 640px заглушка, «Всё равно открыть» её убирает', async () => {
+    mockMedia(['(max-width: 1023px)', '(max-width: 639px)']);
+    const user = userEvent.setup();
+    renderAt('/l/how-to-use');
+    expect(await screen.findByText('see-the-query рассчитан на экран от 1024 px')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Всё равно открыть' }));
+    expect(screen.queryByText('see-the-query рассчитан на экран от 1024 px')).not.toBeInTheDocument();
     expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
   });
 });
