@@ -152,6 +152,14 @@ function useCamera(
   const pendingFit = useRef(false);
   const width = useStore((s) => s.width);
   const nodeKey = useMemo(() => nodes.map((n) => n.id).join('|'), [nodes]);
+  // Замеренные ширины таблиц: свёртка меняет их без смены набора нод
+  const tableWidths = useStore((s) =>
+    [...s.nodeLookup.values()]
+      .filter((n) => n.type === 'table')
+      .map((n) => `${n.id}:${n.measured.width ?? ''}`)
+      .join('|'),
+  );
+  const knownWidths = useRef(new Map<string, number>());
 
   // Сохранённая камера урока ставится один раз; без неё вписываем доску при каждой смене набора нод.
   // fitView React Flow сам откладывает до первого замера нод, ещё не замеренные считает по
@@ -190,6 +198,33 @@ function useCamera(
       });
     }
   }, [focusRequest, flow]);
+
+  // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
+  // Первый замер ноды не считается, его вписывает эффект выше
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tableWidths служит только триггером, ширины читаем из flow
+  useEffect(() => {
+    let changed = false;
+    for (const { id } of tablesOf(nodes)) {
+      const w = flow.getInternalNode(id)?.measured.width;
+      if (w === undefined) continue;
+      const known = knownWidths.current.get(id);
+      if (known !== undefined && known !== w) changed = true;
+      knownWidths.current.set(id, w);
+    }
+    if (!changed) return;
+    const ids = useBoardStore.getState().focused;
+    void flow.fitView(
+      ids.length > 0
+        ? {
+            nodes: ids.map((id) => ({ id })),
+            padding: 0.3,
+            minZoom: FIT_MIN_ZOOM,
+            duration: animationMs(400),
+            maxZoom: 1,
+          }
+        : { nodes: tablesOf(nodes), padding: 0.15, minZoom: FIT_MIN_ZOOM, duration: animationMs(300) },
+    );
+  }, [tableWidths, nodes, flow]);
 
   // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver
   // уже после раскладки, поэтому вписываем не сразу, а когда придёт новая ширина

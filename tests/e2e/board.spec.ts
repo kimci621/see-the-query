@@ -164,25 +164,20 @@ test('широкая book свёрнута, колонки запроса вид
   await expect(page.locator('.react-flow__node[data-id="public.book"]')).toHaveCSS('width', '1188px');
 });
 
-// Раскладка select-basics задана в уроке (book и author друг под другом): рядом они не влезают
-// в доску 719×467 px при зуме 0.6, и автоподгонка обрезала бы обе таблицы
-test('стартовый кадр: book, author и подпись схемы целиком, зум не меньше 0.6', async ({ page }) => {
-  await openBookstore(page);
+// Что из кадра вылезает за доску: таблицы и подпись рамки схемы (её в кадре держит только отступ fitView)
+async function outsideBoard(page: Page, ids: string[]): Promise<string[]> {
   const board = await page.locator('.react-flow').boundingBox();
   if (!board) throw new Error('нет доски');
-  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
-  const inside = (r: { x: number; y: number; width: number; height: number }) => {
-    expect(r.x).toBeGreaterThanOrEqual(board.x);
-    expect(r.x + r.width).toBeLessThanOrEqual(board.x + board.width);
-    expect(r.y).toBeGreaterThanOrEqual(board.y);
-    expect(r.y + r.height).toBeLessThanOrEqual(board.y + board.height);
-  };
-  for (const id of ['public.book', 'public.author']) {
+  const inside = (r: { x: number; y: number; width: number; height: number }) =>
+    r.x >= board.x &&
+    r.x + r.width <= board.x + board.width &&
+    r.y >= board.y &&
+    r.y + r.height <= board.y + board.height;
+  const out: string[] = [];
+  for (const id of ids) {
     const r = await page.getByTestId(`table-node-${id}`).boundingBox();
-    if (!r) throw new Error(`нет ${id}`);
-    inside(r);
+    if (!r || !inside(r)) out.push(id);
   }
-  // Подпись рамки над таблицами: в кадре её держит только отступ fitView
   const label = await page
     .getByTestId('schema-group-public')
     .getByText('public', { exact: true })
@@ -191,5 +186,34 @@ test('стартовый кадр: book, author и подпись схемы ц�
       range.selectNodeContents(el);
       return range.getBoundingClientRect().toJSON();
     });
-  inside(label);
+  if (!inside(label)) out.push('подпись public');
+  return out;
+}
+
+// Раскладка select-basics задана в уроке (book и author друг под другом): рядом они не влезают
+// в доску 719×467 px при зуме 0.6, и автоподгонка обрезала бы обе таблицы
+test('стартовый кадр: book, author и подпись схемы целиком, зум не меньше 0.6', async ({ page }) => {
+  await openBookstore(page);
+  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
+  await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
+});
+
+// how-to-use стартует с select * from book: book развёрнута до 1188 единиц, author стоит над ней
+test('how-to-use: развёрнутая book, author и подпись схемы в кадре', async ({ page }) => {
+  await page.goto('/l/how-to-use');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
+  await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
+});
+
+// Разворот свёртки меняет ширину ноды: камера перевписывает кадр
+test('select * разворачивает book, и она целиком в кадре', async ({ page }) => {
+  await openBookstore(page);
+  await setEditorText(page, 'select * from book');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.getByTestId('hidden-columns')).toHaveCount(0);
+  await expect
+    .poll(async () => (await outsideBoard(page, ['public.book'])).includes('public.book'))
+    .toBe(false);
 });
