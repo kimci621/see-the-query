@@ -9,6 +9,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Kbd } from '@/components/ui/kbd';
 import type { Sandbox } from '@/features/db/sandbox';
@@ -120,15 +121,36 @@ export function EditorToolbar({
         >
           Отменить
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="reset-button"
-          disabled={busy || !sandbox}
-          onClick={() => setConfirmReset(true)}
-        >
-          Сброс
-        </Button>
+        {/* DialogTrigger: после Esc или «Отмена» Radix возвращает фокус на «Сброс» */}
+        <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="reset-button" disabled={busy || !sandbox}>
+              Сброс
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Сбросить урок?</DialogTitle>
+              <DialogDescription>
+                Все применённые запросы будут отменены, данные вернутся к началу урока.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmReset(false)}>
+                Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setConfirmReset(false);
+                  void run(() => sandbox?.reset() ?? Promise.resolve());
+                }}
+              >
+                Сбросить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <Button
           size="sm"
           variant={applied || current?.kind === 'select' ? 'outline' : 'default'}
@@ -139,30 +161,6 @@ export function EditorToolbar({
           {applied ? 'Применено' : 'Применить'} <Kbd>{modKey()} ⏎</Kbd>
         </Button>
       </div>
-      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Сбросить урок?</DialogTitle>
-            <DialogDescription>
-              Все применённые запросы будут отменены, данные вернутся к началу урока.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmReset(false)}>
-              Отмена
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setConfirmReset(false);
-                void run(() => sandbox?.reset() ?? Promise.resolve());
-              }}
-            >
-              Сбросить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

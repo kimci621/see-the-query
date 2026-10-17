@@ -217,6 +217,16 @@ describe('EditorToolbar', () => {
     expect(sandbox.reset).toHaveBeenCalledTimes(1);
   });
 
+  it('Esc в диалоге сброса возвращает фокус на «Сброс»', async () => {
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    await user.click(screen.getByTestId('reset-button'));
+    expect(await screen.findByText('Сбросить урок?')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByText('Сбросить урок?')).toBeNull());
+    expect(screen.getByTestId('reset-button')).toHaveFocus();
+  });
+
   it('после применения тост с итогом', async () => {
     useEditorStore.getState().setText('select 1; select 2');
     const sandbox = fakeSandbox([], [{ command: 'INSERT', rowCount: 1, rows: [], fields: [] }]);

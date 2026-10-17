@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Kbd } from '@/components/ui/kbd';
 import { modKey } from '@/lib/utils';
@@ -22,9 +23,20 @@ export function HotkeysHelp({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const opener = useRef<HTMLElement | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        // Открыт клавишей ?, без DialogTrigger: Radix не знает, куда вернуть фокус.
+        // Запоминаем, где он был до открытия, и возвращаем туда после закрытия
+        onOpenAutoFocus={() => {
+          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          opener.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Горячие клавиши</DialogTitle>
           <DialogDescription>Что можно сделать с клавиатуры.</DialogDescription>
