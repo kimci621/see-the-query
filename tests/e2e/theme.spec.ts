@@ -43,6 +43,9 @@ test('тёмная тема: контролы доски и редактор н�
 test('тёмная тема: автокомплит редактора на токенах, а не на светлой теме CodeMirror', async ({ page }) => {
   await page.goto('/l/select-basics');
   await expect(page.locator('.cm-content')).toBeVisible({ timeout: 20_000 });
+  // схема приходит асинхронно и пересобирает автокомплит: открытый список перерисуется,
+  // и проверки стилей поймают уже отцепленный элемент. Ждём схему (таблицы на доске) до набора
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Тема оформления' }).click();
   await page.getByRole('menuitemradio', { name: 'Тёмная' }).click();
   await expect(page.locator('html')).toHaveClass(/dark/);
