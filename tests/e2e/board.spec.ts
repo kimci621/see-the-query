@@ -329,3 +329,28 @@ test('режим фокуса: доска на всю ширину, зум не 
   await expect(page.getByText(/Заглушка урока/)).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toBeVisible();
 });
+
+// Стартовый кадр ставится без полёта (спека 3.4), даже когда select * стартового запроса
+// разворачивает book уже после первого кадра. Пишем все трансформы вьюпорта с загрузки страницы
+test('how-to-use: стартовый кадр без полёта', async ({ page }) => {
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    Object.assign(window, { __transforms: seen });
+    const tick = () => {
+      const style = document.querySelector<HTMLElement>('.react-flow__viewport')?.style.transform;
+      if (style && style !== seen.at(-1)) seen.push(style);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await page.goto('/l/how-to-use');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 20_000 });
+  await page.waitForTimeout(600);
+  const transforms = await page.evaluate(
+    () => (window as unknown as { __transforms: string[] }).__transforms,
+  );
+  // исходный вьюпорт, затем кадр; второй мгновенный кадр допустим (замер развёрнутой book), полёта нет
+  expect(transforms.length, transforms.join('\n')).toBeLessThanOrEqual(3);
+});

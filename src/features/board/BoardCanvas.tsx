@@ -168,9 +168,10 @@ function useCamera(
 ) {
   const flow = useReactFlow();
   const startedFor = useRef<string | null>(null);
-  // Свёртка старта урока при восстановленной сохранённой камере. Пока свёртка та же
-  // (стартовый запрос и его первый трейс), рефит камеру ученика не трогает; null - защиты нет
-  const startFold = useRef<string | null>(null);
+  // Свёртка старта урока. Пока свёртка та же (стартовый запрос и его первый трейс), её замер
+  // ещё часть старта: сохранённую камеру ученика рефит не трогает (keep), без неё ставит кадр
+  // без полёта. null - старт закончился
+  const startFold = useRef<{ fold: string; keep: boolean } | null>(null);
   const fitRequest = useBoardStore((s) => s.fitRequest);
   const focusRequest = useBoardStore((s) => s.focusRequest);
   const startRequest = useBoardStore((s) => s.startRequest);
@@ -202,10 +203,10 @@ function useCamera(
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.viewport : undefined;
     if (saved) {
       if (opened) void flow.setViewport(saved);
-      if (opened || startFold.current !== null) startFold.current = foldKey();
+      startFold.current = opened || startFold.current?.keep ? { fold: foldKey(), keep: true } : null;
       return;
     }
-    startFold.current = null;
+    startFold.current = { fold: foldKey(), keep: false };
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
     void flow.fitView(ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
@@ -227,7 +228,8 @@ function useCamera(
 
   // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
   // При смене урока цель рефита - focused, то есть новый стартовый кадр. Первый замер ноды
-  // не считается, его вписывает эффект выше. Свёртку старта при сохранённой камере не вписываем
+  // не считается, его вписывает эффект выше. Свёртку старта при сохранённой камере не вписываем,
+  // без сохранённой вписываем без полёта: select * стартового запроса разворачивает таблицу уже после кадра
   // biome-ignore lint/correctness/useExhaustiveDependencies: tableWidths служит только триггером, ширины читаем из flow
   useEffect(() => {
     let changed = false;
@@ -238,10 +240,12 @@ function useCamera(
       if (known !== undefined && known !== w) changed = true;
       knownWidths.current.set(id, w);
     }
-    if (!changed || startFold.current === foldKey()) return;
-    startFold.current = null;
+    const start = startFold.current?.fold === foldKey() ? startFold.current : null;
+    if (!changed || start?.keep) return;
+    if (!start) startFold.current = null;
     const ids = useBoardStore.getState().focused;
-    void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(nodes));
+    const duration = start ? 0 : undefined;
+    void flow.fitView(ids.length > 0 ? focusFrame(ids, duration) : boardFrame(nodes, duration));
   }, [tableWidths, nodes, flow]);
 
   // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver

@@ -47,6 +47,17 @@ function renderBoard() {
   );
 }
 
+// Замер ноды: в jsdom React Flow ноды не меряет. Ставим ширину во внутреннюю ноду и будим подписчиков стора
+function measure(id: string, width: number) {
+  act(() => {
+    const store = holder.store;
+    const node = store?.getState().nodeLookup.get(id);
+    if (!store || !node) throw new Error(`нет ноды ${id}`);
+    node.measured = { width, height: 300 };
+    store.setState({});
+  });
+}
+
 function flow(): ReactFlowInstance {
   if (!holder.flow) throw new Error('React Flow ещё не смонтирован');
   return holder.flow;
@@ -176,6 +187,23 @@ describe('BoardCanvas', () => {
     renderBoard();
     act(() => useBoardStore.getState().frameStart(['public.nope']));
     expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
+  });
+
+  it('замер свёртки старта (select * развернул book) ставит кадр без полёта, следующий разворот летит', () => {
+    mockReducedMotion(false);
+    renderBoard();
+    measure('public.book', 756);
+    act(() => {
+      useBoardStore.getState().expandTables(['public.book']);
+      useBoardStore.getState().frameStart(['public.book']);
+    });
+    measure('public.book', 1188);
+    expect(fitNodes()).toEqual(['public.book']);
+    expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ padding: 0.1, duration: 0 }));
+
+    act(() => useBoardStore.getState().expandTables([]));
+    measure('public.book', 756);
+    expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 400 }));
   });
 
   it('сохранённая камера урока важнее стартового кадра', async () => {
