@@ -167,3 +167,23 @@ test('200% текста на 1024x768: поле редактора, «Приме
   expect(overflow.scroll).toBeLessThanOrEqual(0);
   expect(overflow.h1).toBeLessThanOrEqual(overflow.panel);
 });
+
+test('reduced motion: Dialog и Sheet открываются без анимации', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const animation = (selector: string) =>
+    page.locator(selector).evaluate((el) => getComputedStyle(el).animationName);
+
+  await page.goto('/l/select-basics');
+  await expect(page.getByTestId('reset-button')).toBeEnabled({ timeout: 20_000 });
+  await page.getByTestId('reset-button').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(await animation('[data-slot="dialog-content"]')).toBe('none');
+  expect(await animation('[data-slot="dialog-overlay"]')).toBe('none');
+  await page.keyboard.press('Escape');
+
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.getByRole('button', { name: 'Уроки' }).click();
+  await expect(page.getByRole('dialog', { name: 'Уроки' })).toBeVisible();
+  expect(await animation('[data-slot="sheet-content"]')).toBe('none');
+  expect(await animation('[data-slot="sheet-overlay"]')).toBe('none');
+});

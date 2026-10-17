@@ -16,6 +16,7 @@ export function ErrorCard({ error, sql }: { error: DbError; sql: string }) {
   const { fix } = explanation;
   // кнопка есть, только когда правка применима к текущему тексту
   const fixed = fix ? applyFix(text, sql, error, fix) : null;
+  const showFix = fix != null && fixed != null;
 
   return (
     <div
@@ -29,14 +30,14 @@ export function ErrorCard({ error, sql }: { error: DbError; sql: string }) {
       <p data-testid="pg-explain-body" className="mt-1">
         {explanation.body}
       </p>
-      {(explanation.suggestion || (fix && fixed != null)) && (
+      {(explanation.suggestion || showFix) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
           {explanation.suggestion && (
             <p data-testid="pg-explain-suggestion" className="text-muted-foreground">
               {explanation.suggestion}
             </p>
           )}
-          {fix && fixed != null && (
+          {showFix && (
             <Button
               size="xs"
               variant="outline"
