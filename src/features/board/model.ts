@@ -103,6 +103,9 @@ export function buildNodes(
         // Позиции и рамка схемы считаются по полной ширине, разворот соседей не задевает.
         initialWidth: foldWidth(foldColumns(b.t, [], false)),
         height: b.h,
+        // Без выбора и переноса React Flow ставит ноде pointer-events: none, и title у колонок,
+        // флагов и «+N колонки» не показываются. Pan по ноде работает: класса nopan у неё нет
+        style: { pointerEvents: 'all' },
       });
     }
   }

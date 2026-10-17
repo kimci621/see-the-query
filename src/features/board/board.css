@@ -16,6 +16,11 @@
   pointer-events: none;
 }
 
+/* Ноды ловят указатель ради подсказок title, курсор как у фона: доску по ним можно тянуть */
+.vs-board .react-flow__node-table {
+  cursor: grab;
+}
+
 /* Пока идёт сцена, базовая доска приглушена; меняется только атрибут контейнера */
 .vs-board .react-flow__node-table,
 .vs-board .react-flow__edge {

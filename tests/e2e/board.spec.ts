@@ -217,3 +217,27 @@ test('select * разворачивает book, и она целиком в ка
     .poll(async () => (await outsideBoard(page, ['public.book'])).includes('public.book'))
     .toBe(false);
 });
+
+// Ноды ловят указатель (иначе title у колонок, флагов и «+N колонки» не показываются),
+// а перетаскивание поверх ноды по-прежнему двигает доску
+test('подсказки на нодах доступны мыши, drag по ноде двигает вьюпорт', async ({ page }) => {
+  await openBookstore(page);
+  const book = page.getByTestId('table-node-public.book');
+  const head = book.locator('[data-column="title"]');
+  const box = await head.boundingBox();
+  if (!box) throw new Error('нет колонки title');
+  const hit = await page.evaluate(
+    ({ x, y }) =>
+      document.elementFromPoint(x, y)?.closest('[data-column]')?.getAttribute('data-column') ?? null,
+    { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+  );
+  expect(hit).toBe('title');
+
+  const viewport = page.locator('.react-flow__viewport');
+  const before = await viewport.getAttribute('style');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(() => viewport.getAttribute('style')).not.toBe(before);
+});
