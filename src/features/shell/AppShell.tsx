@@ -137,9 +137,9 @@ export function AppShell() {
             onCloseAutoFocus={(e) => {
               e.preventDefault();
               if (commandOpen) return;
-              document
-                .getElementById(lessonId === openedFor.current ? 'lessons-button' : 'lesson-title')
-                ?.focus();
+              // в режиме фокуса теории нет, заголовка урока тоже: тогда на кнопку «Уроки»
+              const target = lessonId === openedFor.current ? null : document.getElementById('lesson-title');
+              (target ?? document.getElementById('lessons-button'))?.focus();
             }}
           >
             <SheetTitle className="sr-only">Уроки</SheetTitle>

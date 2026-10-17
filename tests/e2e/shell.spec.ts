@@ -74,6 +74,19 @@ test('Tab с доски фокусирует ноду таблицы с подп
   await expect(page.getByTestId('rf__node-public.book')).toBeFocused();
 });
 
+test('узкий экран и режим фокуса: после выбора урока фокус на кнопке «Уроки»', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto('/l/select-basics');
+  await page.keyboard.press('ControlOrMeta+Backslash');
+  await page.getByRole('button', { name: 'Уроки' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Уроки' });
+  await sheet.getByRole('button', { name: '0. Старт' }).click();
+  await sheet.getByRole('link', { name: /Как пользоваться доской/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Уроки' })).toBeHidden();
+  // теории в режиме фокуса нет, заголовка урока тоже: фокус не теряется на body
+  await expect(page.getByRole('button', { name: 'Уроки' })).toBeFocused();
+});
+
 test('поиск из Sheet на узком экране: фокус в поле поиска', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto('/l/how-to-use');

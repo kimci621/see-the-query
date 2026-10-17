@@ -252,7 +252,7 @@ export const DICTIONARY: Record<string, Entry> = {
       suggestion: !identity
         ? `Убери ${name} из запроса или передай DEFAULT.`
         : err.message.includes('updated')
-          ? `Убери ${name} из SET: номер строки UPDATE не меняет. Нужно сбросить номер: SET ${name} = DEFAULT.`
+          ? `Убери ${name} из SET: номер строки менять не нужно. Нужен новый номер из последовательности: SET ${name} = DEFAULT.`
           : `Убери ${name} из INSERT, номер появится сам. Нужен именно свой номер: допиши OVERRIDING SYSTEM VALUE перед VALUES.`,
       highlight: { tableIds: owners.map((t) => t.id), columns: owners.map((t) => `${t.id}.${name}`) },
     };

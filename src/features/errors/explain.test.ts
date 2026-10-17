@@ -142,7 +142,7 @@ describe('explainError', () => {
       highlight: { tableIds: ['public.author'], columns: ['public.author.author_id'] },
     });
     expect(explain('identityUpdate').suggestion).toBe(
-      'Убери author_id из SET: номер строки UPDATE не меняет. Нужно сбросить номер: SET author_id = DEFAULT.',
+      'Убери author_id из SET: номер строки менять не нужно. Нужен новый номер из последовательности: SET author_id = DEFAULT.',
     );
     const generated: DbError = {
       code: '428C9',
