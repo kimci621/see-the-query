@@ -233,38 +233,65 @@ test('переход how-to-use → select-basics заканчивается с�
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
 });
 
-// Сохранённая камера важнее стартового кадра и рефита по развороту book
-test('how-to-use: сохранённая камера переживает перезагрузку и разворот book', async ({ page }) => {
-  await page.goto('/l/how-to-use');
-  const book = page.getByTestId('table-node-public.book');
-  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
-  const viewport = page.locator('.react-flow__viewport');
+// Колесо над доской: кадр ученика сохраняется в урок. Колесо может прервать рефит по развороту
+// на полпути, и промежуточный кадр тоже сохраняется, поэтому ждём кадр после колеса
+async function saveCamera(page: Page, lessonId: string): Promise<string> {
   const box = await page.getByTestId('board-canvas').boundingBox();
   if (!box) throw new Error('нет доски');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, -400);
-  // Колесо может прервать рефит по развороту на полпути, и промежуточный кадр тоже сохраняется.
-  // Ждём, пока в хранилище не ляжет кадр после колеса
-  const savedZoom = () =>
+  const savedZoom = (id: string) =>
     page.evaluate(
-      () =>
-        (JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['how-to-use']?.viewport?.zoom as
+      (id) =>
+        (JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.[id]?.viewport?.zoom as
           | number
           | undefined) ?? null,
+      id,
     );
   await expect
     .poll(async () => {
-      const saved = await savedZoom();
+      const saved = await savedZoom(lessonId);
       return saved !== null && Math.abs(saved - (await zoomOf(page))) < 1e-3;
     })
     .toBe(true);
-  const zoomed = await viewport.getAttribute('style');
+  return (await page.locator('.react-flow__viewport').getAttribute('style')) ?? '';
+}
+
+// После первого трейса (результат на месте) камера стоит: рефит начался бы в пределах кадра-двух
+async function cameraStays(page: Page, style: string) {
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 20_000 });
+  const viewport = page.locator('.react-flow__viewport');
+  for (let i = 0; i < 6; i++) {
+    await expect(viewport).toHaveAttribute('style', style, { timeout: 0 });
+    await page.waitForTimeout(100);
+  }
+}
+
+// Сохранённая камера важнее стартового кадра и рефита по первому трейсу (разворот book)
+test('how-to-use: сохранённая камера переживает перезагрузку и разворот book', async ({ page }) => {
+  await page.goto('/l/how-to-use');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  const zoomed = await saveCamera(page, 'how-to-use');
 
   await page.reload();
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
-  // рефит анимируется 400 мс: даём ему шанс случиться, камера должна остаться на месте
-  await page.waitForTimeout(800);
-  await expect(viewport).toHaveAttribute('style', zoomed ?? '');
+  await cameraStays(page, zoomed);
+});
+
+// Камера ученика важнее только старта урока: следующий разворот снова перевписывает кадр (13c)
+test('сохранённая камера не мешает рефиту после старта: select * вписывает book', async ({ page }) => {
+  await openBookstore(page);
+  const zoomed = await saveCamera(page, 'select-basics');
+
+  await page.reload();
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book).toBeVisible({ timeout: 20_000 });
+  await cameraStays(page, zoomed);
+
+  await setEditorText(page, 'select * from book');
+  await expect(book.getByTestId('hidden-columns')).toHaveCount(0);
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
 });
 
 // Разворот свёртки меняет ширину ноды: камера перевписывает кадр

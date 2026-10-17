@@ -6,7 +6,6 @@ import {
   ControlButton,
   Controls,
   MiniMap,
-  type OnMove,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -46,6 +45,12 @@ const ariaLabelConfig = {
 
 // Кадр по таблицам, без рамок схем: рамка резервирует полную ширину свёрнутых таблиц,
 // пустой резерв в стартовый кадр не берём
+// Состояние свёртки доски: колонки трейса и развёрнутые таблицы
+const foldKey = () => {
+  const { queryColumns, expandedTables } = useBoardStore.getState();
+  return `${queryColumns.join()}|${expandedTables.join()}`;
+};
+
 const tablesOf = (nodes: { id: string; type?: string }[]) =>
   nodes.filter((n) => n.type === 'table').map((n) => ({ id: n.id }));
 
@@ -101,7 +106,7 @@ function BoardFlow() {
     return { nodes: buildNodes(schema, visible, positions), edges: buildEdges(schema, visible) };
   }, [schema, visible, meta]);
 
-  const onMoveEnd = useCamera(lessonId, nodes, boardRef, over);
+  useCamera(lessonId, nodes, boardRef, over);
 
   return (
     <div
@@ -133,7 +138,10 @@ function BoardFlow() {
         elementsSelectable={false}
         minZoom={0.25}
         maxZoom={2}
-        onMoveEnd={onMoveEnd}
+        onMoveEnd={(event, viewport) => {
+          // event = null у программных движений (fitView), их не запоминаем
+          if (event && lessonId) useLessonStore.getState().setViewport(lessonId, viewport);
+        }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
         <Controls showInteractive={false} position="bottom-left">
@@ -157,11 +165,12 @@ function useCamera(
   nodes: BoardNode[],
   boardRef: RefObject<HTMLDivElement | null>,
   over: RefObject<boolean>,
-): OnMove {
+) {
   const flow = useReactFlow();
   const startedFor = useRef<string | null>(null);
-  // Камера ученика: сохранённая или сдвинутая руками. Рефит по свёртке её не перебивает
-  const userCamera = useRef(false);
+  // Свёртка старта урока при восстановленной сохранённой камере. Пока свёртка та же
+  // (стартовый запрос и его первый трейс), рефит камеру ученика не трогает; null - защиты нет
+  const startFold = useRef<string | null>(null);
   const fitRequest = useBoardStore((s) => s.fitRequest);
   const focusRequest = useBoardStore((s) => s.focusRequest);
   const startRequest = useBoardStore((s) => s.startRequest);
@@ -192,13 +201,11 @@ function useCamera(
     startedFor.current = lessonId;
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.viewport : undefined;
     if (saved) {
-      if (opened) {
-        userCamera.current = true;
-        void flow.setViewport(saved);
-      }
+      if (opened) void flow.setViewport(saved);
+      if (opened || startFold.current !== null) startFold.current = foldKey();
       return;
     }
-    userCamera.current = false;
+    startFold.current = null;
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
     void flow.fitView(ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
@@ -206,21 +213,21 @@ function useCamera(
 
   useEffect(() => {
     if (fitRequest === 0) return;
-    userCamera.current = false;
+    startFold.current = null;
     void flow.fitView(boardFrame(flow.getNodes()));
   }, [fitRequest, flow]);
 
   useEffect(() => {
     const ids = useBoardStore.getState().focused;
     if (focusRequest > 0 && ids.length > 0) {
-      userCamera.current = false;
+      startFold.current = null;
       void flow.fitView(focusFrame(ids));
     }
   }, [focusRequest, flow]);
 
   // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
   // При смене урока цель рефита - focused, то есть новый стартовый кадр. Первый замер ноды
-  // не считается, его вписывает эффект выше; камеру ученика не трогаем
+  // не считается, его вписывает эффект выше. Свёртку старта при сохранённой камере не вписываем
   // biome-ignore lint/correctness/useExhaustiveDependencies: tableWidths служит только триггером, ширины читаем из flow
   useEffect(() => {
     let changed = false;
@@ -231,7 +238,8 @@ function useCamera(
       if (known !== undefined && known !== w) changed = true;
       knownWidths.current.set(id, w);
     }
-    if (!changed || userCamera.current) return;
+    if (!changed || startFold.current === foldKey()) return;
+    startFold.current = null;
     const ids = useBoardStore.getState().focused;
     void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(nodes));
   }, [tableWidths, nodes, flow]);
@@ -248,7 +256,7 @@ function useCamera(
   useEffect(() => {
     if (!pendingFit.current) return;
     pendingFit.current = false;
-    userCamera.current = false;
+    startFold.current = null;
     void flow.fitView(boardFrame(flow.getNodes()));
   }, [width, flow]);
 
@@ -265,11 +273,4 @@ function useCamera(
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [boardRef, over]);
-
-  // event = null у программных движений (fitView), их не запоминаем
-  return (event, viewport) => {
-    if (!event) return;
-    userCamera.current = true;
-    if (lessonId) useLessonStore.getState().setViewport(lessonId, viewport);
-  };
 }

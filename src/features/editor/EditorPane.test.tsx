@@ -193,6 +193,17 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().startRequest).toBe(1);
   });
 
+  it('старт урока ставит свёртку стартового запроса до первого трейса', async () => {
+    route.lessonId = 'unknown';
+    useLessonStore.getState().setLastQuery('unknown', 'select *, title from book;');
+    render(<EditorPane />);
+    await act(async () => undefined);
+    expect(useBoardStore.getState()).toMatchObject({
+      queryColumns: ['public.book.title'],
+      expandedTables: ['public.book'],
+    });
+  });
+
   it('стартовый кадр ждёт схему', async () => {
     route.lessonId = 'unknown';
     useLessonStore.getState().setLastQuery('unknown', 'select title from book');

@@ -43,16 +43,19 @@ export function EditorPane() {
 
   const trace = useSceneStore((s) => s.trace);
 
-  // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса.
+  // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса
+  useEffect(() => {
+    const traced = trace?.touched.columns ?? [];
+    useBoardStore.getState().highlightColumns(hoveredColumn ? [hoveredColumn] : traced);
+  }, [hoveredColumn, trace]);
+
   // Свёртка таблиц только по колонкам трейса: hover свёрнутой колонки не меняет ширину ноды и не двигает камеру.
   // Звёздочка последнего трейса разворачивает свёрнутые таблицы
   useEffect(() => {
-    const traced = trace?.touched.columns ?? [];
     const board = useBoardStore.getState();
-    board.highlightColumns(hoveredColumn ? [hoveredColumn] : traced);
-    board.setQueryColumns(traced);
+    board.setQueryColumns(trace?.touched.columns ?? []);
     board.expandTables(trace?.touched.expanded ?? []);
-  }, [hoveredColumn, trace]);
+  }, [trace]);
 
   // INSERT/UPDATE/DELETE: камера летит к целевой таблице, строки базовой доски не двигаются
   // Пока курсор в from/into/using, фокус ведёт курсор (ниже): трейс его не перебивает
@@ -98,16 +101,19 @@ export function EditorPane() {
     }
   }, [lessonId, meta]);
 
-  // Стартовый кадр урока: таблицы стартового текста (спека 3.4). Ждёт схему и парсер; новая схема
-  // после «Применить» кадр не повторяет. Нет таблиц или текст не разбирается - кадр на всю доску
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lessonId служит только триггером, текст читаем из стора
+  // Стартовый кадр урока: таблицы стартового текста (спека 3.4), свёртка как у будущего трейса,
+  // чтобы первый трейс не менял ширину нод. Ждёт схему и парсер; новая схема после «Применить»
+  // кадр не повторяет. Нет таблиц или текст не разбирается - кадр на всю доску
   useEffect(() => {
-    if (!hasSchema || !parserReady) return;
+    if (!lessonId || !hasSchema || !parserReady) return;
     const { text, cursor } = useEditorStore.getState();
     const parsed = parseSql(text);
     const stmt = parsed.ok ? statementAt(parsed.statements, cursor) : null;
     const board = useBoardStore.getState();
-    board.frameStart(stmt ? touchedOf(stmt, board.schema).tableIds : []);
+    const touched = stmt ? touchedOf(stmt, board.schema) : { tableIds: [], columns: [], expanded: [] };
+    board.setQueryColumns(touched.columns);
+    board.expandTables(touched.expanded);
+    board.frameStart(touched.tableIds);
   }, [lessonId, hasSchema, parserReady]);
 
   // Последний запрос урока: сохраняем через секунду после того, как ученик перестал печатать
