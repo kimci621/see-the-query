@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEditorStore } from '@/stores/editor';
 import { EditorPane } from './EditorPane';
+import { SqlEditor } from './SqlEditor';
 
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
@@ -53,5 +54,28 @@ describe('EditorPane', () => {
       throw new Error('редактор не загрузился');
     });
     expect(editor.getAttribute('aria-label')).toBe('SQL-запрос');
+  });
+});
+
+describe('SqlEditor', () => {
+  beforeEach(() => {
+    useEditorStore.setState(useEditorStore.getInitialState(), true);
+  });
+
+  // Mod-Enter из defaultKeymap (insertBlankLine) не должен перебивать применение
+  it('Mod-Enter в поле редактора применяет запрос, а не вставляет строку', async () => {
+    const onApply = vi.fn();
+    useEditorStore.setState({ text: 'select 1' });
+    render(<SqlEditor onApply={onApply} />);
+    const user = userEvent.setup();
+    const editor = await waitFor(() => {
+      const el = document.querySelector('.cm-content');
+      if (el instanceof HTMLElement) return el;
+      throw new Error('редактор не загрузился');
+    });
+    await user.click(editor);
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    expect(onApply).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().text).toBe('select 1');
   });
 });

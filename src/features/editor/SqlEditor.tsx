@@ -1,6 +1,6 @@
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
 import { type Diagnostic, setDiagnostics } from '@codemirror/lint';
-import type { Extension } from '@codemirror/state';
+import { type Extension, Prec } from '@codemirror/state';
 import { EditorView, hoverTooltip, keymap, type ViewUpdate } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
@@ -76,15 +76,18 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
         schema: schema ? buildSchemaSpec(schema) : undefined,
       }),
       EditorView.contentAttributes.of({ 'aria-label': 'SQL-запрос' }),
-      keymap.of([
-        {
-          key: 'Mod-Enter',
-          run: () => {
-            applyRef.current?.();
-            return true;
+      // Prec.highest: иначе Mod-Enter из defaultKeymap (insertBlankLine) срабатывает раньше
+      Prec.highest(
+        keymap.of([
+          {
+            key: 'Mod-Enter',
+            run: () => {
+              applyRef.current?.();
+              return true;
+            },
           },
-        },
-      ]),
+        ]),
+      ),
       editorTheme(),
       clauseHighlight(),
       hoverExtension,
