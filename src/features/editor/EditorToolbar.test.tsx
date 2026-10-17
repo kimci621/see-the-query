@@ -15,6 +15,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const parserState = vi.hoisted(() => ({ ready: true, release: () => {} }));
 vi.mock('@/features/sql/parser', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/sql/parser')>();
+  // WASM libpg-query грузится асинхронно с импорта; без ожидания под нагрузкой настоящий parseSql
+  // отвечает «WASM module not initialized», операторов 0 и кнопки остаются выключенными
+  await actual.initParser();
   return {
     ...actual,
     isParserReady: () => parserState.ready,
