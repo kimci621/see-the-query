@@ -5,6 +5,8 @@ export interface BoardStore {
   schema: SchemaSnapshot | null;
   visibleTables: string[] | null;
   focused: string[];
+  // Цель рефита камеры: focused или таблицы SELECT-трейса. Рамку не рисует
+  frameTarget: string[];
   highlightedColumns: string[];
   // Колонки трейса: по ним сворачиваются широкие таблицы. Наведённой здесь нет: hover не меняет ширину ноды
   queryColumns: string[];
@@ -33,6 +35,7 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   schema: null,
   visibleTables: null,
   focused: [],
+  frameTarget: [],
   highlightedColumns: [],
   queryColumns: [],
   expandedTables: [],
@@ -44,12 +47,20 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   setVisibleTables: (visibleTables) => set({ visibleTables }),
   // Камера летит только при смене набора: ввод в редакторе вызывает focus на каждый символ
   focus: (tableIds) =>
-    set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds, focusRequest: s.focusRequest + 1 })),
-  // Цель камеры без полёта: SELECT-трейс называет свои таблицы, и рефит при развороте целится в них, а не в прошлый фокус
-  retarget: (tableIds) => set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds })),
+    set((s) =>
+      sameSet(s.focused, tableIds)
+        ? sameSet(s.frameTarget, tableIds)
+          ? s
+          : { frameTarget: tableIds }
+        : { focused: tableIds, frameTarget: tableIds, focusRequest: s.focusRequest + 1 },
+    ),
+  // Цель камеры без полёта и без рамки: SELECT-трейс называет свои таблицы, и рефит при развороте
+  // целится в них, а не в прошлый фокус. Рамка остаётся у DML и курсора во FROM (спека 3.4)
+  retarget: (tableIds) => set((s) => (sameSet(s.frameTarget, tableIds) ? s : { frameTarget: tableIds })),
   // Стартовый кадр урока (спека 3.4): таблицы стартового запроса. Ставится и при том же наборе,
   // доска наводит камеру без полёта
-  frameStart: (tableIds) => set((s) => ({ focused: tableIds, startRequest: s.startRequest + 1 })),
+  frameStart: (tableIds) =>
+    set((s) => ({ focused: tableIds, frameTarget: tableIds, startRequest: s.startRequest + 1 })),
   highlightColumns: (cols) =>
     set((s) => (sameList(s.highlightedColumns, cols) ? s : { highlightedColumns: cols })),
   setQueryColumns: (cols) => set((s) => (sameList(s.queryColumns, cols) ? s : { queryColumns: cols })),

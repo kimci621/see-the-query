@@ -32,6 +32,19 @@ describe('useBoardStore', () => {
     expect(useBoardStore.getState()).toMatchObject({ focused: [], startRequest: 2, focusRequest: 1 });
   });
 
+  it('retarget меняет цель рефита, но не рамку и не камеру; focus того же набора возвращает цель', () => {
+    const s = useBoardStore.getState();
+    s.focus(['public.author']);
+    s.retarget(['public.book']);
+    expect(useBoardStore.getState()).toMatchObject({
+      focused: ['public.author'],
+      frameTarget: ['public.book'],
+      focusRequest: 1,
+    });
+    s.focus(['public.author']);
+    expect(useBoardStore.getState()).toMatchObject({ frameTarget: ['public.author'], focusRequest: 1 });
+  });
+
   it('highlightColumns с тем же списком не меняет состояние', () => {
     useBoardStore.getState().highlightColumns(['public.book.title']);
     const before = useBoardStore.getState();

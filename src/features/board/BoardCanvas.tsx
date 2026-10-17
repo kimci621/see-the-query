@@ -241,7 +241,7 @@ function useCamera(
   }, [focusRequest, flow]);
 
   // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
-  // При смене урока цель рефита - focused, то есть новый стартовый кадр. Первый замер ноды
+  // Цель рефита - frameTarget: при смене урока это новый стартовый кадр. Первый замер ноды
   // не считается, его вписывает эффект выше. Свёртку старта при сохранённой камере не вписываем,
   // без сохранённой вписываем без полёта: select * стартового запроса разворачивает таблицу уже после кадра
   // biome-ignore lint/correctness/useExhaustiveDependencies: tableWidths служит только триггером, ширины читаем из flow
@@ -257,7 +257,7 @@ function useCamera(
     const start = startFold.current?.fold === foldKey() ? startFold.current : null;
     if (!changed || start?.keep) return;
     if (!start) startFold.current = null;
-    const ids = useBoardStore.getState().focused;
+    const ids = useBoardStore.getState().frameTarget;
     const duration = start ? 0 : undefined;
     void flow.fitView(ids.length > 0 ? focusFrame(ids, duration) : boardFrame(nodes, duration));
   }, [tableWidths, nodes, flow]);
@@ -276,7 +276,7 @@ function useCamera(
     if (!pendingFit.current) return;
     pendingFit.current = false;
     startFold.current = null;
-    const ids = useBoardStore.getState().focused;
+    const ids = useBoardStore.getState().frameTarget;
     void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(flow.getNodes()));
   }, [width, flow]);
 

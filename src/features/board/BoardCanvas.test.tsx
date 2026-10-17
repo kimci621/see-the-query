@@ -235,6 +235,19 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 400 }));
   });
 
+  it('разворот после SELECT-трейса вписывает его таблицы, а не прошлый фокус', () => {
+    renderBoard();
+    measure('public.book', 756);
+    act(() => {
+      useBoardStore.getState().focus(['public.author']);
+      useBoardStore.getState().retarget(['public.book']);
+      useBoardStore.getState().expandTables(['public.book']);
+    });
+    measure('public.book', 1188);
+    expect(fitNodes()).toEqual(['public.book']);
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
+  });
+
   it('сохранённая камера урока важнее стартового кадра', async () => {
     const saved = { x: 12, y: 34, zoom: 1.5 };
     useLessonStore.getState().setViewport('unknown', saved);

@@ -99,7 +99,7 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().focused.toSorted()).toEqual(['public.author', 'public.book']);
   });
 
-  it('трейс SELECT меняет цель рефита на свои таблицы, но камеру не двигает', async () => {
+  it('трейс SELECT меняет цель рефита на свои таблицы, но камеру и рамку не двигает', async () => {
     render(<EditorPane />);
     act(() => useBoardStore.getState().focus(['public.author']));
     const requests = useBoardStore.getState().focusRequest;
@@ -109,7 +109,8 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     };
     act(() => useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration()));
     await act(async () => undefined);
-    expect(useBoardStore.getState().focused).toEqual(['public.book']);
+    expect(useBoardStore.getState().frameTarget).toEqual(['public.book']);
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
     expect(useBoardStore.getState().focusRequest).toBe(requests);
   });
 
