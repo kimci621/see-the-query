@@ -19,7 +19,7 @@ test('запрос: результат и фокус на доске', async ({ 
   await openLesson(page);
   const started = Date.now();
   await setEditorText(page, 'select title, price from book');
-  await expect(page.getByTestId('result-count')).toHaveText('11', { timeout: 5000 });
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 5000 });
   const elapsed = Date.now() - started;
   // критерий фазы: 250 мс debounce + превью; в CI запас, локально логируем
   console.log(`превью заняло ${elapsed} мс`);
@@ -27,6 +27,24 @@ test('запрос: результат и фокус на доске', async ({ 
   await expect(page.getByTestId('field-price')).toBeVisible();
   // NULL-плашка в результате
   expect(await page.locator('[data-kind="null"]').count()).toBeGreaterThan(0);
+});
+
+test('широкий результат: значения под своими заголовками', async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await openLesson(page);
+  await setEditorText(page, 'select * from book');
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 5000 });
+  const grid = page.getByRole('table', { name: 'Результат запроса' });
+  // 700px: панель уже 864px (9 колонок по 96px), результат прокручивается
+  // колонки book: book_id, title, author_id, category_id, price (индекс 4)
+  await grid.evaluate((el) => el.scrollBy(300, 0));
+  // таблица реально поехала вбок, иначе проверка ничего не доказывает
+  expect(await grid.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const head = await page.getByTestId('field-price').boundingBox();
+  const cell = await page.getByTestId('cell-0-4').boundingBox();
+  expect(head).not.toBeNull();
+  expect(cell).not.toBeNull();
+  expect(Math.abs((head?.x ?? 0) - (cell?.x ?? 99999))).toBeLessThan(2);
 });
 
 test('ошибка Postgres: подчёркнуто и объяснено', async ({ page }) => {
@@ -41,7 +59,7 @@ test('ошибка Postgres: подчёркнуто и объяснено', asyn
   await expect(page.getByTestId('pg-explain-title')).toContainText(/колонк/iu);
   // ошибка парсинга не мигает: после исправления панель возвращается
   await setEditorText(page, 'select name from author');
-  await expect(page.getByTestId('result-count')).toHaveText('6', { timeout: 5000 });
+  await expect(page.getByTestId('result-count')).toHaveText('6 строк', { timeout: 5000 });
 });
 
 test('Tab выводит фокус из редактора к тулбару', async ({ page }) => {

@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { rowsWord } from '@/features/tracer/captions';
 import { useSceneStore } from '@/stores/scene';
 import { MessagesList } from './MessagesList';
 import { ResultGrid } from './ResultGrid';
@@ -32,7 +33,7 @@ export function ResultsPanel() {
           </TabsList>
           {result && (
             <Badge variant="secondary" data-testid="result-count">
-              {isDml ? `${result.command}: затронуто ${count}` : count}
+              {isDml ? `${result.command}: ${count}` : rowsWord(count)}
             </Badge>
           )}
           {trace && (
@@ -41,7 +42,10 @@ export function ResultsPanel() {
         </div>
         <TabsContent value="result" className="mt-0 min-h-0 flex-1">
           {result ? (
-            <ResultGrid result={result} emptyHint={isDml ? undefined : '0 строк'} />
+            <ResultGrid
+              result={result}
+              emptyHint={isDml ? `${result.command} не возвращает строк. Затронуто: ${count}` : '0 строк'}
+            />
           ) : trace?.error ? (
             <div className="grid h-full place-items-center text-sm text-muted-foreground">
               Запрос не выполнен, см. «Сообщения»
