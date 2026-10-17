@@ -112,7 +112,7 @@
     --sidebar-accent: oklch(0.97 0 0);
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar-ring: oklch(0.55 0 0);
     /* Состояния строк на сцене: смысл одинаковый во всём приложении */
     --kept: oklch(0.48 0.13 150);
     --kept-bg: oklch(0.95 0.05 150);
@@ -182,7 +182,7 @@
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar-ring: oklch(0.65 0 0);
     --kept: oklch(0.78 0.15 150);
     --kept-bg: oklch(0.32 0.06 150);
     --dropped: oklch(0.72 0.17 25);

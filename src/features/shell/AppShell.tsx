@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -35,6 +35,8 @@ export function AppShell() {
   const phone = useMediaQuery('(max-width: 639px)');
   const [forceOpen, setForceOpen] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
+  // Урок, при котором открыли Sheet: по нему решаем, куда вернуть фокус после закрытия
+  const openedFor = useRef(lessonId);
 
   // Выбрали урок (ссылка, поиск, «дальше») или экран стал шире: Sheet закрываем, иначе он остаётся
   // над теорией или сам откроется при возврате на узкий экран
@@ -57,7 +59,7 @@ export function AppShell() {
       <main className="flex h-svh flex-col items-center justify-center gap-4 bg-background p-6 text-center text-foreground">
         <h1 className="text-lg font-semibold">see-the-query рассчитан на экран от 1024 px</h1>
         <p className="text-sm text-muted-foreground">
-          Откройте на ноутбуке или планшете: на телефоне доска не поместится.
+          Открой на ноутбуке или планшете: на телефоне доска не поместится.
         </p>
         <Button variant="outline" onClick={() => setForceOpen(true)}>
           Всё равно открыть
@@ -83,17 +85,27 @@ export function AppShell() {
                 <LessonSidebar activeId={lessonId} onOpenSearch={() => setCommandOpen(true)} />
               </PanelErrorBoundary>
             </ResizablePanel>
-            <ResizableHandle />
+            <ResizableHandle aria-label="Ширина списка уроков" />
           </>
         )}
         {!focusMode && (
           <>
             <ResizablePanel id="theory" defaultSize={`${mainLayout[1]}%`} minSize="20%">
               <PanelErrorBoundary key={lessonId} name="Теория">
-                <TheoryPane meta={meta} onOpenLessons={narrow ? () => setLessonsOpen(true) : undefined} />
+                <TheoryPane
+                  meta={meta}
+                  onOpenLessons={
+                    narrow
+                      ? () => {
+                          openedFor.current = lessonId;
+                          setLessonsOpen(true);
+                        }
+                      : undefined
+                  }
+                />
               </PanelErrorBoundary>
             </ResizablePanel>
-            <ResizableHandle />
+            <ResizableHandle aria-label="Граница теории и доски" />
           </>
         )}
         <ResizablePanel id="workspace" defaultSize={`${mainLayout[2]}%`} minSize="25%">
@@ -104,7 +116,19 @@ export function AppShell() {
       </ResizablePanelGroup>
       {narrow && (
         <Sheet open={lessonsOpen} onOpenChange={setLessonsOpen}>
-          <SheetContent side="left" className="gap-0 p-0">
+          <SheetContent
+            side="left"
+            className="gap-0 p-0"
+            // Sheet открыт не через SheetTrigger, сам Radix фокус не вернёт: после выбора урока
+            // фокус на его заголовке, иначе на кнопке «Уроки». Ушли в поиск: фокус у поиска
+            onCloseAutoFocus={(e) => {
+              e.preventDefault();
+              if (commandOpen) return;
+              document
+                .getElementById(lessonId === openedFor.current ? 'lessons-button' : 'lesson-title')
+                ?.focus();
+            }}
+          >
             <SheetTitle className="sr-only">Уроки</SheetTitle>
             <SheetDescription className="sr-only">Список уроков по главам</SheetDescription>
             <LessonSidebar

@@ -80,7 +80,7 @@ export function ResultsPanel() {
             <span className="ml-auto font-mono text-xs text-muted-foreground">{trace.timingMs} мс</span>
           )}
         </div>
-        <TabsContent value="result" className="mt-0 min-h-0 flex-1">
+        <TabsContent value="result" tabIndex={-1} className="mt-0 min-h-0 flex-1">
           {parseDbError ? (
             <div className="h-full overflow-auto p-2">
               <ErrorCard error={parseDbError} sql={text} />
@@ -100,7 +100,7 @@ export function ResultsPanel() {
             </div>
           )}
         </TabsContent>
-        <TabsContent value="messages" className="mt-0 min-h-0 flex-1">
+        <TabsContent value="messages" tabIndex={-1} className="mt-0 min-h-0 flex-1">
           <MessagesList trace={trace} parseError={parseDbError ? { error: parseDbError, sql: text } : null} />
         </TabsContent>
       </Tabs>

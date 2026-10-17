@@ -131,6 +131,8 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
       ref={ref}
       value={text}
       theme="none"
+      // корень на всю панель: .cm-editor высотой с панель, рамка фокуса обводит всё поле
+      className="h-full"
       height="100%"
       indentWithTab={false}
       extensions={extensions}

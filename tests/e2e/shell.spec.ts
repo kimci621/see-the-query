@@ -113,3 +113,57 @@ test.describe('тулбар не обрезается на узком экран
     expect(apply).toBeLessThanOrEqual(panel);
   });
 });
+
+test('200% текста на 1024x768: поле редактора, «Применить» и заголовок теории на месте', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  // крупный текст браузера: корневой размер шрифта 200% ещё до старта приложения
+  await page.addInitScript(() => {
+    document.addEventListener('readystatechange', () => {
+      document.documentElement.style.fontSize = '200%';
+    });
+  });
+  await page.goto('/l/select-basics');
+  const content = page.locator('.cm-content');
+  await expect(content).toBeVisible({ timeout: 20_000 });
+
+  // редактор сжат до минимума: доска забирает всё, что может
+  await page.getByRole('separator', { name: 'Высота доски' }).focus();
+  await page.keyboard.press('End');
+  await page.getByRole('separator', { name: 'Граница редактора и результата' }).focus();
+  await page.keyboard.press('Home');
+
+  // в поле редактора помещаются хотя бы 2 строки
+  const lineHeight = await content.evaluate((el) => Number.parseFloat(getComputedStyle(el).lineHeight));
+  const scroller = await page.locator('.cm-scroller').boundingBox();
+  expect(scroller?.height ?? 0).toBeGreaterThanOrEqual(lineHeight * 2);
+
+  // CodeMirror занимает всю панель: рамка фокуса обводит поле, а не строку
+  const editorBox = await page.locator('.cm-editor').boundingBox();
+  const slotBox = await page.locator('.editor-pane > div').first().boundingBox();
+  expect(Math.abs((editorBox?.height ?? 0) - (slotBox?.height ?? 1))).toBeLessThan(2);
+
+  // «Применить» целиком внутри региона «Редактор»
+  const region = await page.getByRole('region', { name: 'Редактор' }).boundingBox();
+  const apply = await page.getByTestId('apply-button').boundingBox();
+  expect(region).not.toBeNull();
+  expect(apply).not.toBeNull();
+  if (region && apply) {
+    expect(apply.x).toBeGreaterThanOrEqual(region.x);
+    expect(apply.y).toBeGreaterThanOrEqual(region.y);
+    expect(apply.x + apply.width).toBeLessThanOrEqual(region.x + region.width + 0.5);
+    expect(apply.y + apply.height).toBeLessThanOrEqual(region.y + region.height + 0.5);
+  }
+
+  // заголовок урока переносится и не шире своей колонки
+  const h1 = page.getByRole('heading', { level: 1 });
+  const overflow = await h1.evaluate((el) => {
+    const panel = el.closest('[data-slot="resizable-panel"]');
+    return {
+      h1: el.getBoundingClientRect().right,
+      panel: panel?.getBoundingClientRect().right ?? 0,
+      scroll: el.scrollWidth - el.clientWidth,
+    };
+  });
+  expect(overflow.scroll).toBeLessThanOrEqual(0);
+  expect(overflow.h1).toBeLessThanOrEqual(overflow.panel);
+});

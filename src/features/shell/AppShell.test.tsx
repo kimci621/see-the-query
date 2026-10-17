@@ -95,11 +95,19 @@ describe('AppShell', () => {
     expect(screen.getByRole('region', { name: 'Доска' })).toBeInTheDocument();
   });
 
-  it('правая колонка из четырёх панелей', async () => {
+  it('правая колонка из трёх панелей, у ручек ресайза есть имена', async () => {
     renderAt('/l/how-to-use');
-    for (const name of ['Доска', 'Таймлайн', 'Редактор', 'Результат']) {
+    for (const name of ['Доска', 'Редактор', 'Результат']) {
       expect(await screen.findByRole('region', { name })).toBeInTheDocument();
     }
+    expect(screen.queryByRole('region', { name: 'Таймлайн' })).toBeNull();
+    const handles = screen.getAllByRole('separator').map((el) => el.getAttribute('aria-label'));
+    expect(handles).toEqual([
+      'Ширина списка уроков',
+      'Граница теории и доски',
+      'Высота доски',
+      'Граница редактора и результата',
+    ]);
   });
 
   it('⌘\\ прячет теорию и возвращает её обратно', async () => {
@@ -138,6 +146,27 @@ describe('AppShell', () => {
     await user.click(within(dialog).getByRole('link', { name: /SELECT: колонки, выражения, алиасы/ }));
     expect(router.state.location.pathname).toBe('/l/select-basics');
     expect(screen.queryByRole('dialog', { name: 'Уроки' })).not.toBeInTheDocument();
+  });
+
+  it('закрытый Sheet возвращает фокус на кнопку «Уроки», выбор урока ставит фокус на его заголовок', async () => {
+    mockMedia(['(max-width: 1023px)']);
+    const user = userEvent.setup();
+    renderAt('/l/how-to-use');
+    await screen.findByText(/Заглушка урока/);
+    await user.click(screen.getByRole('button', { name: 'Уроки' }));
+    await screen.findByRole('dialog', { name: 'Уроки' });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Уроки' })).toHaveFocus());
+
+    await user.click(screen.getByRole('button', { name: 'Уроки' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Уроки' });
+    await user.click(within(dialog).getByRole('button', { name: /^4\./ }));
+    await user.click(within(dialog).getByRole('link', { name: /SELECT: колонки, выражения, алиасы/ }));
+    const title = await screen.findByRole('heading', {
+      level: 1,
+      name: 'SELECT: колонки, выражения, алиасы',
+    });
+    await waitFor(() => expect(title).toHaveFocus());
   });
 
   it('Sheet не открывается сам после перехода узкий -> широкий -> узкий', async () => {

@@ -55,3 +55,19 @@
 .vs-board[data-far] .vs-table-name {
   font-size: 24px;
 }
+
+/* Фокус с клавиатуры на таблице доски: тот же акцент, что у «затронуто», контраст ≥ 3:1 */
+.vs-board .react-flow__node:focus-visible {
+  outline: 2px solid var(--touched);
+  outline-offset: 2px;
+}
+
+/* Атрибуция React Flow остаётся (лицензия), но не спорит с доской */
+.vs-board .react-flow__attribution {
+  background: transparent;
+  font-size: 11px;
+}
+
+.vs-board .react-flow__attribution a {
+  color: var(--muted-foreground);
+}

@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { getLesson } from '@/features/lessons/registry';
+import { isTypingTarget } from '@/features/shell/useGlobalHotkeys';
 import { clauseAt } from '@/features/sql/clauses';
 import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
@@ -97,12 +98,13 @@ export function EditorPane() {
   const applyRef = useRef(applyCurrent);
   applyRef.current = applyCurrent;
 
-  // Глобальные горячие клавиши ⌘Z (вне редактора) и ⌘⏎
+  // Глобальные горячие клавиши ⌘Z и ⌘⏎. В полях ввода (редактор, поиск) и в диалогах
+  // клавиши принадлежат им: в редакторе ⌘Z отменяет набор, ⌘⏎ ловит keymap CodeMirror
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || (e.target instanceof Element && e.target.closest('[role=dialog]')))
+        return;
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ') {
-        const el = document.activeElement;
-        if (el instanceof HTMLElement && el.closest('.cm-editor')) return; // внутри редактора - undo набора
         e.preventDefault();
         void sandbox?.undo().catch((err: unknown) => notifyDbError(err, useEditorStore.getState().text));
       }

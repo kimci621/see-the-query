@@ -8,12 +8,25 @@ import { ResultsPanel } from '@/features/results/ResultsPanel';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
-// Панели правой колонки; панель без содержимого показывает подсказку-заглушку
+// Панели правой колонки, порядок совпадает с rightLayout; панель без содержимого показывает подсказку-заглушку.
+// handle - имя ручки под панелью. Таймлайн вернётся отдельной панелью в Ф6.
+// Минимум редактора в rem: при крупном тексте (200%) поле и тулбар не схлопываются
 const PANELS = [
-  { id: 'board', title: 'Доска', hint: 'Здесь будет доска с таблицами', minSize: 25 },
-  { id: 'timeline', title: 'Таймлайн', hint: 'Шаги выполнения запроса', minSize: 5 },
-  { id: 'editor', title: 'Редактор', hint: 'SQL-редактор', minSize: 10 },
-  { id: 'results', title: 'Результат', hint: 'Результат запроса и сообщения', minSize: 8 },
+  {
+    id: 'board',
+    title: 'Доска',
+    hint: 'Здесь будет доска с таблицами',
+    minSize: '25%',
+    handle: 'Высота доски',
+  },
+  {
+    id: 'editor',
+    title: 'Редактор',
+    hint: 'SQL-редактор',
+    minSize: '9rem',
+    handle: 'Граница редактора и результата',
+  },
+  { id: 'results', title: 'Результат', hint: 'Результат запроса и сообщения', minSize: '8%', handle: null },
 ] as const;
 
 function BoardSlot() {
@@ -47,12 +60,7 @@ export function BoardPane() {
       }}
     >
       {PANELS.map((panel, index) => (
-        <PanelSlot
-          key={panel.id}
-          last={index === PANELS.length - 1}
-          size={rightLayout[index] ?? 25}
-          {...panel}
-        >
+        <PanelSlot key={panel.id} size={rightLayout[index] ?? 25} {...panel}>
           {SLOTS[panel.id]}
         </PanelSlot>
       ))}
@@ -64,14 +72,14 @@ function PanelSlot(props: {
   id: string;
   title: string;
   hint: string;
-  minSize: number;
+  minSize: string;
   size: number;
-  last: boolean;
+  handle: string | null;
   children?: ReactNode;
 }) {
   return (
     <>
-      <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={`${props.minSize}%`}>
+      <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={props.minSize}>
         <section
           aria-label={props.title}
           className={
@@ -83,7 +91,7 @@ function PanelSlot(props: {
           {props.children ?? props.hint}
         </section>
       </ResizablePanel>
-      {!props.last && <ResizableHandle />}
+      {props.handle && <ResizableHandle aria-label={props.handle} />}
     </>
   );
 }

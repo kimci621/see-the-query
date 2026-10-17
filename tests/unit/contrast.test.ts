@@ -26,6 +26,7 @@ const TEXT: [string, string, number][] = [
 // Нетекстовые индикаторы
 const NON_TEXT: [string, string, number][] = [
   ['ring', 'background', 3.0],
+  ['sidebar-ring', 'sidebar', 3.0],
   ['touched', 'card', 3.0],
 ];
 

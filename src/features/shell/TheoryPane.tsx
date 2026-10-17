@@ -15,15 +15,17 @@ export function TheoryPane({
   onOpenLessons?: () => void;
 }) {
   return (
-    <ScrollArea className="h-full">
+    // Radix кладёт содержимое в display: table, и оно растёт по самой широкой строке (код, длинное слово).
+    // Блок держит теорию в ширине колонки: при 200% текста заголовок переносится, код скроллится внутри
+    <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:block!">
       {onOpenLessons && (
         <div className="px-8 pt-4">
-          <Button variant="outline" size="sm" onClick={onOpenLessons}>
+          <Button id="lessons-button" variant="outline" size="sm" onClick={onOpenLessons}>
             <Menu className="size-4" aria-hidden /> Уроки
           </Button>
         </div>
       )}
-      <article className="prose prose-neutral max-w-none px-8 py-6 dark:prose-invert">
+      <article className="prose prose-neutral max-w-none px-8 py-6 break-words dark:prose-invert">
         {meta ? (
           <LessonView key={meta.id} meta={meta} />
         ) : (

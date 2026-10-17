@@ -108,7 +108,7 @@ function BoardFlow() {
         ariaLabelConfig={ariaLabelConfig}
         edgesFocusable={false}
         elementsSelectable={false}
-        minZoom={0.05}
+        minZoom={0.25}
         maxZoom={2}
         onMoveEnd={(event, viewport) => {
           // event = null у программных движений (fitView), их не запоминаем

@@ -9,7 +9,8 @@ async function openLesson(page: Page) {
 
 async function setEditorText(page: Page, text: string) {
   const editor = page.locator('.cm-content');
-  await editor.click();
+  // поле редактора во всю панель: кликаем в первую строку, а не в центр, где может висеть автокомплит
+  await editor.click({ position: { x: 8, y: 8 } });
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.press('Backspace');
   await page.keyboard.insertText(text);

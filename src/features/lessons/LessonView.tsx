@@ -38,7 +38,10 @@ export function LessonView({ meta }: { meta: LessonMeta }) {
     <>
       <header className="not-prose mb-6">
         <p className="font-mono text-sm text-muted-foreground">{meta.number}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{meta.title}</h1>
+        {/* tabIndex -1: сюда переводим фокус после выбора урока в Sheet */}
+        <h1 id="lesson-title" tabIndex={-1} className="text-2xl font-semibold tracking-tight">
+          {meta.title}
+        </h1>
       </header>
       <Suspense fallback={<LessonSkeleton />}>
         <Content />

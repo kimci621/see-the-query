@@ -44,6 +44,23 @@ describe('useSettingsStore', () => {
     expect(s.focusMode).toBe(false);
   });
 
+  it('раскладка версии 1 (с таймлайном, 4 панели) мигрирует в 3 панели, остальное сохраняется', async () => {
+    localStorage.setItem(
+      'vs-settings',
+      JSON.stringify({
+        state: { theme: 'dark', mainLayout: [20, 30, 50], rightLayout: [55, 8, 22, 15], focusMode: true },
+        version: 1,
+      }),
+    );
+    await useSettingsStore.persist.rehydrate();
+    const s = useSettingsStore.getState();
+    expect(s.rightLayout).toEqual([52, 18, 30]);
+    expect(s.theme).toBe('dark');
+    expect(s.mainLayout).toEqual([20, 30, 50]);
+    expect(s.focusMode).toBe(true);
+    useSettingsStore.setState({ theme: 'system', mainLayout: DEFAULT_MAIN_LAYOUT, focusMode: false });
+  });
+
   it('toggleFocusMode переключает режим', () => {
     const before = useSettingsStore.getState().focusMode;
     useSettingsStore.getState().toggleFocusMode();

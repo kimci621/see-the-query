@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SCHEMA } from '@/features/editor/__fixtures__/schema';
 import { initParser } from '@/features/sql/parser';
@@ -9,8 +9,9 @@ import { EditorPane } from './EditorPane';
 
 // CodeMirror в этом тесте не нужен: проверяем эффекты связи, редактор подменён
 vi.mock('./SqlEditor', () => ({ SqlEditor: () => null }));
+const sandboxState = vi.hoisted(() => ({ sandbox: null as unknown }));
 vi.mock('@/features/db/SandboxProvider', () => ({
-  useSandbox: () => ({ sandbox: null, status: 'ready', version: null }),
+  useSandbox: () => ({ sandbox: sandboxState.sandbox, status: 'ready', version: null }),
 }));
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
@@ -18,6 +19,7 @@ vi.mock('react-router', async (importOriginal) => ({
 }));
 
 beforeEach(async () => {
+  sandboxState.sandbox = null;
   useEditorStore.setState(useEditorStore.getInitialState(), true);
   useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
   useBoardStore.setState(useBoardStore.getInitialState(), true);
@@ -76,5 +78,48 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     });
     await act(async () => undefined);
     expect(useBoardStore.getState().highlightedColumns).toEqual(['public.book.title']);
+  });
+});
+
+describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
+  const setup = () => {
+    const sandbox = {
+      undo: vi.fn(async () => undefined),
+      apply: vi.fn(async () => []),
+      preview: () => new Promise(() => undefined),
+      journal: () => [],
+      subscribe: () => () => undefined,
+    };
+    sandboxState.sandbox = sandbox;
+    render(
+      <>
+        <EditorPane />
+        <input aria-label="чужое поле" />
+        <div role="dialog">
+          <button type="button">в диалоге</button>
+        </div>
+      </>,
+    );
+    return sandbox;
+  };
+
+  it('⌘Z вне полей ввода отменяет применённый запрос', () => {
+    const sandbox = setup();
+    fireEvent.keyDown(document.body, { code: 'KeyZ', metaKey: true });
+    expect(sandbox.undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('⌘Z и ⌘⏎ в чужом поле ввода и внутри диалога не трогают песочницу', async () => {
+    const sandbox = setup();
+    act(() => useEditorStore.getState().setText('select 1'));
+    const input = document.querySelector('input') as HTMLInputElement;
+    const inDialog = document.querySelector('[role=dialog] button') as HTMLButtonElement;
+    for (const target of [input, inDialog]) {
+      fireEvent.keyDown(target, { code: 'KeyZ', metaKey: true });
+      fireEvent.keyDown(target, { code: 'Enter', ctrlKey: true });
+    }
+    await act(async () => undefined);
+    expect(sandbox.undo).not.toHaveBeenCalled();
+    expect(sandbox.apply).not.toHaveBeenCalled();
   });
 });
