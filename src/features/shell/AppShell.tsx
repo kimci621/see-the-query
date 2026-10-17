@@ -80,7 +80,8 @@ export function AppShell() {
       >
         {!narrow && (
           <>
-            <ResizablePanel id="sidebar" defaultSize={`${mainLayout[0]}%`} minSize="10%" maxSize="30%">
+            {/* Минимум в rem растёт с размером текста: при 200% «Поиск» и названия уроков не обрезаются */}
+            <ResizablePanel id="sidebar" defaultSize={`${mainLayout[0]}%`} minSize="12rem" maxSize="30%">
               <PanelErrorBoundary name="Темы">
                 <LessonSidebar activeId={lessonId} onOpenSearch={() => setCommandOpen(true)} />
               </PanelErrorBoundary>

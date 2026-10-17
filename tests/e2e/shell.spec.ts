@@ -166,6 +166,16 @@ test('200% текста на 1024x768: поле редактора, «Приме
   });
   expect(overflow.scroll).toBeLessThanOrEqual(0);
   expect(overflow.h1).toBeLessThanOrEqual(overflow.panel);
+
+  // сайдбар растёт со шрифтом: «Поиск» не обрезан, от названия урока видно больше номера
+  const search = page.getByRole('button', { name: /Поиск/ });
+  expect(await search.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  const title = await page
+    .getByRole('navigation', { name: 'Уроки', exact: true })
+    .getByRole('link', { name: /SELECT/ })
+    .locator('span.truncate')
+    .evaluate((el) => ({ width: el.clientWidth, em: Number.parseFloat(getComputedStyle(el).fontSize) }));
+  expect(title.width).toBeGreaterThanOrEqual(title.em * 4);
 });
 
 test('reduced motion: Dialog и Sheet открываются без анимации', async ({ page }) => {
