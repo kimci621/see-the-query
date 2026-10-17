@@ -61,6 +61,15 @@
     --color-deleted: var(--deleted);
     --color-deleted-bg: var(--deleted-bg);
     --color-board-dot: var(--board-dot);
+    --color-touched: var(--touched);
+    --color-touched-fg: var(--touched-fg);
+    --color-sql-keyword: var(--sql-keyword);
+    --color-sql-string: var(--sql-string);
+    --color-sql-number: var(--sql-number);
+    --color-sql-comment: var(--sql-comment);
+    --color-sql-identifier: var(--sql-identifier);
+    --color-sql-operator: var(--sql-operator);
+    --color-sql-function: var(--sql-function);
     --color-group-1: var(--group-1);
     --color-group-2: var(--group-2);
     --color-group-3: var(--group-3);
@@ -84,13 +93,13 @@
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
+    --muted-foreground: oklch(0.52 0 0);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
+    --destructive: oklch(0.5 0.22 27);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --ring: oklch(0.55 0 0);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -105,21 +114,32 @@
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
     /* Состояния строк на сцене: смысл одинаковый во всём приложении */
-    --kept: oklch(0.56 0.15 150);
+    --kept: oklch(0.48 0.13 150);
     --kept-bg: oklch(0.95 0.05 150);
-    --dropped: oklch(0.56 0.2 27);
+    --dropped: oklch(0.53 0.2 27);
     --dropped-bg: oklch(0.95 0.035 27);
     --match: oklch(0.52 0.2 280);
     --match-bg: oklch(0.95 0.035 280);
-    --null: oklch(0.58 0.01 260);
+    --null: oklch(0.5 0.01 260);
     --null-bg: oklch(0.965 0.004 260);
-    --new: oklch(0.55 0.13 165);
+    --new: oklch(0.47 0.11 165);
     --new-bg: oklch(0.95 0.045 165);
-    --changed: oklch(0.6 0.15 75);
+    --changed: oklch(0.5 0.12 75);
     --changed-bg: oklch(0.96 0.06 90);
-    --deleted: oklch(0.56 0.2 27);
+    --deleted: oklch(0.53 0.2 27);
     --deleted-bg: oklch(0.95 0.035 27);
     --board-dot: oklch(0.85 0 0);
+    /* Акцент «затронуто»: те же оттенок и роль, что у --sql-keyword */
+    --touched: oklch(0.5 0.19 258);
+    --touched-fg: oklch(0.985 0 0);
+    /* Палитра SQL в редакторе и тексте уроков */
+    --sql-keyword: oklch(0.48 0.17 258);
+    --sql-string: oklch(0.47 0.12 150);
+    --sql-number: oklch(0.5 0.13 50);
+    --sql-comment: var(--muted-foreground);
+    --sql-identifier: var(--foreground);
+    --sql-operator: oklch(0.45 0 0);
+    --sql-function: oklch(0.47 0.15 300);
     /* Категориальная палитра групп и партиций */
     --group-1: oklch(0.6 0.16 250);
     --group-2: oklch(0.65 0.17 45);
@@ -149,7 +169,7 @@
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: oklch(0.65 0 0);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -178,6 +198,15 @@
     --deleted: oklch(0.72 0.17 25);
     --deleted-bg: oklch(0.32 0.07 25);
     --board-dot: oklch(0.35 0 0);
+    --touched: oklch(0.74 0.14 250);
+    --touched-fg: oklch(0.2 0 0);
+    --sql-keyword: oklch(0.78 0.13 258);
+    --sql-string: oklch(0.8 0.12 150);
+    --sql-number: oklch(0.8 0.12 50);
+    --sql-comment: var(--muted-foreground);
+    --sql-identifier: var(--foreground);
+    --sql-operator: oklch(0.75 0 0);
+    --sql-function: oklch(0.78 0.13 300);
     --group-1: oklch(0.72 0.14 250);
     --group-2: oklch(0.75 0.15 45);
     --group-3: oklch(0.74 0.14 150);
@@ -190,7 +219,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
     }
   body {
     @apply bg-background text-foreground;

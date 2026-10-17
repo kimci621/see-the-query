@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { block } from './contrast';
 
 const css = readFileSync('src/index.css', 'utf8');
 
@@ -7,15 +8,11 @@ const SEMANTIC = ['kept', 'dropped', 'match', 'null', 'new', 'changed', 'deleted
 const TOKENS = [
   ...SEMANTIC.flatMap((t) => [t, `${t}-bg`]),
   'board-dot',
+  'touched',
+  'touched-fg',
+  ...['keyword', 'string', 'number', 'comment', 'identifier', 'operator', 'function'].map((t) => `sql-${t}`),
   ...Array.from({ length: 8 }, (_, i) => `group-${i + 1}`),
 ];
-
-// Содержимое первого блока с данным селектором
-function block(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`(^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
-  return match?.[2] ?? '';
-}
 
 describe('дизайн-токены', () => {
   it.each(TOKENS)('--%s задан в светлой и тёмной теме', (token) => {
