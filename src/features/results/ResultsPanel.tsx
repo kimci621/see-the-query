@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { DbError } from '@/features/db/types';
+import { type DbError, hasRowCount } from '@/features/db/types';
 import { explainError } from '@/features/errors/explain';
-import { rowsWord } from '@/features/tracer/captions';
+import { rowsWord } from '@/lib/plural';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
@@ -32,6 +32,8 @@ export function ResultsPanel() {
 
   const count = result ? (result.rows.length > 0 ? result.rows.length : (result.rowCount ?? 0)) : 0;
   const isDml = result != null && result.command != null && result.command !== 'SELECT';
+  // у DDL числа строк нет: «CREATE: 0» вводит в заблуждение
+  const counted = hasRowCount(result?.command);
   const schema = useBoardStore((s) => s.schema);
 
   // Что озвучить скринридеру: итог выполнения или заголовок ошибки (ErrorCard сам не role="alert")
@@ -42,9 +44,10 @@ export function ResultsPanel() {
         ? { error: trace.error, sql: trace.sql }
         : null;
     if (err) return `Ошибка: ${explainError(err.error, { sql: err.sql, schema }).title}`;
-    if (result) return isDml ? `${result.command}: ${count}` : rowsWord(count);
+    if (result)
+      return isDml ? (counted ? `${result.command}: ${count}` : (result.command ?? '')) : rowsWord(count);
     return '';
-  }, [parseDbError, text, trace, schema, result, isDml, count]);
+  }, [parseDbError, text, trace, schema, result, isDml, counted, count]);
   // Задержка 1000 мс: пока человек печатает, превью пересчитывается на каждый символ, а объявлять нужно итог
   const [announced, setAnnounced] = useState('');
   useEffect(() => {
@@ -73,7 +76,7 @@ export function ResultsPanel() {
           </TabsList>
           {result && (
             <Badge variant="secondary" data-testid="result-count">
-              {isDml ? `${result.command}: ${count}` : rowsWord(count)}
+              {isDml ? (counted ? `${result.command}: ${count}` : result.command) : rowsWord(count)}
             </Badge>
           )}
           {trace && (
@@ -88,7 +91,11 @@ export function ResultsPanel() {
           ) : result ? (
             <ResultGrid
               result={result}
-              emptyHint={isDml ? `${result.command} не возвращает строк. Затронуто: ${count}` : '0 строк'}
+              emptyHint={
+                isDml
+                  ? `${result.command} не возвращает строк.${counted ? ` Затронуто: ${count}` : ''}`
+                  : '0 строк'
+              }
             />
           ) : trace?.error ? (
             <div className="h-full overflow-auto p-2">

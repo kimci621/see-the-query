@@ -8,6 +8,9 @@ export interface QueryResult {
   command?: string; // 'SELECT', 'INSERT', ...
   rowCount?: number;
 }
+// Число строк осмысленно только у этих команд; у DDL (CREATE, ALTER, DROP) PGlite отдаёт rowCount 0
+export const hasRowCount = (command: string | undefined) =>
+  command !== undefined && /^(SELECT|INSERT|UPDATE|DELETE|MERGE)$/.test(command);
 export interface DbError {
   code: string; // SQLSTATE или наш код VS001/VS002
   message: string;

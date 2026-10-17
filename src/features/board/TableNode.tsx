@@ -4,7 +4,7 @@ import { memo, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '@/components/ui/badge';
 import type { ColumnInfo } from '@/features/db/introspect';
-import { plural } from '@/features/tracer/captions';
+import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';

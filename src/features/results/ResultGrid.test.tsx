@@ -10,6 +10,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => {
     const size = estimateSize();
     return {
+      measureElement: () => undefined,
       getTotalSize: () => count * size,
       getVirtualItems: () =>
         Array.from({ length: count }, (_, i) => ({
@@ -96,6 +97,13 @@ describe('ResultsPanel', () => {
     useSceneStore.setState({ trace: trace({ fields: [], rows: [], command: 'INSERT', rowCount: 1 }) });
     render(<ResultsPanel />);
     expect(screen.getByTestId('result-empty')).toHaveTextContent('INSERT не возвращает строк. Затронуто: 1');
+  });
+
+  it('DDL: ни «CREATE: 0» в бейдже, ни «Затронуто: 0» в подсказке', () => {
+    useSceneStore.setState({ trace: trace({ fields: [], rows: [], command: 'CREATE', rowCount: 0 }) });
+    render(<ResultsPanel />);
+    expect(screen.getByTestId('result-count')).toHaveTextContent(/^CREATE$/);
+    expect(screen.getByTestId('result-empty')).toHaveTextContent(/^CREATE не возвращает строк\.$/);
   });
 
   it('бейдж счётчика: число и слово', () => {

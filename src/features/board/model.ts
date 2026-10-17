@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { FkInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
-import { rowsWord } from '@/features/tracer/captions';
+import { rowsWord } from '@/lib/plural';
 import {
   autoLayout,
   foldColumns,

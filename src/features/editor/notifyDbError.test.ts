@@ -15,6 +15,17 @@ describe('notifyDbError', () => {
     );
   });
 
+  it('код вне словаря: SQLSTATE в заголовке, текст один раз', () => {
+    notifyDbError(
+      new DbException({ code: '2BP01', message: 'cannot drop table author' }),
+      'drop table author',
+    );
+    expect(toast.error).toHaveBeenLastCalledWith('Postgres отклонил запрос (2BP01)', {
+      description: 'cannot drop table author',
+      style: { whiteSpace: 'pre-line' },
+    });
+  });
+
   it('не ошибка БД: «Не получилось» и текст', () => {
     notifyDbError(new Error('boom'), '');
     expect(toast.error).toHaveBeenLastCalledWith('Не получилось', { description: 'Error: boom' });
@@ -44,9 +55,9 @@ describe('notifyApplied', () => {
     expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { description: 'INSERT: 1 строка' });
   });
 
-  it('команда без rowCount: только команда', () => {
-    notifyApplied([res('CREATE TABLE')]);
-    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { description: 'CREATE TABLE' });
+  it('DDL: только команда, без «0 строк» (так PGlite отдаёт CREATE)', () => {
+    notifyApplied([res('CREATE', 0)]);
+    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { description: 'CREATE' });
   });
 
   it('пустой результат: «Выполнено» без описания', () => {

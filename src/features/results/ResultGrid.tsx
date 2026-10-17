@@ -14,6 +14,7 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
+    // оценка для первого кадра; высоту строки замеряет measureElement, при крупном тексте браузера она растёт
     estimateSize: () => 28,
     overscan: 12,
     initialRect: { width: 800, height: 400 },
@@ -66,11 +67,13 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
             return (
               <div
                 key={item.key}
+                ref={virtualizer.measureElement}
+                data-index={item.index}
                 role="row"
                 aria-rowindex={item.index + 2}
                 data-testid={`row-${item.index}`}
                 className="absolute left-0 flex w-full font-mono text-xs hover:bg-muted/50"
-                style={{ top: item.start, height: item.size, minWidth }}
+                style={{ top: item.start, minWidth }}
               >
                 {row.map((cell, i) => (
                   <Cell key={result.fields[i]?.name ?? i} row={item.index} col={i} value={cell} />

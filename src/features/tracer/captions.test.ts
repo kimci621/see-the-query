@@ -1,21 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { captions, limitLabel, plural } from './captions';
+import { captions, limitLabel } from './captions';
 
 describe('captions', () => {
-  it('склонение по числу', () => {
-    const w = (n: number) => plural(n, 'строка', 'строки', 'строк');
-    expect([1, 2, 5, 11, 12, 21, 22, 111, 0].map(w)).toEqual([
-      'строка',
-      'строки',
-      'строк',
-      'строк',
-      'строк',
-      'строка',
-      'строки',
-      'строк',
-      'строк',
-    ]);
-  });
   it('подписи стадий', () => {
     expect(captions.scan('book', 'b', 11)).toBe('FROM book AS b: 11 строк');
     expect(captions.filter(11, 7, 1)).toBe('WHERE: осталось 7 из 11 строк, UNKNOWN у 1');

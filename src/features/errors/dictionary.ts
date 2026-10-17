@@ -247,12 +247,12 @@ export const DICTIONARY: Record<string, Entry> = {
     return {
       title: `${name} заполняет сам Postgres`,
       body: identity
-        ? `Колонка ${name} объявлена как GENERATED ALWAYS AS IDENTITY: номер для неё выдаёт Postgres, чужое значение он не принимает.`
+        ? `Колонка ${name} объявлена как GENERATED ALWAYS AS IDENTITY: номер для неё выдаёт Postgres, а явное значение она отвергает всегда.`
         : `Колонка ${name} вычисляемая (GENERATED ALWAYS AS): Postgres считает её сам из других колонок.`,
       suggestion: !identity
         ? `Убери ${name} из запроса или передай DEFAULT.`
         : err.message.includes('updated')
-          ? `Убери ${name} из SET: номер строки UPDATE не меняет.`
+          ? `Убери ${name} из SET: номер строки UPDATE не меняет. Нужно сбросить номер: SET ${name} = DEFAULT.`
           : `Убери ${name} из INSERT, номер появится сам. Нужен именно свой номер: допиши OVERRIDING SYSTEM VALUE перед VALUES.`,
       highlight: { tableIds: owners.map((t) => t.id), columns: owners.map((t) => `${t.id}.${name}`) },
     };

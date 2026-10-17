@@ -8,7 +8,7 @@ export function editorTheme(): Extension[] {
   return [
     EditorView.theme({
       '&': {
-        fontSize: '13px',
+        fontSize: '0.8125rem',
         backgroundColor: 'var(--editor-bg)',
         color: 'var(--editor-fg)',
         fontFamily: 'var(--font-mono)',

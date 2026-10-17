@@ -111,3 +111,26 @@ test('применить, отменить и применить всё', async 
   await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
   await expect(authorCount).toHaveText('6', { timeout: 5000 });
 });
+
+test('крупный шрифт браузера: строка результата не обрезает ячейку', async ({ page }) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await openLesson(page);
+  await setEditorText(page, 'select title from book');
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 5000 });
+  const { row, content } = await page.getByTestId('cell-0-0').evaluate((el) => ({
+    row: el.parentElement?.getBoundingClientRect().height ?? 0,
+    content: el.scrollHeight,
+  }));
+  expect(row).toBeGreaterThanOrEqual(content);
+});
+
+test('крупный шрифт браузера: текст редактора растёт вместе с ним', async ({ page }) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await openLesson(page);
+  const size = await page
+    .locator('.cm-editor')
+    .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBe(26); // 0.8125rem при корне 32px
+});
