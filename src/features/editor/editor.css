@@ -6,22 +6,22 @@
 }
 
 .editor-pane .tok-keyword {
-  color: var(--primary);
+  color: var(--sql-keyword);
   font-weight: 600;
 }
 .editor-pane .tok-string {
-  color: color-mix(in oklab, var(--chart-2, var(--primary)) 70%, var(--foreground));
+  color: var(--sql-string);
 }
 .editor-pane .tok-number {
-  color: color-mix(in oklab, var(--chart-1, var(--primary)) 70%, var(--foreground));
+  color: var(--sql-number);
 }
 .editor-pane .tok-comment {
-  color: var(--muted-foreground);
+  color: var(--sql-comment);
   font-style: italic;
 }
 .editor-pane .tok-identifier {
-  color: var(--foreground);
+  color: var(--sql-identifier);
 }
 .editor-pane .tok-operator {
-  color: var(--muted-foreground);
+  color: var(--sql-operator);
 }

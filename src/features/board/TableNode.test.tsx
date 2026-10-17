@@ -97,6 +97,25 @@ describe('TableNode', () => {
   });
 });
 
+describe('TableNode: акцент touched', () => {
+  beforeEach(() => useBoardStore.setState(useBoardStore.getInitialState(), true));
+
+  it('фокус и подсветка колонок используют touched', () => {
+    render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
+    act(() => {
+      useBoardStore.getState().focus(['public.book']);
+      useBoardStore.getState().highlightColumns(['public.book.title']);
+    });
+    const el = screen.getByTestId('table-node-public.book');
+    expect(el.className).toContain('ring-touched');
+    const head = el.querySelector('[data-column="title"]');
+    expect(head?.className).toContain('bg-touched/15');
+    const cell = el.querySelector('.bg-touched\\/10');
+    expect(cell).not.toBeNull();
+    expect(el.innerHTML).not.toMatch(/primary/);
+  });
+});
+
 describe('columnTitle', () => {
   it('собирает ограничения колонки', () => {
     const [id] = author.columns;

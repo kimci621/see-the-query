@@ -226,14 +226,16 @@
     }
 }
 
-/* Подсветка кода shiki: две темы, переключение классом .dark */
-.shiki,
-.shiki span {
-  color: var(--shiki-light);
-  background-color: var(--shiki-light-bg);
-}
-.dark .shiki,
-.dark .shiki span {
-  color: var(--shiki-dark);
-  background-color: var(--shiki-dark-bg);
+/* Подсветка кода shiki: css-переменные на токенах --sql-*, тема меняется вместе с ними (rehype-code-meta.ts) */
+:root {
+  --shiki-foreground: var(--foreground);
+  --shiki-background: var(--muted);
+  --shiki-token-keyword: var(--sql-keyword);
+  --shiki-token-string: var(--sql-string);
+  --shiki-token-string-expression: var(--sql-string);
+  --shiki-token-constant: var(--sql-number);
+  --shiki-token-comment: var(--sql-comment);
+  --shiki-token-function: var(--sql-function);
+  --shiki-token-punctuation: var(--sql-operator);
+  --shiki-token-parameter: var(--sql-identifier);
 }

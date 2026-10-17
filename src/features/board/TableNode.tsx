@@ -43,7 +43,7 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
       title={columnTitle(column)}
       className={cn(
         'flex shrink-0 flex-col justify-center gap-0.5 border-r px-2 last:border-r-0',
-        highlighted && 'bg-primary/15',
+        highlighted && 'bg-touched/15',
       )}
       style={{ width: COLUMN_WIDTH }}
     >
@@ -79,7 +79,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       data-focused={focused || undefined}
       className={cn(
         'h-full w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',
-        focused && 'ring-2 ring-primary',
+        focused && 'ring-2 ring-touched',
       )}
     >
       <Handle
@@ -123,7 +123,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
               key={c.name}
               className={cn(
                 'flex shrink-0 items-center overflow-hidden px-2',
-                highlighted.includes(c.name) && 'bg-primary/10',
+                highlighted.includes(c.name) && 'bg-touched/10',
               )}
               style={{ width: COLUMN_WIDTH }}
             >

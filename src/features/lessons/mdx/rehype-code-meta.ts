@@ -1,14 +1,17 @@
 import type { Element, ElementContent, Root } from 'hast';
-import { createHighlighter, type Highlighter } from 'shiki';
+import { createCssVariablesTheme, createHighlighter, type Highlighter } from 'shiki';
 
 const LANGS = ['sql', 'bash', 'json', 'typescript'];
 const LANG_CLASS = /^language-(.+)$/;
+
+// Цвета берутся из переменных --shiki-* (index.css), смена темы идёт через токены --sql-*
+const sqlVars = createCssVariablesTheme({ name: 'sql-vars', variablePrefix: '--shiki-' });
 
 let highlighter: Promise<Highlighter> | null = null;
 
 // Один подсветчик на процесс сборки
 function getHighlighter(): Promise<Highlighter> {
-  highlighter ??= createHighlighter({ themes: ['github-light', 'github-dark'], langs: LANGS });
+  highlighter ??= createHighlighter({ themes: [sqlVars], langs: LANGS });
   return highlighter;
 }
 
@@ -57,8 +60,7 @@ export function rehypeCodeMeta() {
 
       const highlighted = hl.codeToHast(source, {
         lang: loaded.includes(lang) ? lang : 'text',
-        themes: { light: 'github-light', dark: 'github-dark' },
-        defaultColor: false,
+        theme: sqlVars,
       });
       const pre = highlighted.children.find((c): c is Element => c.type === 'element' && c.tagName === 'pre');
       if (!pre) continue;

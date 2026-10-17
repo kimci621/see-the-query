@@ -21,7 +21,7 @@ export function editorTheme(): Extension[] {
       '.cm-activeLine': { backgroundColor: 'color-mix(in oklab, var(--editor-fg) 6%, transparent)' },
       '.cm-activeLineGutter': { backgroundColor: 'color-mix(in oklab, var(--editor-fg) 8%, transparent)' },
       '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-        backgroundColor: 'color-mix(in oklab, var(--primary) 24%, transparent)',
+        backgroundColor: 'color-mix(in oklab, var(--touched) 24%, transparent)',
       },
       '.cm-cursor': { borderLeftColor: 'var(--editor-fg)' },
       '.cm-tooltip': {
@@ -34,7 +34,7 @@ export function editorTheme(): Extension[] {
         color: 'var(--accent-foreground)',
       },
       '.cm-clauseActive': {
-        backgroundColor: 'color-mix(in oklab, var(--primary) 14%, transparent)',
+        backgroundColor: 'color-mix(in oklab, var(--touched) 14%, transparent)',
         borderRadius: '2px',
       },
     }),

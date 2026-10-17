@@ -23,6 +23,12 @@ describe('rehypeCodeMeta', () => {
     expect(html).toContain('class="shiki');
   });
 
+  it('shiki красит через css-переменные', async () => {
+    const html = await render('```sql\nselect 1\n```\n');
+    expect(html).toContain('var(--shiki-token-keyword)');
+    expect(html).not.toContain('--shiki-light');
+  });
+
   it('кириллица в коде не портится', async () => {
     const html = await render("```sql\nselect 'Привет';\n```\n");
     expect(html).toContain('data-code="select &#x27;Привет&#x27;;"');
