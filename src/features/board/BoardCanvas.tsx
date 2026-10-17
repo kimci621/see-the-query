@@ -126,7 +126,7 @@ function BoardFlow() {
             <MapIcon />
           </ControlButton>
         </Controls>
-        {miniMap && <MiniMap pannable zoomable ariaLabel="Миникарта доски" />}
+        {miniMap && <MiniMap pannable zoomable />}
       </ReactFlow>
     </div>
   );

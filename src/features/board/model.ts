@@ -86,6 +86,8 @@ export function buildNodes(
         data: { table: b.t },
         // Фокус при Tab попадает на обёртку ноды React Flow, подпись нужна ей
         ariaLabel: tableAriaLabel(b.t),
+        // По умолчанию React Flow называет роль «node»
+        domAttributes: { 'aria-roledescription': 'таблица' },
         width: b.w,
         height: b.h,
       });

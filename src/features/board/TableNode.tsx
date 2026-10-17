@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';
 import { COLUMN_HEADER_HEIGHT, COLUMN_WIDTH, HEADER_HEIGHT, MAX_VISIBLE_ROWS, ROW_HEIGHT } from './layout';
-import { type TableFlowNode, tableAriaLabel } from './model';
+import type { TableFlowNode } from './model';
 
 export function columnTitle(c: ColumnInfo): string {
   return [
@@ -79,11 +79,8 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   const footer = { height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` };
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: fieldset ломает раскладку ноды, группа нужна только ради подписи
     <div
       data-testid={`table-node-${id}`}
-      role="group"
-      aria-label={tableAriaLabel(table)}
       data-focused={focused || undefined}
       className={cn(
         'vs-table h-full w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',

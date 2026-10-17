@@ -136,13 +136,11 @@ describe('TableNode: читаемость', () => {
 });
 
 describe('TableNode: доступность', () => {
-  it('корень ноды: подпись с числом строк и всеми колонками', () => {
+  it('подпись ноды живёт на обёртке React Flow, внутренний корень без дубля', () => {
     render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
     const el = screen.getByTestId('table-node-public.book');
-    expect(el).toHaveAttribute(
-      'aria-label',
-      `Таблица public.book, 11 строк, колонки: ${book.columns.map((c) => c.name).join(', ')}`,
-    );
+    expect(el).not.toHaveAttribute('aria-label');
+    expect(el).not.toHaveAttribute('role');
   });
 
   it('флаг NN расшифрован через abbr', () => {

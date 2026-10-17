@@ -39,3 +39,38 @@ test('тёмная тема: контролы доски и редактор н�
   const textColor = await page.locator('.cm-content').evaluate((el) => getComputedStyle(el).color);
   expect(keywordColor).not.toBe(textColor);
 });
+
+test('тёмная тема: автокомплит редактора на токенах, а не на светлой теме CodeMirror', async ({ page }) => {
+  await page.goto('/l/select-basics');
+  await expect(page.locator('.cm-content')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Тема оформления' }).click();
+  await page.getByRole('menuitemradio', { name: 'Тёмная' }).click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' sel');
+  const tooltip = page.locator('.cm-tooltip-autocomplete');
+  await expect(tooltip).toBeVisible();
+
+  // эталон: вычисленные токены, посчитанные браузером так же, как для стилей редактора
+  const token = (name: string) =>
+    page.evaluate((n) => {
+      const probe = document.createElement('div');
+      probe.style.backgroundColor = `var(--${n})`;
+      document.body.append(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }, name);
+  const popover = await token('popover');
+  const accent = await token('accent');
+  expect(await tooltip.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(popover);
+  expect(popover).not.toBe('rgb(245, 245, 245)');
+  const selected = await tooltip
+    .locator('li[aria-selected]')
+    .first()
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(selected).toBe(accent);
+  expect(selected).not.toBe('rgb(17, 119, 204)');
+});

@@ -36,9 +36,10 @@ export function AppShell() {
   const [forceOpen, setForceOpen] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
 
-  // Выбрали урок (ссылка, поиск, «дальше»): Sheet закрываем, иначе он остаётся над теорией
-  // biome-ignore lint/correctness/useExhaustiveDependencies: закрываем именно при смене урока
-  useEffect(() => setLessonsOpen(false), [lessonId]);
+  // Выбрали урок (ссылка, поиск, «дальше») или экран стал шире: Sheet закрываем, иначе он остаётся
+  // над теорией или сам откроется при возврате на узкий экран
+  // biome-ignore lint/correctness/useExhaustiveDependencies: закрываем именно при смене урока и ширины
+  useEffect(() => setLessonsOpen(false), [lessonId, narrow]);
 
   // Вкладка называется по уроку: так её различают в истории и при переключении окон
   useEffect(() => {
@@ -54,7 +55,7 @@ export function AppShell() {
   if (phone && !forceOpen) {
     return (
       <main className="flex h-svh flex-col items-center justify-center gap-4 bg-background p-6 text-center text-foreground">
-        <p className="text-lg font-semibold">see-the-query рассчитан на экран от 1024 px</p>
+        <h1 className="text-lg font-semibold">see-the-query рассчитан на экран от 1024 px</h1>
         <p className="text-sm text-muted-foreground">
           Откройте на ноутбуке или планшете: на телефоне доска не поместится.
         </p>

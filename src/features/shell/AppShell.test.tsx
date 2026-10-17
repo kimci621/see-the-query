@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +16,32 @@ function mockMedia(matching: string[]) {
     const mql = real.call(window, query);
     return Object.assign(mql, { matches: matching.includes(query) });
   });
+}
+
+// Как mockMedia, но список совпадений можно менять на лету: слушатели change получают событие
+function mockResizableMedia(initial: string[]) {
+  let matching = initial;
+  const listeners = new Set<{ query: string; fn: () => void }>();
+  vi.spyOn(window, 'matchMedia').mockImplementation(
+    (query: string) =>
+      ({
+        get matches() {
+          return matching.includes(query);
+        },
+        media: query,
+        addEventListener: (_: string, fn: () => void) => listeners.add({ query, fn }),
+        removeEventListener: (_: string, fn: () => void) => {
+          for (const l of listeners) if (l.fn === fn) listeners.delete(l);
+        },
+      }) as unknown as MediaQueryList,
+  );
+  return (next: string[]) =>
+    act(() => {
+      const prev = matching;
+      matching = next;
+      // слушатель получает событие только по запросу, чей результат изменился
+      for (const { query, fn } of listeners) if (prev.includes(query) !== next.includes(query)) fn();
+    });
 }
 
 function renderAt(url: string) {
@@ -111,6 +137,33 @@ describe('AppShell', () => {
     await user.click(within(dialog).getByRole('button', { name: /^4\./ }));
     await user.click(within(dialog).getByRole('link', { name: /SELECT: колонки, выражения, алиасы/ }));
     expect(router.state.location.pathname).toBe('/l/select-basics');
+    expect(screen.queryByRole('dialog', { name: 'Уроки' })).not.toBeInTheDocument();
+  });
+
+  it('Sheet не открывается сам после перехода узкий -> широкий -> узкий', async () => {
+    const NARROW = '(max-width: 1023px)';
+    const resize = mockResizableMedia([NARROW]);
+    const user = userEvent.setup();
+    renderAt('/l/how-to-use');
+    await screen.findByText(/Заглушка урока/);
+    await user.click(screen.getByRole('button', { name: 'Уроки' }));
+    await screen.findByRole('dialog', { name: 'Уроки' });
+    resize([]);
+    expect(screen.queryByRole('dialog', { name: 'Уроки' })).not.toBeInTheDocument();
+    resize([NARROW]);
+    expect(screen.queryByRole('dialog', { name: 'Уроки' })).not.toBeInTheDocument();
+  });
+
+  it('поиск из Sheet: Sheet закрывается, фокус в поле поиска', async () => {
+    mockMedia(['(max-width: 1023px)']);
+    const user = userEvent.setup();
+    renderAt('/l/how-to-use');
+    await screen.findByText(/Заглушка урока/);
+    await user.click(screen.getByRole('button', { name: 'Уроки' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Уроки' });
+    await user.click(within(sheet).getByRole('button', { name: /Поиск/ }));
+    const input = await screen.findByPlaceholderText(/Урок, тема/);
+    await waitFor(() => expect(input).toHaveFocus());
     expect(screen.queryByRole('dialog', { name: 'Уроки' })).not.toBeInTheDocument();
   });
 

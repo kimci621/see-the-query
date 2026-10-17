@@ -74,6 +74,15 @@ test('Tab с доски фокусирует ноду таблицы с подп
   await expect(page.getByTestId('rf__node-public.book')).toBeFocused();
 });
 
+test('поиск из Sheet на узком экране: фокус в поле поиска', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto('/l/how-to-use');
+  await page.getByRole('button', { name: 'Уроки' }).click();
+  await page.getByRole('dialog', { name: 'Уроки' }).getByRole('button', { name: /Поиск/ }).click();
+  await expect(page.getByPlaceholder('Урок, тема, ключевое слово SQL...')).toBeFocused();
+  await expect(page.getByRole('dialog', { name: 'Уроки' })).toBeHidden();
+});
+
 test.describe('тулбар не обрезается на узком экране и при 200% текста', () => {
   const panelRight = async (page: import('@playwright/test').Page) => {
     const panel = await page.getByRole('region', { name: 'Редактор' }).boundingBox();

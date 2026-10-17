@@ -8,12 +8,21 @@ import {
   GROUP_PADDING,
   normalizeTableId,
   resolvePositions,
+  tableAriaLabel,
 } from './model';
 
 describe('normalizeTableId', () => {
   it('голое имя уходит в public, полное остаётся', () => {
     expect(normalizeTableId('book')).toBe('public.book');
     expect(normalizeTableId('shop.cart')).toBe('shop.cart');
+  });
+});
+
+describe('tableAriaLabel', () => {
+  it('таблица, число строк и все колонки', () => {
+    expect(tableAriaLabel(book)).toBe(
+      `Таблица public.book, 11 строк, колонки: ${book.columns.map((c) => c.name).join(', ')}`,
+    );
   });
 });
 
@@ -55,6 +64,12 @@ describe('buildNodes', () => {
         y: (group?.position.y ?? 0) + (node?.position.y ?? 0),
       }).toEqual(positions[t.id]);
     }
+  });
+
+  it('таблица: подпись и роль для скринридера на обёртке ноды', () => {
+    const node = nodes.find((n) => n.id === 'public.book');
+    expect(node?.ariaLabel).toBe(tableAriaLabel(book));
+    expect(node?.domAttributes).toEqual({ 'aria-roledescription': 'таблица' });
   });
 
   it('рамка охватывает таблицы с отступом и местом под подпись', () => {

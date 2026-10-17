@@ -19,6 +19,8 @@ const TEXT: [string, string, number][] = [
   ['touched', 'background', 4.5],
   ['touched-fg', 'touched', 4.5],
   ...SQL.map((t): [string, string, number] => [`sql-${t}`, 'background', 4.5]),
+  // код в уроках лежит на --muted
+  ...SQL.map((t): [string, string, number] => [`sql-${t}`, 'muted', 4.5]),
 ];
 
 // Нетекстовые индикаторы
@@ -35,6 +37,10 @@ describe('контраст токенов (WCAG AA)', () => {
 
   it('полупрозрачный цвет смешивается с фоном', () => {
     expect(contrast('oklch(1 0 0 / 0%)', 'oklch(0 0 0)')).toBeCloseTo(1, 5);
+  });
+
+  it('полупрозрачный чёрный 50% на белом: серый 0.5 в гамма-sRGB, 1.05 / (0.214 + 0.05) ≈ 3.98', () => {
+    expect(Math.abs(contrast('oklch(0 0 0 / 50%)', 'oklch(1 0 0)') - 3.98)).toBeLessThan(0.05);
   });
 
   describe.each([':root', '.dark'] as const)('%s', (theme) => {

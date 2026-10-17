@@ -14,7 +14,7 @@ export function ErrorCard({ error, sql }: { error: DbError; sql: string }) {
   const explanation = useMemo(() => explainError(error, { sql, schema }), [error, sql, schema]);
   const { fix } = explanation;
   // кнопка есть, только когда правка применима к текущему тексту
-  const fixed = fix ? applyFix(text, sql, error, fix.to) : null;
+  const fixed = fix ? applyFix(text, sql, error, fix) : null;
 
   return (
     <div

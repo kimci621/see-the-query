@@ -19,12 +19,17 @@ export function parseDiagnostic(text: string, err: { message: string; position: 
 }
 
 // Абсолютная позиция ошибки Postgres в тексте редактора: position 1-based от начала оператора.
+// Postgres считает в кодовых точках, JS в UTF-16: эмодзи перед ошибкой сдвинули бы позицию.
 // ponytail: оператор ищется первым вхождением текста; дубликат оператора в редакторе
 // подчеркнёт первый. Обновление - хранить from в трейсе, когда Ф5 строит трейс из ParsedStatement.
 function pgOffset(text: string, stmtSql: string, err: DbError): number | null {
   if (err.position == null) return null;
   const stmtFrom = text.indexOf(stmtSql);
-  return stmtFrom < 0 ? null : stmtFrom + err.position - 1;
+  if (stmtFrom < 0) return null;
+  const before = Array.from(stmtSql)
+    .slice(0, err.position - 1)
+    .join('');
+  return stmtFrom + before.length;
 }
 
 export function pgDiagnostic(text: string, stmtSql: string, err: DbError): EditorDiagnostic | null {
@@ -32,13 +37,19 @@ export function pgDiagnostic(text: string, stmtSql: string, err: DbError): Edito
   return at == null ? null : { ...wordAt(text, at), message: err.message };
 }
 
-// Правка-подсказка: заменяет слово под позицией ошибки на `to`. null, если позиция не стоит
-// на начале простого имени: так не испортим текст ни на пробеле, ни на `table.column`.
-export function applyFix(text: string, stmtSql: string, err: DbError, to: string): string | null {
+// Правка-подсказка: заменяет слово под позицией ошибки на `fix.to`. null, если позиция не стоит
+// на начале простого имени (ни пробел, ни `table.column`) или слово не равно `fix.from`.
+export function applyFix(
+  text: string,
+  stmtSql: string,
+  err: DbError,
+  fix: { from: string; to: string },
+): string | null {
   const at = pgOffset(text, stmtSql, err);
   if (at == null) return null;
   const word = /^[\w$]+/.exec(text.slice(at))?.[0];
   if (!word || /[\w$]/.test(text[at - 1] ?? '')) return null;
   if (text[at + word.length] === '.') return null;
-  return text.slice(0, at) + to + text.slice(at + word.length);
+  if (word.toLowerCase() !== fix.from.toLowerCase()) return null;
+  return text.slice(0, at) + fix.to + text.slice(at + word.length);
 }
