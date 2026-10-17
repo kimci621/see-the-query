@@ -53,6 +53,43 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().focused).toEqual(['public.author']);
   });
 
+  const traceOf = (sql: string, statementType: 'select' | 'insert' | 'update' | 'delete') => ({
+    sql,
+    statementType,
+    mode: 'final-only' as const,
+    touched: { tableIds: [], columns: [], expanded: [] },
+    stages: [],
+    result: null,
+    error: null,
+    notices: [],
+    timingMs: 1,
+  });
+
+  it.each([
+    ["insert into author (name) values ('Ада')", 'insert'],
+    ["update author set name = 'Ада' where id in (select author_id from book)", 'update'],
+    ['delete from author using book where book.author_id = author.id', 'delete'],
+  ] as const)('трейс DML фокусирует целевую таблицу: %s', async (sql, type) => {
+    render(<EditorPane />);
+    act(() =>
+      useSceneStore.getState().setTrace(traceOf(sql, type), useSceneStore.getState().nextGeneration()),
+    );
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
+  });
+
+  it('трейс SELECT не двигает фокус', async () => {
+    render(<EditorPane />);
+    act(() => useBoardStore.getState().focus(['public.author']));
+    act(() =>
+      useSceneStore
+        .getState()
+        .setTrace(traceOf('select * from book', 'select'), useSceneStore.getState().nextGeneration()),
+    );
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
+  });
+
   it('hoveredColumn подсвечивает колонку, уход с hover возвращает подсветку трейса', async () => {
     const trace = {
       sql: 'select title from book',
@@ -151,6 +188,20 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     );
     return sandbox;
   };
+
+  it('⌘⏎ с INSERT фокусирует целевую таблицу после применения', async () => {
+    const sandbox = setup();
+    act(() => {
+      useEditorStore.getState().setText("insert into author (name) values ('Ада')");
+      useEditorStore.getState().setCursor(40);
+    });
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused).toEqual([]);
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    expect(sandbox.apply).toHaveBeenCalledTimes(1);
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
+  });
 
   it('⌘Z вне полей ввода отменяет применённый запрос', () => {
     const sandbox = setup();

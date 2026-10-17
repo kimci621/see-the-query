@@ -37,6 +37,20 @@ export function touchedOf(
   return { tableIds, columns, expanded: tableIds.filter((id) => expanded.has(id)) };
 }
 
+// Целевая таблица INSERT/UPDATE/DELETE (relation оператора, не USING/FROM/подзапросы) в текущей схеме.
+// Для остальных операторов и неизвестной таблицы null
+export function dmlTargetOf(stmt: ParsedStatement, schema: SchemaSnapshot | null): string | null {
+  if (!schema) return null;
+  const body = stmt.ast as unknown as Record<
+    string,
+    { relation?: { relname?: string; schemaname?: string } }
+  >;
+  const rel = (body.InsertStmt ?? body.UpdateStmt ?? body.DeleteStmt)?.relation;
+  if (typeof rel?.relname !== 'string') return null;
+  const ref = { schema: rel.schemaname ?? null, name: rel.relname, alias: null, from: 0, to: 0 };
+  return resolveTable(ref, schema)?.id ?? null;
+}
+
 export function resolveColumn(
   column: ColumnRef,
   tables: RangeRef[],

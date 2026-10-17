@@ -14,11 +14,19 @@ import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
 import { notifyApplied, notifyDbError } from './notifyDbError';
-import { touchedOf } from './touched';
+import { dmlTargetOf, touchedOf } from './touched';
 import { useLiveTrace } from './useLiveTrace';
 
 // CodeMirror тяжёлый: грузим лениво, оболочка его не ждёт (спека 5.12)
 const SqlEditor = lazy(() => import('./SqlEditor').then((m) => ({ default: m.SqlEditor })));
+
+// Фокус на целевую таблицу DML-оператора из текста; для остальных операторов ничего не делает
+function focusDmlTarget(sql: string): void {
+  const parsed = parseSql(sql);
+  const stmt = parsed.ok ? parsed.statements[0] : undefined;
+  const target = stmt && dmlTargetOf(stmt, useBoardStore.getState().schema);
+  if (target) useBoardStore.getState().focus([target]);
+}
 
 export function EditorPane() {
   const { lessonId } = useParams();
@@ -44,6 +52,11 @@ export function EditorPane() {
     );
     board.expandTables(trace?.touched.expanded ?? []);
   }, [hoveredColumn, trace]);
+
+  // INSERT/UPDATE/DELETE: камера летит к целевой таблице, строки базовой доски не двигаются
+  useEffect(() => {
+    if (trace) focusDmlTarget(trace.sql);
+  }, [trace]);
 
   // activeClause при изменении текста или курсора
   useEffect(() => {
@@ -98,7 +111,10 @@ export function EditorPane() {
     if (!stmt) return;
     void sandbox
       .apply(stmt.text)
-      .then(notifyApplied)
+      .then((results) => {
+        notifyApplied(results);
+        focusDmlTarget(stmt.text);
+      })
       .catch((e: unknown) => notifyDbError(e, stmt.text));
   };
 

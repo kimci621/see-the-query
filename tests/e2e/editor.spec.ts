@@ -86,6 +86,8 @@ test('применить, отменить и применить всё', async 
   await page.getByTestId('apply-button').click();
   await expect(page.getByTestId('result-count')).toContainText('1', { timeout: 5000 });
   await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
+  // камера ушла на целевую таблицу оператора
+  await expect(page.getByTestId('table-node-public.author')).toHaveAttribute('data-focused', 'true');
 
   await setEditorText(page, 'select 1');
   // фокус вне редактора: клик по фону страницы
