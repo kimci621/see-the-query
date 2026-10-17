@@ -78,6 +78,23 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().focused).toEqual(['public.author']);
   });
 
+  it('трейс DML не перебивает фокус по курсору в USING', async () => {
+    const sql = 'delete from author using book where book.author_id = author.id';
+    render(<EditorPane />);
+    act(() => {
+      useEditorStore.getState().setText(sql);
+      useEditorStore.getState().setCursor(26); // внутри 'book' в USING
+    });
+    await act(async () => undefined);
+    expect(useEditorStore.getState().activeClause).toBe('using');
+    expect(useBoardStore.getState().focused.toSorted()).toEqual(['public.author', 'public.book']);
+    act(() =>
+      useSceneStore.getState().setTrace(traceOf(sql, 'delete'), useSceneStore.getState().nextGeneration()),
+    );
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focused.toSorted()).toEqual(['public.author', 'public.book']);
+  });
+
   it('трейс SELECT не двигает фокус', async () => {
     render(<EditorPane />);
     act(() => useBoardStore.getState().focus(['public.author']));

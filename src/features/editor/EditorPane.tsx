@@ -54,7 +54,10 @@ export function EditorPane() {
   }, [hoveredColumn, trace]);
 
   // INSERT/UPDATE/DELETE: камера летит к целевой таблице, строки базовой доски не двигаются
+  // Пока курсор в from/into/using, фокус ведёт курсор (ниже): трейс его не перебивает
   useEffect(() => {
+    const clause = useEditorStore.getState().activeClause;
+    if (clause === 'from' || clause === 'into' || clause === 'using') return;
     if (trace) focusDmlTarget(trace.sql);
   }, [trace]);
 
