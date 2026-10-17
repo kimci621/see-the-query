@@ -1,7 +1,7 @@
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
-import { type Diagnostic, linter, setDiagnostics } from '@codemirror/lint';
+import { type Diagnostic, setDiagnostics } from '@codemirror/lint';
 import type { Extension } from '@codemirror/state';
-import { type EditorView, hoverTooltip, keymap, type ViewUpdate } from '@codemirror/view';
+import { EditorView, hoverTooltip, keymap, type ViewUpdate } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { useResolvedTheme } from '@/app/ThemeProvider';
@@ -23,8 +23,6 @@ export interface SqlEditorProps {
   extraExtensions?: Extension[];
 }
 
-// linter(() => []) обязателен: расширение lint регистрирует StateField,
-// в который эффектами кладутся программные диагностики (setDiagnostics, задача 8)
 export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function SqlEditor(
   { onApply, extraExtensions = [] },
   ref,
@@ -79,7 +77,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
         upperCaseKeywords: false,
         schema: schema ? buildSchemaSpec(schema) : undefined,
       }),
-      linter(() => []),
+      EditorView.contentAttributes.of({ 'aria-label': 'SQL-запрос' }),
       keymap.of([
         {
           key: 'Mod-Enter',
@@ -97,7 +95,8 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
     [schema, hoverExtension, extraExtensions],
   );
 
-  // Программные диагностики: lint-расширение уже зарегистрировано в extensions
+  // Программные диагностики: setDiagnostics сам подключает lint-состояние, linter не нужен
+  // (пустой linter через 750 мс затирал бы диагностики)
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -135,6 +134,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
       value={text}
       theme={resolved}
       height="100%"
+      indentWithTab={false}
       extensions={extensions}
       onChange={setText}
       onCreateEditor={(view) => {

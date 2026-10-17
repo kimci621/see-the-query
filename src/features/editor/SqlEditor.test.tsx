@@ -28,4 +28,30 @@ describe('EditorPane', () => {
     expect(useEditorStore.getState().text).toBe('select 1');
     expect(useEditorStore.getState().cursor).toBe(8);
   });
+
+  it('подчёркивание ошибки разбора держится дольше задержки линтера', async () => {
+    render(<EditorPane />);
+    const user = userEvent.setup();
+    const editor = await waitFor(() => {
+      const el = document.querySelector('.cm-content');
+      if (el instanceof HTMLElement) return el;
+      throw new Error('редактор не загрузился');
+    });
+    await user.click(editor);
+    await user.keyboard('select 1');
+    useEditorStore.setState({ parseError: { message: 'syntax error', position: 7 } });
+    // linter откладывает прогон на 750 мс: ждём реальным таймером
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(document.querySelector('.cm-lintRange-error')).not.toBeNull();
+  });
+
+  it('у редактора есть доступное имя', async () => {
+    render(<EditorPane />);
+    const editor = await waitFor(() => {
+      const el = document.querySelector('.cm-content');
+      if (el instanceof HTMLElement) return el;
+      throw new Error('редактор не загрузился');
+    });
+    expect(editor.getAttribute('aria-label')).toBe('SQL-запрос');
+  });
 });

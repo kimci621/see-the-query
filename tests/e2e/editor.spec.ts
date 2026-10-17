@@ -33,12 +33,24 @@ test('ошибка Postgres: подчёркнуто и объяснено', asyn
   await openLesson(page);
   await setEditorText(page, 'select nme from book');
   await expect(page.locator('.cm-lintRange-error')).toBeVisible({ timeout: 5000 });
+  // подчёркивание не затирается отложенным прогоном линтера (750 мс)
+  await page.waitForTimeout(1200);
+  await expect(page.locator('.cm-lintRange-error')).toBeVisible();
   await page.getByRole('tab', { name: 'Сообщения' }).click();
   await expect(page.getByTestId('pg-original')).toContainText('nme');
   await expect(page.getByTestId('pg-explain-title')).toContainText(/колонк/iu);
   // ошибка парсинга не мигает: после исправления панель возвращается
   await setEditorText(page, 'select name from author');
   await expect(page.getByTestId('result-count')).toHaveText('6', { timeout: 5000 });
+});
+
+test('Tab выводит фокус из редактора к тулбару', async ({ page }) => {
+  await openLesson(page);
+  await setEditorText(page, 'select 1');
+  await page.keyboard.press('Tab');
+  // «Отменить» заблокирована при пустом журнале, поэтому первый фокусируемый после редактора - «Сброс»
+  await expect(page.getByTestId('reset-button')).toBeFocused();
+  await expect(page.locator('.cm-content')).toHaveText('select 1');
 });
 
 test('применить, отменить и применить всё', async ({ page }) => {

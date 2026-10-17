@@ -14,6 +14,7 @@ export function editorTheme(): Extension[] {
         fontFamily: 'var(--font-mono)',
         height: '100%',
       },
+      '&.cm-focused': { outline: '2px solid var(--ring)', outlineOffset: '-2px' },
       '.cm-scroller': { overflow: 'auto', lineHeight: '1.6' },
       '.cm-content': { caretColor: 'var(--editor-fg)', padding: '8px 0' },
       '.cm-gutters': { backgroundColor: 'var(--editor-bg)', color: 'var(--editor-muted)', border: 'none' },
