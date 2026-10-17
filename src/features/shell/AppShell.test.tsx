@@ -206,13 +206,23 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: 'Уроки' })).not.toBeInTheDocument();
   });
 
+  it('узкий экран и режим фокуса: «Уроки» остаётся и открывает Sheet', async () => {
+    mockMedia(['(max-width: 80em)']);
+    useSettingsStore.setState({ focusMode: true });
+    const user = userEvent.setup();
+    render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/l/how-to-use'] })} />);
+    expect(screen.queryByText(/Заглушка урока/)).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Уроки' }));
+    expect(await screen.findByRole('dialog', { name: 'Уроки' })).toBeInTheDocument();
+  });
+
   it('ниже 640px заглушка, «Всё равно открыть» её убирает', async () => {
     mockMedia(['(max-width: 80em)', '(max-width: 639px)']);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
-    expect(await screen.findByText('see-the-query рассчитан на экран от 1024 px')).toBeInTheDocument();
+    expect(await screen.findByText('see-the-query рассчитан на экран от 640 px')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Всё равно открыть' }));
-    expect(screen.queryByText('see-the-query рассчитан на экран от 1024 px')).not.toBeInTheDocument();
+    expect(screen.queryByText('see-the-query рассчитан на экран от 640 px')).not.toBeInTheDocument();
     expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
   });
 });

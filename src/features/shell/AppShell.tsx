@@ -1,3 +1,4 @@
+import { Menu } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
@@ -56,10 +57,15 @@ export function AppShell() {
     help: () => setHelpOpen(true),
   });
 
+  const openLessons = () => {
+    openedFor.current = lessonId;
+    setLessonsOpen(true);
+  };
+
   if (phone && !forceOpen) {
     return (
       <main className="flex h-svh flex-col items-center justify-center gap-4 bg-background p-6 text-center text-foreground">
-        <h1 className="text-lg font-semibold">see-the-query рассчитан на экран от 1024 px</h1>
+        <h1 className="text-lg font-semibold">see-the-query рассчитан на экран от 640 px</h1>
         <p className="text-sm text-muted-foreground">
           Открой на ноутбуке или планшете: на телефоне доска не поместится.
         </p>
@@ -97,17 +103,7 @@ export function AppShell() {
             {/* Минимум в rem: при крупном тексте строка урока не короче ~30 знаков. Уступает доска */}
             <ResizablePanel id="theory" defaultSize={`${mainLayout[1]}%`} minSize="20rem">
               <PanelErrorBoundary key={lessonId} name="Теория">
-                <TheoryPane
-                  meta={meta}
-                  onOpenLessons={
-                    narrow
-                      ? () => {
-                          openedFor.current = lessonId;
-                          setLessonsOpen(true);
-                        }
-                      : undefined
-                  }
-                />
+                <TheoryPane meta={meta} onOpenLessons={narrow ? openLessons : undefined} />
               </PanelErrorBoundary>
             </ResizablePanel>
             <ResizableHandle aria-label="Граница теории и доски" />
@@ -119,6 +115,18 @@ export function AppShell() {
           </PanelErrorBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>
+      {/* Узкий экран и режим фокуса: теории с кнопкой «Уроки» нет, кнопка остаётся над доской */}
+      {narrow && focusMode && (
+        <Button
+          id="lessons-button"
+          variant="outline"
+          size="sm"
+          className="fixed top-2 left-2 z-20"
+          onClick={openLessons}
+        >
+          <Menu className="size-4" aria-hidden /> Уроки
+        </Button>
+      )}
       {narrow && (
         <Sheet open={lessonsOpen} onOpenChange={setLessonsOpen}>
           <SheetContent

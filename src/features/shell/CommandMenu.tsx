@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
   CommandDialog,
@@ -17,6 +18,11 @@ export function CommandMenu({
   onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
+  // У диалога нет триггера, Radix сам фокус не вернёт: запоминаем элемент до открытия
+  const returnTo = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    if (open) returnTo.current = document.activeElement;
+  }, [open]);
 
   return (
     <CommandDialog
@@ -24,6 +30,11 @@ export function CommandMenu({
       onOpenChange={onOpenChange}
       title="Поиск по урокам"
       description="Название, номер или тег"
+      onCloseAutoFocus={(e) => {
+        if (!(returnTo.current instanceof HTMLElement) || !returnTo.current.isConnected) return;
+        e.preventDefault();
+        returnTo.current.focus();
+      }}
     >
       <CommandInput placeholder="Урок, тема, ключевое слово SQL..." />
       <CommandList>
