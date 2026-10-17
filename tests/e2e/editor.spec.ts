@@ -37,9 +37,16 @@ test('широкий результат: значения под своими з
   const grid = page.getByRole('table', { name: 'Результат запроса' });
   // 700px: панель уже 864px (9 колонок по 96px), результат прокручивается
   // колонки book: book_id, title, author_id, category_id, price (индекс 4)
-  await grid.evaluate((el) => el.scrollBy(300, 0));
-  // таблица реально поехала вбок, иначе проверка ничего не доказывает
-  expect(await grid.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  // таблица реально поехала вбок, иначе проверка ничего не доказывает;
+  // повторяем, пока панели не досчитали ширину и скролл не стал возможен
+  await expect
+    .poll(() =>
+      grid.evaluate((el) => {
+        el.scrollLeft = 300;
+        return el.scrollLeft;
+      }),
+    )
+    .toBeGreaterThan(0);
   const head = await page.getByTestId('field-price').boundingBox();
   const cell = await page.getByTestId('cell-0-4').boundingBox();
   expect(head).not.toBeNull();
