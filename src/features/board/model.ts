@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { FkInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import { rowsWord } from '@/features/tracer/captions';
 import { autoLayout, isTableVisible, type Positions, schemaNames, tableHeight, tableWidth } from './layout';
 
 // Фокус и подсветку нода читает из useBoardStore, поэтому в data только таблица
@@ -19,6 +20,11 @@ export type FkFlowEdge = Edge<FkEdgeData, 'fk'>;
 
 export const GROUP_PADDING = 24;
 export const GROUP_LABEL = 28;
+
+// Подпись ноды для скринридера: таблица, строк всего (не только показанных), все колонки
+export function tableAriaLabel(t: TableInfo): string {
+  return `Таблица ${t.schema}.${t.name}, ${rowsWord(t.rowCount)}, колонки: ${t.columns.map((c) => c.name).join(', ')}`;
+}
 
 export function normalizeTableId(name: string): string {
   return name.includes('.') ? name : `public.${name}`;
@@ -78,6 +84,8 @@ export function buildNodes(
         parentId: groupId,
         position: { x: b.x - gx, y: b.y - gy },
         data: { table: b.t },
+        // Фокус при Tab попадает на обёртку ноды React Flow, подпись нужна ей
+        ariaLabel: tableAriaLabel(b.t),
         width: b.w,
         height: b.h,
       });

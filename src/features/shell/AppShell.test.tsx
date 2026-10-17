@@ -14,6 +14,18 @@ function renderAt(url: string) {
 }
 
 describe('AppShell', () => {
+  it('корень оболочки это main, заголовок вкладки по уроку', async () => {
+    renderAt('/l/select-basics');
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    expect(document.title).toBe('SELECT: колонки, выражения, алиасы · see-the-query');
+  });
+
+  it('заголовок вкладки без урока: имя продукта', async () => {
+    renderAt('/l/nope');
+    await screen.findByText('Урок не найден');
+    expect(document.title).toBe('see-the-query');
+  });
+
   it('/ уводит на первый урок', async () => {
     const router = renderAt('/');
     expect(

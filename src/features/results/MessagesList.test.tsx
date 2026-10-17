@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SCHEMA } from '@/features/editor/__fixtures__/schema';
@@ -102,5 +102,65 @@ describe('ResultsPanel: ошибка', () => {
     expect(screen.getByTestId('pg-error')).toHaveTextContent('42601');
     expect(screen.getByTestId('pg-original')).toHaveTextContent('syntax error at end of input');
     expect(screen.queryByText(/nme/)).toBeNull();
+  });
+});
+
+describe('ResultsPanel: live-регион', () => {
+  const ok = (rows: number): Trace => ({
+    ...traceWith(null),
+    result: {
+      fields: [{ name: 'n', dataTypeID: 23 }],
+      rows: Array.from({ length: rows }, (_, i) => [i]),
+      command: 'SELECT',
+    },
+  });
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('вежливый sr-only регион, текст появляется через 1000 мс', () => {
+    useSceneStore.setState({ trace: ok(11) });
+    render(<ResultsPanel />);
+    const live = screen.getByTestId('results-live');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    expect(live.className).toContain('sr-only');
+    expect(live).toHaveTextContent('');
+    act(() => vi.advanceTimersByTime(999));
+    expect(live).toBeEmptyDOMElement();
+    act(() => vi.advanceTimersByTime(1));
+    expect(live).toHaveTextContent('11 строк');
+  });
+
+  it('ошибка: «Ошибка: » + заголовок объяснения', () => {
+    useBoardStore.getState().setSchema(SCHEMA);
+    const error = { code: '42703', message: 'column "nme" does not exist', position: 8 };
+    const title = explain.explainError(error, { sql: 'select nme from book', schema: SCHEMA }).title;
+    useSceneStore.setState({ trace: traceWith(error) });
+    render(<ResultsPanel />);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByTestId('results-live')).toHaveTextContent(`Ошибка: ${title}`);
+  });
+
+  it('ошибка разбора при stale объявляется так же', () => {
+    useBoardStore.getState().setSchema(SCHEMA);
+    useSceneStore.setState({ trace: ok(3), stale: true });
+    useEditorStore.setState({
+      text: 'select from',
+      parseError: { message: 'syntax error at end of input', position: 11 },
+    });
+    render(<ResultsPanel />);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByTestId('results-live').textContent).toMatch(/^Ошибка: .+/);
+  });
+
+  it('быстрые смены результата объявляются один раз, последним', () => {
+    useSceneStore.setState({ trace: ok(1) });
+    render(<ResultsPanel />);
+    act(() => vi.advanceTimersByTime(500));
+    act(() => useSceneStore.setState({ trace: ok(5) }));
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.getByTestId('results-live')).toBeEmptyDOMElement();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByTestId('results-live')).toHaveTextContent('5 строк');
   });
 });

@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { DbError } from '@/features/db/types';
+import { explainError } from '@/features/errors/explain';
 import { rowsWord } from '@/features/tracer/captions';
+import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { ErrorCard } from './ErrorCard';
@@ -30,6 +32,25 @@ export function ResultsPanel() {
 
   const count = result ? (result.rows.length > 0 ? result.rows.length : (result.rowCount ?? 0)) : 0;
   const isDml = result != null && result.command != null && result.command !== 'SELECT';
+  const schema = useBoardStore((s) => s.schema);
+
+  // Что озвучить скринридеру: итог выполнения или заголовок ошибки (ErrorCard сам не role="alert")
+  const spoken = useMemo(() => {
+    const err = parseDbError
+      ? { error: parseDbError, sql: text }
+      : trace?.error
+        ? { error: trace.error, sql: trace.sql }
+        : null;
+    if (err) return `Ошибка: ${explainError(err.error, { sql: err.sql, schema }).title}`;
+    if (result) return isDml ? `${result.command}: ${count}` : rowsWord(count);
+    return '';
+  }, [parseDbError, text, trace, schema, result, isDml, count]);
+  // Задержка 1000 мс: пока человек печатает, превью пересчитывается на каждый символ, а объявлять нужно итог
+  const [announced, setAnnounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setAnnounced(spoken), 1000);
+    return () => clearTimeout(t);
+  }, [spoken]);
 
   return (
     <div
@@ -37,6 +58,9 @@ export function ResultsPanel() {
       data-stale={stale || undefined}
       className={stale && !parseDbError ? 'h-full opacity-50' : 'h-full'}
     >
+      <p data-testid="results-live" aria-live="polite" className="sr-only">
+        {announced}
+      </p>
       <Tabs defaultValue="result" className="flex h-full flex-col">
         <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1">
           <TabsList className="h-7">

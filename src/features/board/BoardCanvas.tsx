@@ -29,6 +29,20 @@ import { TableNode } from './TableNode';
 const nodeTypes = { table: TableNode, schemaGroup: SchemaGroupNode };
 const edgeTypes = { fk: FkEdge };
 
+// Подписи React Flow по-русски (ключи из AriaLabelConfig). Описание нод и рёбер заменено:
+// стандартное обещает выбор и перенос, а доска только для чтения
+const NODE_DESCRIPTION = 'Таблица на доске. Только для просмотра.';
+const ariaLabelConfig = {
+  'node.a11yDescription.default': NODE_DESCRIPTION,
+  'node.a11yDescription.keyboardDisabled': NODE_DESCRIPTION,
+  'edge.a11yDescription.default': 'Связь по внешнему ключу. Только для просмотра.',
+  'controls.ariaLabel': 'Управление доской',
+  'controls.zoomIn.ariaLabel': 'Приблизить',
+  'controls.zoomOut.ariaLabel': 'Отдалить',
+  'controls.fitView.ariaLabel': 'Вписать доску',
+  'minimap.ariaLabel': 'Миникарта доски',
+};
+
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
 
@@ -90,7 +104,8 @@ function BoardFlow() {
         onlyRenderVisibleElements
         nodesDraggable={false}
         nodesConnectable={false}
-        nodesFocusable={false}
+        nodesFocusable
+        ariaLabelConfig={ariaLabelConfig}
         edgesFocusable={false}
         elementsSelectable={false}
         minZoom={0.05}

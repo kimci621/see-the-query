@@ -57,7 +57,7 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
         <Badge
           variant="outline"
           data-testid="pg-version"
-          className="absolute right-2 bottom-2 z-10 bg-background"
+          className="absolute top-2 right-2 z-10 bg-background"
         >
           {label}
         </Badge>

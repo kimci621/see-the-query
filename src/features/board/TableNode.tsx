@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';
 import { COLUMN_HEADER_HEIGHT, COLUMN_WIDTH, HEADER_HEIGHT, MAX_VISIBLE_ROWS, ROW_HEIGHT } from './layout';
-import type { TableFlowNode } from './model';
+import { type TableFlowNode, tableAriaLabel } from './model';
 
 export function columnTitle(c: ColumnInfo): string {
   return [
@@ -31,8 +31,13 @@ function ownColumns(all: string[], tableId: string): string[] {
   return all.filter((c) => c.startsWith(prefix)).map((c) => c.slice(prefix.length));
 }
 
-function Flag({ children }: { children: ReactNode }) {
-  return <span className="rounded border px-0.5 leading-none">{children}</span>;
+// Флаг-сокращение с расшифровкой: title для мыши, abbr для скринридера
+function Flag({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <abbr title={title} className="rounded border px-0.5 leading-none no-underline">
+      {children}
+    </abbr>
+  );
 }
 
 function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: boolean }) {
@@ -54,9 +59,9 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
       </div>
       <div className="vs-col-meta flex items-center gap-1 text-[11px] text-muted-foreground">
         <span className="truncate font-mono">{column.type}</span>
-        {!column.nullable && !column.isPk && <Flag>NN</Flag>}
-        {column.isUnique && !column.isPk && <Flag>U</Flag>}
-        {column.checks.length > 0 && <Flag>✓</Flag>}
+        {!column.nullable && !column.isPk && <Flag title="NOT NULL">NN</Flag>}
+        {column.isUnique && !column.isPk && <Flag title="UNIQUE">U</Flag>}
+        {column.checks.length > 0 && <Flag title="CHECK">✓</Flag>}
       </div>
     </div>
   );
@@ -74,8 +79,11 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   const footer = { height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: fieldset ломает раскладку ноды, группа нужна только ради подписи
     <div
       data-testid={`table-node-${id}`}
+      role="group"
+      aria-label={tableAriaLabel(table)}
       data-focused={focused || undefined}
       className={cn(
         'vs-table h-full w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',

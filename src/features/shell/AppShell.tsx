@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useSandbox } from '@/features/db/SandboxProvider';
@@ -28,6 +28,11 @@ export function AppShell() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Вкладка называется по уроку: так её различают в истории и при переключении окон
+  useEffect(() => {
+    document.title = meta ? `${meta.title} · see-the-query` : 'see-the-query';
+  }, [meta]);
+
   useGlobalHotkeys({
     commandMenu: () => setCommandOpen((o) => !o),
     focusMode: toggleFocusMode,
@@ -35,7 +40,7 @@ export function AppShell() {
   });
 
   return (
-    <div className="h-svh w-full overflow-hidden bg-background text-foreground">
+    <main className="h-svh w-full overflow-hidden bg-background text-foreground">
       <ResizablePanelGroup
         orientation="horizontal"
         // В режиме фокуса панелей две: такую раскладку не сохраняем, иначе потеряем ширину теории
@@ -67,6 +72,6 @@ export function AppShell() {
       </ResizablePanelGroup>
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
       <HotkeysHelp open={helpOpen} onOpenChange={setHelpOpen} />
-    </div>
+    </main>
   );
 }

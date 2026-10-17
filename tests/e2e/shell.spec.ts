@@ -54,3 +54,22 @@ test('SQL-блок урока подсвечен и несёт мету', async 
   await expect(pre).toHaveAttribute('data-meta', 'run expect=rows:11');
   await expect(pre).toHaveClass(/shiki/);
 });
+
+test('Tab с доски фокусирует ноду таблицы с подписью', async ({ page }) => {
+  await page.goto('/l/select-basics');
+  await expect(page.getByTestId('rf__node-public.book')).toBeVisible({ timeout: 20_000 });
+  // клик по пустому месту доски, затем Tab: фокус попадает на первую по DOM ноду таблицы
+  const box = await page.getByTestId('board-canvas').boundingBox();
+  if (!box) throw new Error('нет доски');
+  await page.mouse.click(box.x + 4, box.y + 4);
+  await page.keyboard.press('Tab');
+  const focused = page.locator('.react-flow__node-table:focus');
+  await expect(focused).toHaveCount(1);
+  await expect(focused).toHaveAttribute(
+    'aria-label',
+    /^Таблица public\.\w+, \d+ (строк|строки|строка), колонки: \w+/,
+  );
+  // следующий Tab переходит ко второй таблице
+  await page.keyboard.press('Tab');
+  await expect(page.getByTestId('rf__node-public.book')).toBeFocused();
+});

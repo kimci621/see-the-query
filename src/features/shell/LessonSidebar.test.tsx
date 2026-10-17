@@ -6,14 +6,18 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLessonStore } from '@/stores/lesson';
 import { LessonSidebar } from './LessonSidebar';
 
-function renderSidebar(activeId = 'how-to-use', onOpenSearch = vi.fn()) {
-  render(
+function sidebar(activeId: string, onOpenSearch = vi.fn()) {
+  return (
     <MemoryRouter>
       <TooltipProvider>
         <LessonSidebar activeId={activeId} onOpenSearch={onOpenSearch} />
       </TooltipProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderSidebar(activeId = 'how-to-use', onOpenSearch = vi.fn()) {
+  render(sidebar(activeId, onOpenSearch));
   return onOpenSearch;
 }
 
@@ -45,6 +49,20 @@ describe('LessonSidebar', () => {
   it('активный урок помечен', () => {
     renderSidebar('select-basics');
     expect(screen.getByRole('link', { name: /SELECT: колонки/ })).toHaveAttribute('data-active', 'true');
+  });
+
+  it('список глав в навигации «Уроки»', () => {
+    renderSidebar();
+    expect(screen.getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
+  });
+
+  it('смена activeId раскрывает главу нового урока', () => {
+    const { rerender } = render(sidebar('how-to-use'));
+    expect(screen.queryByRole('link', { name: /SELECT: колонки/ })).not.toBeInTheDocument();
+    rerender(sidebar('select-basics'));
+    expect(screen.getByRole('link', { name: /SELECT: колонки/ })).toBeVisible();
+    // ранее открытая глава остаётся открытой
+    expect(screen.getByRole('link', { name: /Как пользоваться доской/ })).toBeVisible();
   });
 
   it('кнопка поиска вызывает onOpenSearch', async () => {
