@@ -5,6 +5,7 @@ export interface ErrorExplanation {
   title: string;
   body: string;
   suggestion?: string;
+  fix?: { from: string; to: string }; // правка в один клик, только если нашлось ближайшее имя
   highlight: { tableIds: string[]; columns: string[] };
 }
 export interface ErrorContext {
@@ -73,6 +74,7 @@ export const DICTIONARY: Record<string, Entry> = {
         ? `Postgres не нашёл таблицу ${name}. Есть: ${names.join(', ')}.`
         : `Postgres не нашёл таблицу ${name}. В базе пока нет ни одной таблицы.`,
       suggestion: guess ? `Может, ${guess}?` : undefined,
+      fix: guess ? { from: name, to: guess } : undefined,
       highlight: { tableIds: ctx.schema?.tables.map((t) => t.id) ?? [], columns: [] },
     };
   },
@@ -97,6 +99,7 @@ export const DICTIONARY: Record<string, Entry> = {
         : guess
           ? `Может, ${guess}?`
           : undefined,
+      fix: !asString && guess ? { from: name, to: guess } : undefined,
       highlight: {
         tableIds: tables.map((t) => t.id),
         columns: tables.flatMap((t) => t.columns.map((c) => `${t.id}.${c.name}`)),

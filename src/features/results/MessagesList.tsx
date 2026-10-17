@@ -1,15 +1,19 @@
-import { explainError } from '@/features/errors/explain';
+import type { DbError } from '@/features/db/types';
 import type { Trace } from '@/features/tracer/types';
-import { useBoardStore } from '@/stores/board';
+import { ErrorCard } from './ErrorCard';
 
-// Сообщения: ошибка Postgres с человеческим объяснением (словарь Ф2) и оригиналом,
-// NOTICE, пустое состояние. Оригинал всегда рядом (спека 5.14).
-export function MessagesList({ trace }: { trace: Trace | null }) {
-  const schema = useBoardStore((s) => s.schema);
-  const error = trace?.error ?? null;
+// Сообщения: карточка ошибки (объяснение словаря и оригинал Postgres), NOTICE, пустое состояние.
+export function MessagesList({
+  trace,
+  parseError = null,
+}: {
+  trace: Trace | null;
+  parseError?: { error: DbError; sql: string } | null; // ошибка разбора недописанного запроса вместо ошибки трейса
+}) {
+  const shown = parseError ?? (trace?.error ? { error: trace.error, sql: trace.sql } : null);
   const notices = trace?.notices ?? [];
 
-  if (!error && notices.length === 0) {
+  if (!shown && notices.length === 0) {
     return (
       <div
         data-testid="messages-empty"
@@ -22,28 +26,9 @@ export function MessagesList({ trace }: { trace: Trace | null }) {
 
   return (
     <div className="h-full overflow-auto p-2">
-      {error && (
-        <div
-          role="alert"
-          data-testid="pg-error"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm"
-        >
-          <p data-testid="pg-explain-title" className="font-semibold text-destructive">
-            {explainError(error, { sql: trace?.sql ?? '', schema }).title}
-          </p>
-          <p data-testid="pg-explain-body" className="mt-1">
-            {explainError(error, { sql: trace?.sql ?? '', schema }).body}
-          </p>
-          <pre
-            data-testid="pg-original"
-            className="mt-2 overflow-auto rounded bg-muted/60 p-2 font-mono text-xs whitespace-pre-wrap"
-          >
-            {error.message}
-          </pre>
-        </div>
-      )}
+      {shown && <ErrorCard error={shown.error} sql={shown.sql} />}
       {notices.length > 0 && (
-        <ul className={error ? 'mt-2' : ''}>
+        <ul className={shown ? 'mt-2' : ''}>
           {notices.map((n, i) => (
             <li
               // biome-ignore lint/suspicious/noArrayIndexKey: notices are plain strings without id

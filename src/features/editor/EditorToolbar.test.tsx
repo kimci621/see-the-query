@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sandbox } from '@/features/db/sandbox';
+import type { Trace } from '@/features/tracer/types';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
@@ -64,6 +65,33 @@ describe('EditorToolbar', () => {
     useSceneStore.setState({ stale: false });
     rerender(<EditorToolbar sandbox={null} onApplyCurrent={() => undefined} />);
     expect(screen.getByTestId('preview-status')).toHaveTextContent('Превью');
+  });
+
+  it('бейдж: ошибка трейса красная, без ошибки «база не меняется», stale важнее ошибки', () => {
+    const trace = {
+      sql: 'select nme',
+      statementType: 'select',
+      mode: 'final-only',
+      touched: { tableIds: [], columns: [] },
+      stages: [],
+      result: null,
+      error: { code: '42703', message: 'x' },
+      notices: [],
+      timingMs: 1,
+    } as unknown as Trace;
+    useSceneStore.setState({ status: 'ready', trace });
+    const { rerender } = render(<EditorToolbar sandbox={null} onApplyCurrent={() => undefined} />);
+    const badge = screen.getByTestId('preview-status');
+    expect(badge).toHaveTextContent('Ошибка');
+    expect(badge).toHaveClass('text-destructive');
+    useSceneStore.setState({ stale: true });
+    rerender(<EditorToolbar sandbox={null} onApplyCurrent={() => undefined} />);
+    expect(badge).toHaveTextContent('Недописан');
+    expect(badge).not.toHaveClass('text-destructive');
+    useSceneStore.setState({ stale: false, trace: { ...trace, error: null } });
+    rerender(<EditorToolbar sandbox={null} onApplyCurrent={() => undefined} />);
+    expect(badge).toHaveTextContent('Превью: база не меняется');
+    expect(badge).not.toHaveClass('text-destructive');
   });
 
   it('«Применить» вызывает onApplyCurrent (единый путь с ⌘⏎), «Сброс» и «Отменить» зовут песочницу', async () => {

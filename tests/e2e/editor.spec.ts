@@ -61,9 +61,10 @@ test('ошибка Postgres: подчёркнуто и объяснено', asyn
   // подчёркивание не затирается отложенным прогоном линтера (750 мс)
   await page.waitForTimeout(1200);
   await expect(page.locator('.cm-lintRange-error')).toBeVisible();
-  await page.getByRole('tab', { name: 'Сообщения' }).click();
+  // карточка видна сразу во вкладке «Результат», без перехода в «Сообщения»
   await expect(page.getByTestId('pg-original')).toContainText('nme');
   await expect(page.getByTestId('pg-explain-title')).toContainText(/колонк/iu);
+  await expect(page.getByTestId('preview-status')).toContainText('Ошибка');
   // ошибка парсинга не мигает: после исправления панель возвращается
   await setEditorText(page, 'select name from author');
   await expect(page.getByTestId('result-count')).toHaveText('6 строк', { timeout: 5000 });

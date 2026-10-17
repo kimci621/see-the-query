@@ -81,6 +81,19 @@ describe('explainError', () => {
     expect(explain('doubleQuoted').suggestion).toBe(`Строку пишут в одинарных кавычках: 'Жюль Верн'.`);
   });
 
+  it('fix: только когда словарь нашёл ближайшее имя', () => {
+    expect(explain('undefinedTable').fix).toEqual({ from: 'books', to: 'book' });
+    // колонки titel нет, title есть в book
+    const typo: DbError = { code: '42703', message: 'column "titel" does not exist', position: 8 };
+    expect(explainError(typo, { sql: 'select titel from book', schema }).fix).toEqual({
+      from: 'titel',
+      to: 'title',
+    });
+    const far: DbError = { code: '42703', message: 'column "zzzzzz" does not exist', position: 8 };
+    expect(explainError(far, { sql: 'select zzzzzz from book', schema }).fix).toBeUndefined();
+    expect(explain('doubleQuoted').fix).toBeUndefined();
+  });
+
   it('42702: подсвечивает колонку в обеих таблицах', () => {
     expect(explain('ambiguous')).toMatchObject({
       suggestion: 'Укажи таблицу: author.name или customer.name.',

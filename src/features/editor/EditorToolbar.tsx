@@ -1,20 +1,21 @@
 import { LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import type { Sandbox } from '@/features/db/sandbox';
-import { DbException } from '@/features/db/types';
+import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { notifyDbError } from './notifyDbError';
 import { useParsedText } from './useParsedText';
 
-const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error', string> = {
-  idle: 'Превью',
+const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', string> = {
+  idle: 'Превью: база не меняется',
   tracing: 'Считаем',
-  ready: 'Превью',
+  ready: 'Превью: база не меняется',
   error: 'Ошибка',
+  stale: 'Недописан',
 };
 
 // Строка управления под редактором. Применение текущего оператора идёт через
@@ -28,6 +29,7 @@ export function EditorToolbar({
 }) {
   const status = useSceneStore((s) => s.status);
   const stale = useSceneStore((s) => s.stale);
+  const hasError = useSceneStore((s) => s.trace?.error != null);
   const text = useEditorStore((s) => s.text);
   const [busy, setBusy] = useState(false);
   const [journalLength, setJournalLength] = useState(0);
@@ -51,13 +53,14 @@ export function EditorToolbar({
     try {
       await fn();
     } catch (e) {
-      // ошибки применения показываем тостом; превью оператора продублирует её в «Сообщениях»
-      const message = e instanceof DbException ? e.db.message : String(e);
-      toast.error('Не получилось', { description: message });
+      // ошибки применения показываем тостом; превью оператора продублирует её карточкой
+      notifyDbError(e, text);
     } finally {
       setBusy(false);
     }
   };
+
+  const shown = stale ? 'stale' : hasError ? 'error' : status;
 
   const applyAll = () =>
     void run(async () => {
@@ -66,13 +69,17 @@ export function EditorToolbar({
 
   return (
     <div className="flex shrink-0 items-center gap-2 border-t px-2 py-1">
-      <Badge variant="outline" data-testid="preview-status" className="gap-1.5 text-xs">
-        {status === 'tracing' ? (
+      <Badge
+        variant="outline"
+        data-testid="preview-status"
+        className={cn('gap-1.5 text-xs', shown === 'error' && 'border-destructive/40 text-destructive')}
+      >
+        {shown === 'tracing' ? (
           <LoaderCircle className="size-3 animate-spin" aria-hidden />
         ) : (
           <span aria-hidden>●</span>
         )}
-        {stale ? 'Недописан' : STATUS_LABEL[status]}
+        {STATUS_LABEL[shown]}
       </Badge>
       <div className="ml-auto flex items-center gap-1.5">
         {statementCount > 1 && (

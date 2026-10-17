@@ -18,12 +18,27 @@ export function parseDiagnostic(text: string, err: { message: string; position: 
   return { ...wordAt(text, err.position), message: err.message };
 }
 
-// Ошибка Postgres: position 1-based от начала оператора, переводим в абсолютную позицию редактора.
+// Абсолютная позиция ошибки Postgres в тексте редактора: position 1-based от начала оператора.
 // ponytail: оператор ищется первым вхождением текста; дубликат оператора в редакторе
 // подчеркнёт первый. Обновление - хранить from в трейсе, когда Ф5 строит трейс из ParsedStatement.
-export function pgDiagnostic(text: string, stmtSql: string, err: DbError): EditorDiagnostic | null {
+function pgOffset(text: string, stmtSql: string, err: DbError): number | null {
   if (err.position == null) return null;
   const stmtFrom = text.indexOf(stmtSql);
-  if (stmtFrom < 0) return null;
-  return { ...wordAt(text, stmtFrom + err.position - 1), message: err.message };
+  return stmtFrom < 0 ? null : stmtFrom + err.position - 1;
+}
+
+export function pgDiagnostic(text: string, stmtSql: string, err: DbError): EditorDiagnostic | null {
+  const at = pgOffset(text, stmtSql, err);
+  return at == null ? null : { ...wordAt(text, at), message: err.message };
+}
+
+// Правка-подсказка: заменяет слово под позицией ошибки на `to`. null, если позиция не стоит
+// на начале простого имени: так не испортим текст ни на пробеле, ни на `table.column`.
+export function applyFix(text: string, stmtSql: string, err: DbError, to: string): string | null {
+  const at = pgOffset(text, stmtSql, err);
+  if (at == null) return null;
+  const word = /^[\w$]+/.exec(text.slice(at))?.[0];
+  if (!word || /[\w$]/.test(text[at - 1] ?? '')) return null;
+  if (text[at + word.length] === '.') return null;
+  return text.slice(0, at) + to + text.slice(at + word.length);
 }

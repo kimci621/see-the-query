@@ -1,9 +1,7 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { useParams } from 'react-router';
-import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSandbox } from '@/features/db/SandboxProvider';
-import { DbException } from '@/features/db/types';
 import { getLesson } from '@/features/lessons/registry';
 import { clauseAt } from '@/features/sql/clauses';
 import { parseSql } from '@/features/sql/parser';
@@ -14,6 +12,7 @@ import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
+import { notifyDbError } from './notifyDbError';
 import { touchedOf } from './touched';
 import { useLiveTrace } from './useLiveTrace';
 
@@ -89,10 +88,7 @@ export function EditorPane() {
     if (!parsed.ok) return;
     const stmt = statementAt(parsed.statements, editor.cursor);
     if (!stmt) return;
-    void sandbox.apply(stmt.text).catch((e: unknown) => {
-      const message = e instanceof DbException ? e.db.message : String(e);
-      toast.error('Не получилось', { description: message });
-    });
+    void sandbox.apply(stmt.text).catch((e: unknown) => notifyDbError(e, stmt.text));
   };
 
   const applyRef = useRef(applyCurrent);
@@ -105,10 +101,7 @@ export function EditorPane() {
         const el = document.activeElement;
         if (el instanceof HTMLElement && el.closest('.cm-editor')) return; // внутри редактора - undo набора
         e.preventDefault();
-        void sandbox?.undo().catch((err: unknown) => {
-          const message = err instanceof DbException ? err.db.message : String(err);
-          toast.error('Не получилось', { description: message });
-        });
+        void sandbox?.undo().catch((err: unknown) => notifyDbError(err, useEditorStore.getState().text));
       }
       if ((e.metaKey || e.ctrlKey) && e.code === 'Enter') {
         e.preventDefault();
