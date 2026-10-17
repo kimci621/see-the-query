@@ -114,6 +114,54 @@ test.describe('тулбар не обрезается на узком экран
   });
 });
 
+// Узкий режим (спека 3.1): до 80em сайдбар в Sheet. Порог в em, поэтому крупный шрифт браузера
+// включает его раньше. Шрифт 200% ставим настройкой браузера (CDP), как у ученика: от неё зависят
+// и rem, и em в медиазапросах, а style корня em медиазапроса не меняет
+test.describe('узкий режим: порог 80em', () => {
+  const lessonsButton = (page: import('@playwright/test').Page) =>
+    page.getByRole('button', { name: 'Уроки', exact: true });
+  const sidebarNav = (page: import('@playwright/test').Page) =>
+    page.getByRole('navigation', { name: 'Уроки', exact: true });
+
+  for (const [width, height] of [
+    [1024, 768],
+    [1280, 800],
+  ]) {
+    test(`${width}x${height}: сайдбар в Sheet`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto('/l/how-to-use');
+      await expect(lessonsButton(page)).toBeVisible();
+      await expect(sidebarNav(page)).toHaveCount(0);
+    });
+  }
+
+  test('1440x900: сайдбар панелью', async ({ page }) => {
+    await page.goto('/l/how-to-use');
+    await expect(sidebarNav(page)).toBeVisible();
+    await expect(lessonsButton(page)).toHaveCount(0);
+  });
+
+  test('1440x900 при шрифте браузера 200%: Sheet, теория не уже 20em', async ({ page }) => {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+    await page.goto('/l/how-to-use');
+    await expect(lessonsButton(page)).toBeVisible();
+    await expect(sidebarNav(page)).toHaveCount(0);
+    const theory = await page.locator('[id="theory"]').evaluate((el) => ({
+      width: el.getBoundingClientRect().width,
+      em: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+    }));
+    expect(theory.em).toBe(32);
+    expect(theory.width).toBeGreaterThanOrEqual(theory.em * 20 - 1);
+
+    // в Sheet «Поиск» не обрезан
+    await lessonsButton(page).click();
+    const search = page.getByRole('dialog', { name: 'Уроки' }).getByRole('button', { name: /Поиск/ });
+    await expect(search).toBeVisible();
+    expect(await search.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  });
+});
+
 test('200% текста на 1024x768: поле редактора, «Применить» и заголовок теории на месте', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   // крупный текст браузера: корневой размер шрифта 200% ещё до старта приложения
@@ -167,15 +215,13 @@ test('200% текста на 1024x768: поле редактора, «Приме
   expect(overflow.scroll).toBeLessThanOrEqual(0);
   expect(overflow.h1).toBeLessThanOrEqual(overflow.panel);
 
-  // сайдбар растёт со шрифтом: «Поиск» не обрезан, от названия урока видно больше номера
-  const search = page.getByRole('button', { name: /Поиск/ });
-  expect(await search.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
-  const title = await page
-    .getByRole('navigation', { name: 'Уроки', exact: true })
-    .getByRole('link', { name: /SELECT/ })
-    .locator('span.truncate')
-    .evaluate((el) => ({ width: el.clientWidth, em: Number.parseFloat(getComputedStyle(el).fontSize) }));
-  expect(title.width).toBeGreaterThanOrEqual(title.em * 4);
+  // сайдбар в Sheet и ширину у теории не отнимает: колонка не уже 20em
+  await expect(page.getByRole('button', { name: 'Уроки', exact: true })).toBeVisible();
+  const theory = await page.locator('[id="theory"]').evaluate((el) => ({
+    width: el.getBoundingClientRect().width,
+    em: Number.parseFloat(getComputedStyle(el).fontSize),
+  }));
+  expect(theory.width).toBeGreaterThanOrEqual(theory.em * 20 - 1);
 });
 
 test('reduced motion: Dialog и Sheet открываются без анимации', async ({ page }) => {

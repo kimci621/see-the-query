@@ -120,8 +120,8 @@ describe('AppShell', () => {
     expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
   });
 
-  it('ниже 1024px панели сайдбара нет, уроки открываются в Sheet', async () => {
-    mockMedia(['(max-width: 1023px)']);
+  it('ниже 80em панели сайдбара нет, уроки открываются в Sheet', async () => {
+    mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     const { container } = render(
       <RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/l/how-to-use'] })} />,
@@ -135,7 +135,7 @@ describe('AppShell', () => {
   });
 
   it('переход по ссылке урока закрывает Sheet', async () => {
-    mockMedia(['(max-width: 1023px)']);
+    mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     const router = renderAt('/l/how-to-use');
     await screen.findByText(/Заглушка урока/);
@@ -149,7 +149,7 @@ describe('AppShell', () => {
   });
 
   it('закрытый Sheet возвращает фокус на кнопку «Уроки», выбор урока ставит фокус на его заголовок', async () => {
-    mockMedia(['(max-width: 1023px)']);
+    mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
     await screen.findByText(/Заглушка урока/);
@@ -170,7 +170,7 @@ describe('AppShell', () => {
   });
 
   it('Sheet не открывается сам после перехода узкий -> широкий -> узкий', async () => {
-    const NARROW = '(max-width: 1023px)';
+    const NARROW = '(max-width: 80em)';
     const resize = mockResizableMedia([NARROW]);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
@@ -184,7 +184,7 @@ describe('AppShell', () => {
   });
 
   it('поиск из Sheet: Sheet закрывается, фокус в поле поиска', async () => {
-    mockMedia(['(max-width: 1023px)']);
+    mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
     await screen.findByText(/Заглушка урока/);
@@ -204,7 +204,7 @@ describe('AppShell', () => {
   });
 
   it('ниже 640px заглушка, «Всё равно открыть» её убирает', async () => {
-    mockMedia(['(max-width: 1023px)', '(max-width: 639px)']);
+    mockMedia(['(max-width: 80em)', '(max-width: 639px)']);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
     expect(await screen.findByText('see-the-query рассчитан на экран от 1024 px')).toBeInTheDocument();

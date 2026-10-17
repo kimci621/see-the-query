@@ -30,8 +30,10 @@ export function AppShell() {
   const toggleFocusMode = useSettingsStore((s) => s.toggleFocusMode);
   const [commandOpen, setCommandOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  // Ниже 1024px сайдбар уезжает в Sheet, ниже 640px вместо оболочки заглушка
-  const narrow = useMediaQuery('(max-width: 1023px)');
+  // До 80em (1280px при обычном шрифте) сайдбар уезжает в Sheet (спека 3.1). Порог в em: при крупном
+  // шрифте браузера узкий режим включается раньше и теория не сжимается. Заглушка ниже 640px в px,
+  // чтобы крупный шрифт на десктопе её не включал
+  const narrow = useMediaQuery('(max-width: 80em)');
   const phone = useMediaQuery('(max-width: 639px)');
   const [forceOpen, setForceOpen] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
@@ -91,7 +93,8 @@ export function AppShell() {
         )}
         {!focusMode && (
           <>
-            <ResizablePanel id="theory" defaultSize={`${mainLayout[1]}%`} minSize="20%">
+            {/* Минимум в rem: при крупном тексте строка урока не короче ~30 знаков. Уступает доска */}
+            <ResizablePanel id="theory" defaultSize={`${mainLayout[1]}%`} minSize="20rem">
               <PanelErrorBoundary key={lessonId} name="Теория">
                 <TheoryPane
                   meta={meta}
