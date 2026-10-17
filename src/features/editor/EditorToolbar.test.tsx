@@ -1,11 +1,15 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sandbox } from '@/features/db/sandbox';
+import type { QueryResult } from '@/features/db/types';
 import type { Trace } from '@/features/tracer/types';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 // Управляемая готовность парсера: до release() parseSql ведёт себя как настоящий без WASM (ok:false)
 const parserState = vi.hoisted(() => ({ ready: true, release: () => {} }));
@@ -30,7 +34,7 @@ vi.mock('@/features/sql/parser', async (importOriginal) => {
   };
 });
 
-function fakeSandbox(applied: string[]): Sandbox {
+function fakeSandbox(applied: string[], result: QueryResult[] = []): Sandbox {
   return {
     status: 'ready',
     datasetId: 'bookstore',
@@ -39,7 +43,7 @@ function fakeSandbox(applied: string[]): Sandbox {
     preview: vi.fn(),
     apply: async (sql: string) => {
       applied.push(sql);
-      return [];
+      return result;
     },
     undo: vi.fn(async () => undefined),
     reset: vi.fn(async () => undefined),
@@ -51,6 +55,7 @@ function fakeSandbox(applied: string[]): Sandbox {
 describe('EditorToolbar', () => {
   beforeEach(() => {
     parserState.ready = true;
+    vi.clearAllMocks();
     useEditorStore.setState(useEditorStore.getInitialState(), true);
     useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
   });
@@ -106,8 +111,10 @@ describe('EditorToolbar', () => {
     expect(onApplyCurrent).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByTestId('reset-button'));
+    await user.click(await screen.findByRole('button', { name: 'Сбросить' }));
     expect(sandbox.reset).toHaveBeenCalledTimes(1);
 
+    await waitFor(() => expect(screen.queryByText('Сбросить урок?')).toBeNull());
     await user.click(screen.getByTestId('undo-button'));
     expect(sandbox.undo).toHaveBeenCalledTimes(1);
   });
@@ -139,5 +146,49 @@ describe('EditorToolbar', () => {
 
     act(() => parserState.release());
     await waitFor(() => expect(applyButton).toBeEnabled());
+  });
+
+  it('Применить вторичная для SELECT и основная для INSERT', () => {
+    useEditorStore.getState().setText('select 1');
+    const { rerender } = render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    expect(screen.getByTestId('apply-button')).toHaveAttribute('data-variant', 'outline');
+
+    const insert = "insert into author(name) values ('x')";
+    act(() => {
+      useEditorStore.getState().setText(insert);
+      useEditorStore.getState().setCursor(insert.length);
+    });
+    rerender(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    expect(screen.getByTestId('apply-button')).toHaveAttribute('data-variant', 'default');
+  });
+
+  it('Сброс спрашивает подтверждение', async () => {
+    const sandbox = fakeSandbox([]);
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={() => undefined} />);
+
+    await user.click(screen.getByTestId('reset-button'));
+    expect(await screen.findByText('Сбросить урок?')).toBeInTheDocument();
+    expect(sandbox.reset).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Отмена' }));
+    expect(sandbox.reset).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('Сбросить урок?')).toBeNull());
+
+    await user.click(screen.getByTestId('reset-button'));
+    await user.click(await screen.findByRole('button', { name: 'Сбросить' }));
+    expect(sandbox.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it('после применения тост с итогом', async () => {
+    useEditorStore.getState().setText('select 1; select 2');
+    const sandbox = fakeSandbox([], [{ command: 'INSERT', rowCount: 1, rows: [], fields: [] }]);
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={() => undefined} />);
+
+    await user.click(screen.getByTestId('apply-all-button'));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Записано в базу', { description: 'INSERT: 1 строка' }),
+    );
   });
 });

@@ -2,15 +2,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Kbd } from '@/components/ui/kbd';
 
 // Полный список из спеки 3.10; часть клавиш заработает в следующих фазах
-const HOTKEYS: Array<{ keys: string[]; action: string }> = [
+const HOTKEYS: Array<{ keys: string[]; action: string; soon?: true }> = [
   { keys: ['⌘', 'K'], action: 'Поиск по урокам' },
   { keys: ['⌘', '\\'], action: 'Режим фокуса: доска на всю ширину' },
   { keys: ['⌘', '⏎'], action: 'Применить запрос' },
   { keys: ['⌘', 'Z'], action: 'Отменить применённый запрос' },
   { keys: ['⌘', '0'], action: 'Вписать доску в экран' },
-  { keys: ['Space'], action: 'Пауза и продолжение сцены' },
-  { keys: ['←', '→'], action: 'Шаг сцены назад и вперёд' },
-  { keys: ['Esc'], action: 'Закрыть сцену' },
+  { keys: ['Space'], action: 'Пауза и продолжение сцены', soon: true },
+  { keys: ['←', '→'], action: 'Шаг сцены назад и вперёд', soon: true },
+  { keys: ['Esc'], action: 'Закрыть сцену', soon: true },
   { keys: ['?'], action: 'Эта шпаргалка' },
 ];
 
@@ -36,7 +36,10 @@ export function HotkeysHelp({
                   <Kbd key={k}>{k}</Kbd>
                 ))}
               </dt>
-              <dd>{h.action}</dd>
+              <dd>
+                {h.action}
+                {h.soon && <span className="text-muted-foreground"> · скоро</span>}
+              </dd>
             </div>
           ))}
         </dl>

@@ -97,4 +97,12 @@ test('применить, отменить и применить всё', async 
   await setEditorText(page, 'select 1; select 2');
   await page.getByTestId('apply-all-button').click();
   await expect(page.getByTestId('preview-status')).toContainText('Превью', { timeout: 5000 });
+
+  // сброс требует подтверждения
+  await page.getByTestId('reset-button').click();
+  await expect(page.getByText('Сбросить урок?')).toBeVisible();
+  await page.getByRole('button', { name: 'Сбросить', exact: true }).click();
+  await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('6', {
+    timeout: 5000,
+  });
 });

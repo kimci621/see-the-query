@@ -2,12 +2,22 @@ import { LoaderCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Kbd } from '@/components/ui/kbd';
 import type { Sandbox } from '@/features/db/sandbox';
+import type { QueryResult } from '@/features/db/types';
+import { statementAt } from '@/features/sql/statements';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
-import { notifyDbError } from './notifyDbError';
+import { notifyApplied, notifyDbError } from './notifyDbError';
 import { useParsedText } from './useParsedText';
 
 const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', string> = {
@@ -31,7 +41,9 @@ export function EditorToolbar({
   const stale = useSceneStore((s) => s.stale);
   const hasError = useSceneStore((s) => s.trace?.error != null);
   const text = useEditorStore((s) => s.text);
+  const cursor = useEditorStore((s) => s.cursor);
   const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [journalLength, setJournalLength] = useState(0);
 
   // длина журнала: для блокировки «Отменить»
@@ -47,6 +59,8 @@ export function EditorToolbar({
   const parsed = useParsedText(text);
   const statements = parsed?.ok ? parsed.statements : [];
   const statementCount = statements.length;
+  // SELECT ничего не пишет в базу, поэтому «Применить» для него вторичная кнопка
+  const kind = statementAt(statements, cursor)?.kind;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -64,7 +78,9 @@ export function EditorToolbar({
 
   const applyAll = () =>
     void run(async () => {
-      for (const s of statements) await sandbox?.apply(s.text);
+      const results: QueryResult[] = [];
+      for (const s of statements) results.push(...((await sandbox?.apply(s.text)) ?? []));
+      notifyApplied(results);
     });
 
   return (
@@ -107,12 +123,13 @@ export function EditorToolbar({
           size="sm"
           data-testid="reset-button"
           disabled={busy || !sandbox}
-          onClick={() => void run(() => sandbox?.reset() ?? Promise.resolve())}
+          onClick={() => setConfirmReset(true)}
         >
           Сброс
         </Button>
         <Button
           size="sm"
+          variant={kind === 'select' ? 'outline' : 'default'}
           data-testid="apply-button"
           disabled={busy || !sandbox || statementCount === 0}
           onClick={onApplyCurrent}
@@ -120,6 +137,30 @@ export function EditorToolbar({
           Применить <Kbd>⌘⏎</Kbd>
         </Button>
       </div>
+      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Сбросить урок?</DialogTitle>
+            <DialogDescription>
+              Все применённые запросы будут отменены, данные вернутся к началу урока.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmReset(false)}>
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmReset(false);
+                void run(() => sandbox?.reset() ?? Promise.resolve());
+              }}
+            >
+              Сбросить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
