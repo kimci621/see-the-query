@@ -197,3 +197,18 @@ test('reduced motion: Dialog и Sheet открываются без анимац
   expect(await animation('[data-slot="sheet-content"]')).toBe('none');
   expect(await animation('[data-slot="sheet-overlay"]')).toBe('none');
 });
+
+// Кольцо фокуса вкладок 2px, как у остальных контролов (WCAG 2.4.7)
+test('вкладка результата с клавиатуры: кольцо фокуса 2px', async ({ page }) => {
+  await page.goto('/l/select-basics');
+  const tab = page.getByRole('tab', { name: 'Результат' });
+  await expect(tab).toBeVisible({ timeout: 20_000 });
+  await tab.focus();
+  // у вкладки transition-all: toHaveCSS поймал бы промежуточное значение, ждём конца перехода
+  await expect.poll(() => tab.evaluate((el) => el.getAnimations().length)).toBe(0);
+  const outline = await tab.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { style: s.outlineStyle, width: s.outlineWidth };
+  });
+  expect(outline).toEqual({ style: 'solid', width: '2px' });
+});
