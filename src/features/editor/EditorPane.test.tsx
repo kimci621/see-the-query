@@ -80,6 +80,34 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().highlightedColumns).toEqual(['public.book.title']);
   });
 
+  it('hover меняет подсветку, но не свёртку: колонки трейса остаются, наведённая добавляется', async () => {
+    const trace = {
+      sql: 'select title, price from book',
+      statementType: 'select' as const,
+      mode: 'final-only' as const,
+      touched: {
+        tableIds: ['public.book'],
+        columns: ['public.book.title', 'public.book.price'],
+        expanded: [],
+      },
+      stages: [],
+      result: null,
+      error: null,
+      notices: [],
+      timingMs: 1,
+    };
+    useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
+    render(<EditorPane />);
+    act(() => useEditorStore.getState().setHoveredColumn('public.book.author_id'));
+    await act(async () => undefined);
+    const board = useBoardStore.getState();
+    expect(board.highlightedColumns).toEqual(['public.book.author_id']);
+    expect(board.queryColumns).toEqual(['public.book.title', 'public.book.price', 'public.book.author_id']);
+    act(() => useEditorStore.getState().setHoveredColumn(null));
+    await act(async () => undefined);
+    expect(useBoardStore.getState().queryColumns).toEqual(['public.book.title', 'public.book.price']);
+  });
+
   it('звёздочка трейса разворачивает таблицу на доске, закрытая сцена сворачивает', async () => {
     const trace = {
       sql: 'select * from book',

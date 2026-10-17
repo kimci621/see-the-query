@@ -33,11 +33,15 @@ export function EditorPane() {
   const trace = useSceneStore((s) => s.trace);
 
   // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса.
+  // Свёртка таблиц по колонкам трейса плюс наведённой, чтобы hover не прятал остальные.
   // Звёздочка последнего трейса разворачивает свёрнутые таблицы
   useEffect(() => {
-    const columns = hoveredColumn ? [hoveredColumn] : (trace?.touched.columns ?? []);
+    const traced = trace?.touched.columns ?? [];
     const board = useBoardStore.getState();
-    board.highlightColumns(columns);
+    board.highlightColumns(hoveredColumn ? [hoveredColumn] : traced);
+    board.setQueryColumns(
+      hoveredColumn && !traced.includes(hoveredColumn) ? [...traced, hoveredColumn] : traced,
+    );
     board.expandTables(trace?.touched.expanded ?? []);
   }, [hoveredColumn, trace]);
 

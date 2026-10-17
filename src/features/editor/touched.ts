@@ -23,9 +23,8 @@ export function touchedOf(
   const expanded = new Set<string>();
   for (const c of rel.columns) {
     if (c.name === '*') {
-      const own = tables.filter(
-        (t) => c.qualifier === null || t.alias === c.qualifier || t.name === c.qualifier,
-      );
+      // по имени квалифицирует только таблица без алиаса: `select book.* from book b` - ошибка Postgres
+      const own = tables.filter((t) => c.qualifier === null || (t.alias ?? t.name) === c.qualifier);
       for (const t of own) {
         const info = resolveTable(t, schema);
         if (info) expanded.add(info.id);

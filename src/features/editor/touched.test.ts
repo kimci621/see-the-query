@@ -101,6 +101,10 @@ describe('touchedOf', () => {
     expect(touchedOf(stmtOf('select author.* from author'), SCHEMA).expanded).toEqual(['public.author']);
   });
 
+  it('имя таблицы с алиасом не квалифицирует звёздочку', () => {
+    expect(touchedOf(stmtOf('select book.* from book b'), SCHEMA).expanded).toEqual([]);
+  });
+
   it('без звёздочки и с count(*) ничего не разворачивается', () => {
     expect(touchedOf(stmtOf('select title from book'), SCHEMA).expanded).toEqual([]);
     expect(touchedOf(stmtOf('select count(*) from book'), SCHEMA).expanded).toEqual([]);

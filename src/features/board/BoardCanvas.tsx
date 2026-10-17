@@ -154,8 +154,9 @@ function useCamera(
   const nodeKey = useMemo(() => nodes.map((n) => n.id).join('|'), [nodes]);
 
   // Сохранённая камера урока ставится один раз; без неё вписываем доску при каждой смене набора нод.
-  // useNodesInitialized не годится: при onlyRenderVisibleElements необрисованные ноды не измеряются
-  // и initialized не становится true. Ноды несут явные width/height, поэтому fitView работает сразу.
+  // fitView React Flow сам откладывает до первого замера нод, ещё не замеренные считает по
+  // initialWidth и height. useNodesInitialized не годится: при onlyRenderVisibleElements
+  // необрисованные ноды не измеряются и initialized не становится true.
   useEffect(() => {
     if (nodeKey === '') return;
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.viewport : undefined;

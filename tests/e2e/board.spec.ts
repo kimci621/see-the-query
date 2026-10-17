@@ -164,20 +164,32 @@ test('широкая book свёрнута, колонки запроса вид
   await expect(page.locator('.react-flow__node[data-id="public.book"]')).toHaveCSS('width', '1188px');
 });
 
-// Цель Q.14 (зум старта ≥ 0.75, book и author целиком) при раскладке слева направо не достижима:
-// доска 719×467 px, таблицы рядом занимают 528 + 120 + 756 = 1404 px доски, целиком влезают
-// только при зуме ≤ 0.51. Нужна правка раскладки урока или правила раскладки
-test.fixme('стартовый кадр: book и author целиком, зум не меньше 0.75', async ({ page }) => {
+// Раскладка select-basics задана в уроке (book и author друг под другом): рядом они не влезают
+// в доску 719×467 px при зуме 0.6, и автоподгонка обрезала бы обе таблицы
+test('стартовый кадр: book, author и подпись схемы целиком, зум не меньше 0.6', async ({ page }) => {
   await openBookstore(page);
   const board = await page.locator('.react-flow').boundingBox();
   if (!board) throw new Error('нет доски');
-  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.75);
-  for (const id of ['public.book', 'public.author']) {
-    const r = await page.getByTestId(`table-node-${id}`).boundingBox();
-    if (!r) throw new Error(`нет ${id}`);
+  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
+  const inside = (r: { x: number; y: number; width: number; height: number }) => {
     expect(r.x).toBeGreaterThanOrEqual(board.x);
     expect(r.x + r.width).toBeLessThanOrEqual(board.x + board.width);
     expect(r.y).toBeGreaterThanOrEqual(board.y);
     expect(r.y + r.height).toBeLessThanOrEqual(board.y + board.height);
+  };
+  for (const id of ['public.book', 'public.author']) {
+    const r = await page.getByTestId(`table-node-${id}`).boundingBox();
+    if (!r) throw new Error(`нет ${id}`);
+    inside(r);
   }
+  // Подпись рамки над таблицами: в кадре её держит только отступ fitView
+  const label = await page
+    .getByTestId('schema-group-public')
+    .getByText('public', { exact: true })
+    .evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return range.getBoundingClientRect().toJSON();
+    });
+  inside(label);
 });

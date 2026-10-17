@@ -125,19 +125,33 @@ describe('TableNode: свёртка широкой таблицы', () => {
     expect(screen.getByTestId('hidden-columns')).toHaveTextContent('+8 колонок');
     // затронуты все, кроме последней
     const touched = wide.columns.slice(0, -1).map((c) => `public.book.${c.name}`);
-    act(() => useBoardStore.getState().highlightColumns(touched));
+    act(() => useBoardStore.getState().setQueryColumns(touched));
     expect(screen.getByTestId('hidden-columns')).toHaveTextContent('+1 колонка');
   });
 
   it('затронутая колонка показывается, звёздочка разворачивает целиком', () => {
     render(<ReactFlowProvider>{node(wideBook)}</ReactFlowProvider>);
     const el = screen.getByTestId('table-node-public.book');
-    act(() => useBoardStore.getState().highlightColumns(['public.book.tags']));
+    act(() => useBoardStore.getState().setQueryColumns(['public.book.tags']));
     expect(heads(el)).toContain('tags');
     act(() => useBoardStore.getState().expandTables(['public.book']));
     expect(heads(el)).toEqual(wideBook.columns.map((c) => c.name));
     expect(within(el).queryByTestId('hidden-columns')).toBeNull();
     expect(el.style.width).toBe(`${9 * 132}px`);
+  });
+
+  it('свёртку задают колонки запроса, а не подсветка hover', () => {
+    render(<ReactFlowProvider>{node(wideBook)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    act(() => {
+      useBoardStore
+        .getState()
+        .setQueryColumns(['public.book.tags', 'public.book.meta', 'public.book.author_id']);
+      useBoardStore.getState().highlightColumns(['public.book.author_id']);
+    });
+    expect(heads(el)).toEqual(expect.arrayContaining(['tags', 'meta', 'author_id']));
+    expect(el.querySelector('[data-column="author_id"]')).toHaveAttribute('data-highlighted', 'true');
+    expect(el.querySelector('[data-column="tags"]')).not.toHaveAttribute('data-highlighted');
   });
 
   it('разворот другой таблицы эту ноду не перерисовывает', () => {

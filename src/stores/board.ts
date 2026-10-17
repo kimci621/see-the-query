@@ -6,6 +6,8 @@ export interface BoardStore {
   visibleTables: string[] | null;
   focused: string[];
   highlightedColumns: string[];
+  // Колонки запроса (трейс и наведённая): по ним сворачиваются широкие таблицы, hover их не сужает
+  queryColumns: string[];
   // Таблицы, развёрнутые звёздочкой запроса (select *, t.*)
   expandedTables: string[];
   dimmed: boolean;
@@ -15,6 +17,7 @@ export interface BoardStore {
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
   highlightColumns(cols: string[]): void;
+  setQueryColumns(cols: string[]): void;
   expandTables(tableIds: string[]): void;
   setDimmed(v: boolean): void;
   requestFit(): void;
@@ -28,6 +31,7 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   visibleTables: null,
   focused: [],
   highlightedColumns: [],
+  queryColumns: [],
   expandedTables: [],
   dimmed: false,
   fitRequest: 0,
@@ -39,6 +43,7 @@ export const useBoardStore = create<BoardStore>()((set) => ({
     set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds, focusRequest: s.focusRequest + 1 })),
   highlightColumns: (cols) =>
     set((s) => (sameList(s.highlightedColumns, cols) ? s : { highlightedColumns: cols })),
+  setQueryColumns: (cols) => set((s) => (sameList(s.queryColumns, cols) ? s : { queryColumns: cols })),
   expandTables: (tableIds) =>
     set((s) => (sameSet(s.expandedTables, tableIds) ? s : { expandedTables: tableIds })),
   setDimmed: (dimmed) => set({ dimmed }),

@@ -37,6 +37,13 @@ describe('useBoardStore', () => {
     expect(useBoardStore.getState().expandedTables).toEqual([]);
   });
 
+  it('setQueryColumns с тем же списком не меняет состояние', () => {
+    useBoardStore.getState().setQueryColumns(['public.book.tags']);
+    const before = useBoardStore.getState();
+    useBoardStore.getState().setQueryColumns(['public.book.tags']);
+    expect(useBoardStore.getState()).toBe(before);
+  });
+
   it('requestFit увеличивает счётчик, setDimmed и setVisibleTables пишут поля', () => {
     const s = useBoardStore.getState();
     s.requestFit();

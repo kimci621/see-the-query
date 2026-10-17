@@ -98,7 +98,8 @@ export function buildNodes(
         // По умолчанию React Flow называет роль «node»
         domAttributes: { 'aria-roledescription': 'таблица' },
         // Ширину задаёт сама нода (свёртка зависит от запроса), React Flow её замеряет.
-        // initialWidth - свёрнутая ширина без запроса: по ней кадр и отсечение до замера.
+        // initialWidth (свёрнутая ширина без запроса) нужна только до замера: для отсечения
+        // невидимых нод при onlyRenderVisibleElements.
         // Позиции и рамка схемы считаются по полной ширине, разворот соседей не задевает.
         initialWidth: foldWidth(foldColumns(b.t, [], false)),
         height: b.h,

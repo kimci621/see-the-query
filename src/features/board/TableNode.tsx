@@ -82,15 +82,16 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   // Селекторы вместо data: при фокусе другой таблицы эта нода не рендерится
   const focused = useBoardStore((s) => s.focused.includes(id));
   const highlighted = useBoardStore(useShallow((s) => ownColumns(s.highlightedColumns, id)));
+  const queried = useBoardStore(useShallow((s) => ownColumns(s.queryColumns, id)));
   const expanded = useBoardStore((s) => s.expandedTables.includes(id));
-  // Свёртка зависит от затронутых колонок, поэтому ширину задаёт нода, а не модель
-  const fold = foldColumns(table, highlighted, expanded);
+  // Свёртка зависит от колонок запроса, поэтому ширину задаёт нода, а не модель
+  const fold = foldColumns(table, queried, expanded);
   const shown = fold.visible.map((c) => ({ c, j: table.columns.indexOf(c) }));
   const stub = fold.hidden.length;
   const rows = table.sampleRows
     .slice(0, MAX_VISIBLE_ROWS)
     .map((values, i) => ({ key: table.sampleCtids[i] ?? String(i), values }));
-  const hidden = table.rowCount - rows.length;
+  const hiddenRows = table.rowCount - rows.length;
   const footer = { height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` };
 
   return (
@@ -164,9 +165,9 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
           {stub > 0 && <div data-stub-cell className="shrink-0" style={{ width: STUB_WIDTH }} />}
         </div>
       ))}
-      {hidden > 0 && (
+      {hiddenRows > 0 && (
         <div className="vs-rows px-3 text-xs text-muted-foreground" style={footer}>
-          + ещё {hidden}
+          + ещё {hiddenRows}
         </div>
       )}
       {table.rowCount === 0 && (
