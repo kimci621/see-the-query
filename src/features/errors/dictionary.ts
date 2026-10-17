@@ -238,6 +238,26 @@ export const DICTIONARY: Record<string, Entry> = {
     };
   },
 
+  '428C9': (err, ctx) => {
+    // cannot insert a non-DEFAULT value into column "x" или column "x" can only be updated to DEFAULT;
+    // detail различает identity GENERATED ALWAYS и вычисляемую колонку
+    const name = quoted(err.message);
+    const identity = err.detail?.includes('identity column') ?? false;
+    const owners = tablesInSql(ctx).filter((t) => t.columns.some((c) => c.name === name));
+    return {
+      title: `${name} заполняет сам Postgres`,
+      body: identity
+        ? `Колонка ${name} объявлена как GENERATED ALWAYS AS IDENTITY: номер для неё выдаёт Postgres, чужое значение он не принимает.`
+        : `Колонка ${name} вычисляемая (GENERATED ALWAYS AS): Postgres считает её сам из других колонок.`,
+      suggestion: !identity
+        ? `Убери ${name} из запроса или передай DEFAULT.`
+        : err.message.includes('updated')
+          ? `Убери ${name} из SET: номер строки UPDATE не меняет.`
+          : `Убери ${name} из INSERT, номер появится сам. Нужен именно свой номер: допиши OVERRIDING SYSTEM VALUE перед VALUES.`,
+      highlight: { tableIds: owners.map((t) => t.id), columns: owners.map((t) => `${t.id}.${name}`) },
+    };
+  },
+
   '22012': () => ({
     title: 'Деление на ноль',
     body: 'В одной из строк делитель равен нулю.',

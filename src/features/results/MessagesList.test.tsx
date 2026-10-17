@@ -51,6 +51,18 @@ describe('MessagesList', () => {
     expect(screen.getByTestId('pg-explain-body').textContent).toBeTruthy();
   });
 
+  it('код ошибки в карточке один раз, и для кода вне словаря', () => {
+    for (const error of [
+      { code: '42703', message: 'column "nme" does not exist', position: 8 },
+      { code: '2BP01', message: 'cannot drop table author because other objects depend on it' },
+    ]) {
+      const { unmount } = render(<MessagesList trace={traceWith(error)} />);
+      const card = screen.getByTestId('pg-error');
+      expect(card.textContent?.split(error.code).length, error.code).toBe(2);
+      unmount();
+    }
+  });
+
   it('NOTICE показываются списком', () => {
     render(<MessagesList trace={traceWith(null)} />);
     expect(screen.getByTestId('notice-0')).toHaveTextContent('DROP TABLE создаст скрипт на каскад');

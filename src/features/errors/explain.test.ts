@@ -27,6 +27,8 @@ const CASES: Record<string, string> = {
   divZero: 'select price / 0 from book',
   badInput: `select 'abc'::int`,
   subquery: 'select (select title from book) as t',
+  identityInsert: `insert into author (author_id, name) values (1, 'X')`,
+  identityUpdate: 'update author set author_id = 100 where author_id = 1',
 };
 
 beforeAll(async () => {
@@ -46,7 +48,7 @@ beforeAll(async () => {
 const explain = (name: string) => explainError(errors.get(name) as DbError, { sql: CASES[name], schema });
 
 describe('explainError', () => {
-  it('покрывает 15 SQLSTATE настоящими ошибками', () => {
+  it('покрывает 16 SQLSTATE настоящими ошибками', () => {
     expect([...new Set([...errors.values()].map((e) => e.code))].sort()).toEqual([
       '21000',
       '22012',
@@ -61,6 +63,7 @@ describe('explainError', () => {
       '42803',
       '42804',
       '42883',
+      '428C9',
       '42P01',
       '42P07',
     ]);
@@ -131,6 +134,27 @@ describe('explainError', () => {
     });
   });
 
+  it('428C9: в identity-колонку значение не пишут', () => {
+    expect(explain('identityInsert')).toMatchObject({
+      title: 'author_id заполняет сам Postgres',
+      suggestion:
+        'Убери author_id из INSERT, номер появится сам. Нужен именно свой номер: допиши OVERRIDING SYSTEM VALUE перед VALUES.',
+      highlight: { tableIds: ['public.author'], columns: ['public.author.author_id'] },
+    });
+    expect(explain('identityUpdate').suggestion).toBe(
+      'Убери author_id из SET: номер строки UPDATE не меняет.',
+    );
+    const generated: DbError = {
+      code: '428C9',
+      message: 'cannot insert a non-DEFAULT value into column "b"',
+      detail: 'Column "b" is a generated column.',
+    };
+    expect(explainError(generated, { sql: 'insert into g (a, b) values (1, 2)', schema })).toMatchObject({
+      title: 'b заполняет сам Postgres',
+      suggestion: 'Убери b из запроса или передай DEFAULT.',
+    });
+  });
+
   it('у каждого кода есть заголовок и текст, неизвестный код показывает оригинал', () => {
     for (const name of Object.keys(CASES)) expect(explain(name).title, name).not.toMatch(/^Ошибка/);
     expect(explainError({ code: SANDBOX_TIMEOUT, message: '' }, { sql: '', schema: null }).title).toBe(
@@ -142,7 +166,7 @@ describe('explainError', () => {
         { sql: '', schema: null },
       ),
     ).toEqual({
-      title: 'Ошибка 2BP01',
+      title: 'Postgres отклонил запрос',
       body: 'cannot drop table author',
       suggestion: 'Use DROP ... CASCADE',
       highlight: { tableIds: [], columns: [] },
