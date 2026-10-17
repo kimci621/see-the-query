@@ -6,7 +6,7 @@ const trace = (sql: string): Trace => ({
   sql,
   statementType: 'select',
   mode: 'final-only',
-  touched: { tableIds: ['public.book'], columns: [] },
+  touched: { tableIds: ['public.book'], columns: [], expanded: [] },
   stages: [],
   result: null,
   error: null,

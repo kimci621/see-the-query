@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { author, book, cart, SCHEMA } from './__fixtures__/schema';
-import { tableHeight, tableWidth } from './layout';
+import { foldColumns, foldWidth, tableHeight, tableWidth } from './layout';
 import {
   buildEdges,
   buildNodes,
@@ -57,7 +57,9 @@ describe('buildNodes', () => {
       const group = nodes.find((n) => n.id === `schema:${t.schema}`);
       expect(node?.type).toBe('table');
       expect(node?.parentId).toBe(`schema:${t.schema}`);
-      expect(node?.width).toBe(tableWidth(t));
+      // ширину ноды задаёт сама таблица (свёртка), модель даёт стартовую для кадра до замера
+      expect(node?.width).toBeUndefined();
+      expect(node?.initialWidth).toBe(foldWidth(foldColumns(t, [], false)));
       expect(node?.height).toBe(tableHeight(t));
       expect({
         x: (group?.position.x ?? 0) + (node?.position.x ?? 0),

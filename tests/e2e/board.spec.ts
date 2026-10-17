@@ -122,3 +122,62 @@ test('режим фокуса: после смены ширины доска в�
   // Рефит анимируется 300 мс, ждём, пока камера осядет
   await expect.poll(inside).toBe(true);
 });
+
+async function setEditorText(page: Page, text: string) {
+  await page.locator('.cm-content').click({ position: { x: 8, y: 8 } });
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.insertText(text);
+}
+
+const zoomOf = async (page: Page) => {
+  const style = (await page.locator('.react-flow__viewport').getAttribute('style')) ?? '';
+  return Number(/scale\(([\d.]+)\)/.exec(style)?.[1] ?? Number.NaN);
+};
+
+// Позиция ноды в координатах доски, от камеры не зависит
+const flowTransform = (page: Page, id: string) =>
+  page.locator(`.react-flow__node[data-id="${id}"]`).evaluate((el) => (el as HTMLElement).style.transform);
+
+test('широкая book свёрнута, колонки запроса видны, select * разворачивает без сдвига соседей', async ({
+  page,
+}) => {
+  await openBookstore(page);
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.getByTestId('hidden-columns')).toHaveText('+4 колонки');
+  await expect(book.locator('[data-column="tags"]')).toHaveCount(0);
+  // свёрнутая ширина: 5 колонок по 132 и заглушка 96
+  const zoom = await zoomOf(page);
+  const collapsed = await book.boundingBox();
+  expect(collapsed?.width ?? 0).toBeCloseTo(756 * zoom, 0);
+  const author = await flowTransform(page, 'public.author');
+
+  await setEditorText(page, 'select tags from book');
+  await expect(book.locator('[data-column="tags"]')).toBeVisible();
+  await expect(book.getByTestId('hidden-columns')).toHaveText('+4 колонки');
+
+  await setEditorText(page, 'select * from book');
+  await expect(book.getByTestId('hidden-columns')).toHaveCount(0);
+  await expect(book.locator('[data-column]')).toHaveCount(9);
+  await expect(book.locator('[data-column="meta"]')).toBeVisible();
+  expect(await flowTransform(page, 'public.author')).toBe(author);
+  await expect(page.locator('.react-flow__node[data-id="public.book"]')).toHaveCSS('width', '1188px');
+});
+
+// Цель Q.14 (зум старта ≥ 0.75, book и author целиком) при раскладке слева направо не достижима:
+// доска 719×467 px, таблицы рядом занимают 528 + 120 + 756 = 1404 px доски, целиком влезают
+// только при зуме ≤ 0.51. Нужна правка раскладки урока или правила раскладки
+test.fixme('стартовый кадр: book и author целиком, зум не меньше 0.75', async ({ page }) => {
+  await openBookstore(page);
+  const board = await page.locator('.react-flow').boundingBox();
+  if (!board) throw new Error('нет доски');
+  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.75);
+  for (const id of ['public.book', 'public.author']) {
+    const r = await page.getByTestId(`table-node-${id}`).boundingBox();
+    if (!r) throw new Error(`нет ${id}`);
+    expect(r.x).toBeGreaterThanOrEqual(board.x);
+    expect(r.x + r.width).toBeLessThanOrEqual(board.x + board.width);
+    expect(r.y).toBeGreaterThanOrEqual(board.y);
+    expect(r.y + r.height).toBeLessThanOrEqual(board.y + board.height);
+  }
+});

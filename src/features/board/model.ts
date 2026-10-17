@@ -1,7 +1,16 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { FkInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { rowsWord } from '@/features/tracer/captions';
-import { autoLayout, isTableVisible, type Positions, schemaNames, tableHeight, tableWidth } from './layout';
+import {
+  autoLayout,
+  foldColumns,
+  foldWidth,
+  isTableVisible,
+  type Positions,
+  schemaNames,
+  tableHeight,
+  tableWidth,
+} from './layout';
 
 // Фокус и подсветку нода читает из useBoardStore, поэтому в data только таблица
 export interface TableNodeData extends Record<string, unknown> {
@@ -88,7 +97,10 @@ export function buildNodes(
         ariaLabel: tableAriaLabel(b.t),
         // По умолчанию React Flow называет роль «node»
         domAttributes: { 'aria-roledescription': 'таблица' },
-        width: b.w,
+        // Ширину задаёт сама нода (свёртка зависит от запроса), React Flow её замеряет.
+        // initialWidth - свёрнутая ширина без запроса: по ней кадр и отсечение до замера.
+        // Позиции и рамка схемы считаются по полной ширине, разворот соседей не задевает.
+        initialWidth: foldWidth(foldColumns(b.t, [], false)),
         height: b.h,
       });
     }

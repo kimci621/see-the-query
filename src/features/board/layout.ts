@@ -1,11 +1,16 @@
 import dagre from '@dagrejs/dagre';
-import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 
 export const TABLE_WIDTH = 260;
 export const ROW_HEIGHT = 24;
 export const HEADER_HEIGHT = 36;
 export const MAX_VISIBLE_ROWS = 15;
 export const COLUMN_WIDTH = 132;
+// Заглушка «+N колонки» у свёрнутой таблицы
+export const STUB_WIDTH = 96;
+// Таблица шире этого числа колонок свёрнута, видно не меньше FOLD_MIN колонок
+const FOLD_FROM = 6;
+const FOLD_MIN = 5;
 export const COLUMN_HEADER_HEIGHT = 40;
 export const SCHEMA_GAP = 120;
 // Ниже этого зума доска показывает только шапки и имена колонок (семантический зум, CSS в board.css)
@@ -15,8 +20,35 @@ export const FIT_MIN_ZOOM = 0.6;
 
 export type Positions = Record<string, { x: number; y: number }>;
 
+// Полная ширина: по ней раскладка резервирует место, чтобы разворот не задевал соседей
 export function tableWidth(t: TableInfo): number {
   return Math.max(TABLE_WIDTH, t.columns.length * COLUMN_WIDTH);
+}
+
+export interface Fold {
+  visible: ColumnInfo[];
+  hidden: ColumnInfo[];
+}
+
+// Свёртка широкой таблицы (спека 3.4): видны PK, FK и затронутые запросом колонки,
+// добор по порядку схемы до FOLD_MIN. Порядок видимых всегда как в схеме.
+export function foldColumns(t: TableInfo, touched: string[], expanded: boolean): Fold {
+  if (expanded || t.columns.length <= FOLD_FROM) return { visible: t.columns, hidden: [] };
+  const keep = new Set(
+    t.columns.filter((c) => c.isPk || c.fk || touched.includes(c.name)).map((c) => c.name),
+  );
+  for (const c of t.columns) {
+    if (keep.size >= FOLD_MIN) break;
+    keep.add(c.name);
+  }
+  return {
+    visible: t.columns.filter((c) => keep.has(c.name)),
+    hidden: t.columns.filter((c) => !keep.has(c.name)),
+  };
+}
+
+export function foldWidth(f: Fold): number {
+  return Math.max(TABLE_WIDTH, f.visible.length * COLUMN_WIDTH + (f.hidden.length > 0 ? STUB_WIDTH : 0));
 }
 
 // Шапка + заголовки колонок + видимые строки + строка «+ ещё N» или «пусто»

@@ -67,7 +67,7 @@ export interface Trace {
   statementType: StatementKind;
   mode: 'full' | 'final-only';
   fallbackReason?: string;
-  touched: { tableIds: string[]; columns: string[] };
+  touched: { tableIds: string[]; columns: string[]; expanded: string[] };
   stages: Stage[];
   result: QueryResult | null;
   error: DbError | null;

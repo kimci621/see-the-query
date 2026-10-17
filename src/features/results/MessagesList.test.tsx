@@ -14,7 +14,7 @@ const traceWith = (error: Trace['error']): Trace => ({
   sql: 'select nme from book',
   statementType: 'select',
   mode: 'final-only',
-  touched: { tableIds: ['public.book'], columns: [] },
+  touched: { tableIds: ['public.book'], columns: [], expanded: [] },
   stages: [],
   result: null,
   error,

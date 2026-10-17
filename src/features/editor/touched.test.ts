@@ -84,7 +84,26 @@ describe('touchedOf', () => {
     expect(touchedOf(stmtOf('select title from book'), null)).toEqual({
       tableIds: [],
       columns: [],
+      expanded: [],
     });
+  });
+
+  it('звёздочка без квалификатора разворачивает таблицы оператора', () => {
+    expect(touchedOf(stmtOf('select * from book'), SCHEMA).expanded).toEqual(['public.book']);
+    expect(
+      touchedOf(stmtOf('select * from book b join author a on b.author_id = a.author_id'), SCHEMA).expanded,
+    ).toEqual(['public.book', 'public.author']);
+  });
+
+  it('t.* разворачивает только свою таблицу, по алиасу или имени', () => {
+    const joined = 'from book b join author a on b.author_id = a.author_id';
+    expect(touchedOf(stmtOf(`select b.* ${joined}`), SCHEMA).expanded).toEqual(['public.book']);
+    expect(touchedOf(stmtOf('select author.* from author'), SCHEMA).expanded).toEqual(['public.author']);
+  });
+
+  it('без звёздочки и с count(*) ничего не разворачивается', () => {
+    expect(touchedOf(stmtOf('select title from book'), SCHEMA).expanded).toEqual([]);
+    expect(touchedOf(stmtOf('select count(*) from book'), SCHEMA).expanded).toEqual([]);
   });
 });
 

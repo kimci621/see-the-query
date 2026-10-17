@@ -6,6 +6,8 @@ export interface BoardStore {
   visibleTables: string[] | null;
   focused: string[];
   highlightedColumns: string[];
+  // Таблицы, развёрнутые звёздочкой запроса (select *, t.*)
+  expandedTables: string[];
   dimmed: boolean;
   fitRequest: number;
   focusRequest: number;
@@ -13,6 +15,7 @@ export interface BoardStore {
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
   highlightColumns(cols: string[]): void;
+  expandTables(tableIds: string[]): void;
   setDimmed(v: boolean): void;
   requestFit(): void;
 }
@@ -25,6 +28,7 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   visibleTables: null,
   focused: [],
   highlightedColumns: [],
+  expandedTables: [],
   dimmed: false,
   fitRequest: 0,
   focusRequest: 0,
@@ -35,6 +39,8 @@ export const useBoardStore = create<BoardStore>()((set) => ({
     set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds, focusRequest: s.focusRequest + 1 })),
   highlightColumns: (cols) =>
     set((s) => (sameList(s.highlightedColumns, cols) ? s : { highlightedColumns: cols })),
+  expandTables: (tableIds) =>
+    set((s) => (sameSet(s.expandedTables, tableIds) ? s : { expandedTables: tableIds })),
   setDimmed: (dimmed) => set({ dimmed }),
   requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
 }));

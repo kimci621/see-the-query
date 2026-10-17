@@ -32,10 +32,13 @@ export function EditorPane() {
 
   const trace = useSceneStore((s) => s.trace);
 
-  // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса
+  // Подсветка колонок: hover имеет приоритет, иначе колонки последнего трейса.
+  // Звёздочка последнего трейса разворачивает свёрнутые таблицы
   useEffect(() => {
     const columns = hoveredColumn ? [hoveredColumn] : (trace?.touched.columns ?? []);
-    useBoardStore.getState().highlightColumns(columns);
+    const board = useBoardStore.getState();
+    board.highlightColumns(columns);
+    board.expandTables(trace?.touched.expanded ?? []);
   }, [hoveredColumn, trace]);
 
   // activeClause при изменении текста или курсора

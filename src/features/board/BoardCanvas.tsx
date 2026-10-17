@@ -43,6 +43,11 @@ const ariaLabelConfig = {
   'minimap.ariaLabel': 'Миникарта доски',
 };
 
+// Кадр по таблицам, без рамок схем: рамка резервирует полную ширину свёрнутых таблиц,
+// пустой резерв в стартовый кадр не берём
+const tablesOf = (nodes: { id: string; type?: string }[]) =>
+  nodes.filter((n) => n.type === 'table').map((n) => ({ id: n.id }));
+
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
 
@@ -155,7 +160,7 @@ function useCamera(
     if (nodeKey === '') return;
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.viewport : undefined;
     if (!saved) {
-      void flow.fitView({ padding: 0.15, minZoom: FIT_MIN_ZOOM });
+      void flow.fitView({ nodes: tablesOf(flow.getNodes()), padding: 0.15, minZoom: FIT_MIN_ZOOM });
     } else if (restoredFor.current !== lessonId) {
       restoredFor.current = lessonId;
       void flow.setViewport(saved);
@@ -164,7 +169,12 @@ function useCamera(
 
   useEffect(() => {
     if (fitRequest > 0)
-      void flow.fitView({ padding: 0.15, minZoom: FIT_MIN_ZOOM, duration: animationMs(300) });
+      void flow.fitView({
+        nodes: tablesOf(flow.getNodes()),
+        padding: 0.15,
+        minZoom: FIT_MIN_ZOOM,
+        duration: animationMs(300),
+      });
   }, [fitRequest, flow]);
 
   useEffect(() => {
@@ -192,7 +202,12 @@ function useCamera(
   useEffect(() => {
     if (!pendingFit.current) return;
     pendingFit.current = false;
-    void flow.fitView({ padding: 0.15, minZoom: FIT_MIN_ZOOM, duration: animationMs(300) });
+    void flow.fitView({
+      nodes: tablesOf(flow.getNodes()),
+      padding: 0.15,
+      minZoom: FIT_MIN_ZOOM,
+      duration: animationMs(300),
+    });
   }, [width, flow]);
 
   // ⌘0 / Ctrl+0: по event.code, на русской раскладке key другой; preventDefault гасит сброс зума браузера.

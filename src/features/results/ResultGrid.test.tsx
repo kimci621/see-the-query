@@ -84,7 +84,7 @@ describe('ResultsPanel', () => {
     sql: '',
     statementType: 'select',
     mode: 'final-only',
-    touched: { tableIds: [], columns: [] },
+    touched: { tableIds: [], columns: [], expanded: [] },
     stages: [],
     result,
     error: null,

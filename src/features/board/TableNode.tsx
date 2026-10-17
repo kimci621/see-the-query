@@ -4,10 +4,20 @@ import { memo, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '@/components/ui/badge';
 import type { ColumnInfo } from '@/features/db/introspect';
+import { plural } from '@/features/tracer/captions';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';
-import { COLUMN_HEADER_HEIGHT, COLUMN_WIDTH, HEADER_HEIGHT, MAX_VISIBLE_ROWS, ROW_HEIGHT } from './layout';
+import {
+  COLUMN_HEADER_HEIGHT,
+  COLUMN_WIDTH,
+  foldColumns,
+  foldWidth,
+  HEADER_HEIGHT,
+  MAX_VISIBLE_ROWS,
+  ROW_HEIGHT,
+  STUB_WIDTH,
+} from './layout';
 import type { TableFlowNode } from './model';
 
 export function columnTitle(c: ColumnInfo): string {
@@ -72,6 +82,11 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   // Селекторы вместо data: при фокусе другой таблицы эта нода не рендерится
   const focused = useBoardStore((s) => s.focused.includes(id));
   const highlighted = useBoardStore(useShallow((s) => ownColumns(s.highlightedColumns, id)));
+  const expanded = useBoardStore((s) => s.expandedTables.includes(id));
+  // Свёртка зависит от затронутых колонок, поэтому ширину задаёт нода, а не модель
+  const fold = foldColumns(table, highlighted, expanded);
+  const shown = fold.visible.map((c) => ({ c, j: table.columns.indexOf(c) }));
+  const stub = fold.hidden.length;
   const rows = table.sampleRows
     .slice(0, MAX_VISIBLE_ROWS)
     .map((values, i) => ({ key: table.sampleCtids[i] ?? String(i), values }));
@@ -83,9 +98,10 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       data-testid={`table-node-${id}`}
       data-focused={focused || undefined}
       className={cn(
-        'vs-table h-full w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',
+        'vs-table h-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',
         focused && 'ring-2 ring-touched',
       )}
+      style={{ width: foldWidth(fold) }}
     >
       <Handle
         type="target"
@@ -113,9 +129,19 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
         </Badge>
       </header>
       <div className="flex border-b bg-muted/50" style={{ height: COLUMN_HEADER_HEIGHT }}>
-        {table.columns.map((c) => (
+        {shown.map(({ c }) => (
           <ColumnHead key={c.name} column={c} highlighted={highlighted.includes(c.name)} />
         ))}
+        {stub > 0 && (
+          <div
+            data-testid="hidden-columns"
+            title={fold.hidden.map((c) => c.name).join(', ')}
+            className="flex shrink-0 items-center px-2 text-xs text-muted-foreground"
+            style={{ width: STUB_WIDTH }}
+          >
+            +{stub} {plural(stub, 'колонка', 'колонки', 'колонок')}
+          </div>
+        )}
       </div>
       {rows.map((row) => (
         <div
@@ -123,7 +149,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
           className="vs-rows flex border-b border-border/50 font-mono text-xs"
           style={{ height: ROW_HEIGHT }}
         >
-          {table.columns.map((c, j) => (
+          {shown.map(({ c, j }) => (
             <div
               key={c.name}
               className={cn(
@@ -135,6 +161,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
               <CellValue value={row.values[j]} type={c.type} />
             </div>
           ))}
+          {stub > 0 && <div data-stub-cell className="shrink-0" style={{ width: STUB_WIDTH }} />}
         </div>
       ))}
       {hidden > 0 && (

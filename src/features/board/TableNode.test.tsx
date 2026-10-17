@@ -4,7 +4,7 @@ import { Profiler } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { TableInfo } from '@/features/db/introspect';
 import { useBoardStore } from '@/stores/board';
-import { author, book, cart, category } from './__fixtures__/schema';
+import { author, book, cart, category, col, wideBook } from './__fixtures__/schema';
 import type { TableFlowNode } from './model';
 import { columnTitle, TableNode } from './TableNode';
 
@@ -94,6 +94,58 @@ describe('TableNode', () => {
     expect(
       screen.getByTestId('table-node-public.author').querySelector('[data-column="name"]'),
     ).toHaveAttribute('data-highlighted', 'true');
+  });
+});
+
+describe('TableNode: свёртка широкой таблицы', () => {
+  beforeEach(() => useBoardStore.setState(useBoardStore.getInitialState(), true));
+  const heads = (el: HTMLElement) =>
+    [...el.querySelectorAll('[data-column]')].map((h) => h.getAttribute('data-column'));
+
+  it('заглушка «+N колонки» с именами в тултипе, пустая ячейка в каждой строке', () => {
+    const rows = [[1, 'Тихий Дон', 1, 4, '890.00', 1504, null, ['классика'], null]];
+    render(<ReactFlowProvider>{node({ ...wideBook, sampleRows: rows, rowCount: 1 })}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    expect(heads(el)).toEqual(['book_id', 'title', 'author_id', 'category_id', 'price']);
+    const stub = within(el).getByTestId('hidden-columns');
+    expect(stub).toHaveTextContent('+4 колонки');
+    expect(stub).toHaveAttribute('title', 'pages, published_at, tags, meta');
+    expect(el.querySelectorAll('[data-stub-cell]')).toHaveLength(1);
+    expect(el.style.width).toBe('756px');
+  });
+
+  it('склонение: колонка, колонки, колонок', () => {
+    const narrow = { ...wideBook, columns: wideBook.columns.slice(0, 7) };
+    const { unmount } = render(<ReactFlowProvider>{node(narrow)}</ReactFlowProvider>);
+    expect(screen.getByTestId('hidden-columns')).toHaveTextContent('+2 колонки');
+    unmount();
+    const extra = ['a', 'b', 'c', 'd'].map((n) => col(n, 'int'));
+    const wide = { ...wideBook, columns: [...wideBook.columns, ...extra] };
+    render(<ReactFlowProvider>{node(wide)}</ReactFlowProvider>);
+    expect(screen.getByTestId('hidden-columns')).toHaveTextContent('+8 колонок');
+    // затронуты все, кроме последней
+    const touched = wide.columns.slice(0, -1).map((c) => `public.book.${c.name}`);
+    act(() => useBoardStore.getState().highlightColumns(touched));
+    expect(screen.getByTestId('hidden-columns')).toHaveTextContent('+1 колонка');
+  });
+
+  it('затронутая колонка показывается, звёздочка разворачивает целиком', () => {
+    render(<ReactFlowProvider>{node(wideBook)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    act(() => useBoardStore.getState().highlightColumns(['public.book.tags']));
+    expect(heads(el)).toContain('tags');
+    act(() => useBoardStore.getState().expandTables(['public.book']));
+    expect(heads(el)).toEqual(wideBook.columns.map((c) => c.name));
+    expect(within(el).queryByTestId('hidden-columns')).toBeNull();
+    expect(el.style.width).toBe(`${9 * 132}px`);
+  });
+
+  it('разворот другой таблицы эту ноду не перерисовывает', () => {
+    const renders = { book: 0 };
+    render(<ReactFlowProvider>{node(wideBook, () => renders.book++)}</ReactFlowProvider>);
+    const before = renders.book;
+    act(() => useBoardStore.getState().expandTables(['public.author']));
+    expect(renders.book).toBe(before);
   });
 });
 

@@ -3,12 +3,13 @@ import { relationsOf } from '@/features/sql/relations';
 import type { ColumnRef, ParsedStatement, RangeRef } from '@/features/sql/types';
 
 // Какие таблицы и колонки оператора существуют в текущей схеме (для фокуса доски).
+// expanded: таблицы под звёздочкой (`*` - все таблицы оператора, `t.*` - одна), доска их разворачивает.
 // Неизвестные таблицы (CTE, TEMP до Ф10, функции) пропускаем молча.
 export function touchedOf(
   stmt: ParsedStatement,
   schema: SchemaSnapshot | null,
-): { tableIds: string[]; columns: string[] } {
-  if (!schema) return { tableIds: [], columns: [] };
+): { tableIds: string[]; columns: string[]; expanded: string[] } {
+  if (!schema) return { tableIds: [], columns: [], expanded: [] };
   const rel = relationsOf(stmt);
   const tableIds: string[] = [];
   const tables: RangeRef[] = [];
@@ -19,11 +20,22 @@ export function touchedOf(
     tables.push(t);
   }
   const columns: string[] = [];
+  const expanded = new Set<string>();
   for (const c of rel.columns) {
+    if (c.name === '*') {
+      const own = tables.filter(
+        (t) => c.qualifier === null || t.alias === c.qualifier || t.name === c.qualifier,
+      );
+      for (const t of own) {
+        const info = resolveTable(t, schema);
+        if (info) expanded.add(info.id);
+      }
+      continue;
+    }
     const resolved = resolveColumn(c, tables, schema);
     if (resolved && !columns.includes(resolved.id)) columns.push(resolved.id);
   }
-  return { tableIds, columns };
+  return { tableIds, columns, expanded: tableIds.filter((id) => expanded.has(id)) };
 }
 
 export function resolveColumn(

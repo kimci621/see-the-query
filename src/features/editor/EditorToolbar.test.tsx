@@ -77,7 +77,7 @@ describe('EditorToolbar', () => {
       sql: 'select nme',
       statementType: 'select',
       mode: 'final-only',
-      touched: { tableIds: [], columns: [] },
+      touched: { tableIds: [], columns: [], expanded: [] },
       stages: [],
       result: null,
       error: { code: '42703', message: 'x' },

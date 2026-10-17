@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { author, book, cart, category, col, SCHEMA, table } from './__fixtures__/schema';
-import { autoLayout, COLUMN_WIDTH, SCHEMA_GAP, TABLE_WIDTH, tableHeight, tableWidth } from './layout';
+import { author, book, cart, category, col, SCHEMA, table, wideBook } from './__fixtures__/schema';
+import {
+  autoLayout,
+  COLUMN_WIDTH,
+  foldColumns,
+  foldWidth,
+  SCHEMA_GAP,
+  STUB_WIDTH,
+  TABLE_WIDTH,
+  tableHeight,
+  tableWidth,
+} from './layout';
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -66,5 +76,60 @@ describe('autoLayout', () => {
     const p = autoLayout(SCHEMA, ['public.book', 'public.author']);
     expect(Object.keys(p).sort()).toEqual(['public.author', 'public.book']);
     expect(autoLayout(SCHEMA, null)).toEqual(autoLayout(SCHEMA, null));
+  });
+});
+
+describe('свёртка широкой таблицы', () => {
+  const names = (f: ReturnType<typeof foldColumns>) => ({
+    visible: f.visible.map((c) => c.name),
+    hidden: f.hidden.map((c) => c.name),
+  });
+
+  it('до 6 колонок видны все, заглушки нет', () => {
+    expect(names(foldColumns(book, [], false))).toEqual({
+      visible: book.columns.map((c) => c.name),
+      hidden: [],
+    });
+  });
+
+  it('без запроса: PK, FK и первые по порядку схемы до пяти', () => {
+    expect(names(foldColumns(wideBook, [], false))).toEqual({
+      visible: ['book_id', 'title', 'author_id', 'category_id', 'price'],
+      hidden: ['pages', 'published_at', 'tags', 'meta'],
+    });
+  });
+
+  it('затронутая колонка видна, добор идёт после ключей и затронутых', () => {
+    expect(names(foldColumns(wideBook, ['tags'], false))).toEqual({
+      visible: ['book_id', 'title', 'author_id', 'category_id', 'tags'],
+      hidden: ['price', 'pages', 'published_at', 'meta'],
+    });
+  });
+
+  it('затронутых много: видно больше пяти, без добора', () => {
+    expect(names(foldColumns(wideBook, ['meta', 'tags', 'pages'], false))).toEqual({
+      visible: ['book_id', 'author_id', 'category_id', 'pages', 'tags', 'meta'],
+      hidden: ['title', 'price', 'published_at'],
+    });
+  });
+
+  it('затронуты все остальные колонки: заглушки нет', () => {
+    const rest = ['title', 'price', 'pages', 'published_at', 'tags', 'meta'];
+    expect(foldColumns(wideBook, rest, false).hidden).toEqual([]);
+  });
+
+  it('звёздочка разворачивает все 9 колонок', () => {
+    expect(names(foldColumns(wideBook, [], true))).toEqual({
+      visible: wideBook.columns.map((c) => c.name),
+      hidden: [],
+    });
+  });
+
+  it('ширина: видимые колонки плюс заглушка, не меньше TABLE_WIDTH', () => {
+    expect(foldWidth(foldColumns(wideBook, [], false))).toBe(5 * COLUMN_WIDTH + STUB_WIDTH);
+    expect(foldWidth(foldColumns(wideBook, [], true))).toBe(tableWidth(wideBook));
+    expect(foldWidth(foldColumns(table('public.one', [col('id', 'int')]), [], false))).toBe(TABLE_WIDTH);
+    // свёрнутая всегда уже полной: раскладка резервирует полную ширину
+    expect(foldWidth(foldColumns(wideBook, [], false))).toBeLessThan(tableWidth(wideBook));
   });
 });

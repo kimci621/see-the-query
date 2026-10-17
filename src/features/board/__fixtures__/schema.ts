@@ -103,6 +103,19 @@ export const book = table(
   11,
 );
 
+// book как в датасете bookstore: 9 колонок, шире порога свёртки
+export const wideBook = table('public.book', [
+  col('book_id', 'bigint', { isPk: true, nullable: false }),
+  col('title', 'text', { nullable: false }),
+  col('author_id', 'bigint', { fk: ref('public.author', 'author_id') }),
+  col('category_id', 'integer', { fk: ref('public.book_category', 'category_id') }),
+  col('price', 'numeric(10,2)'),
+  col('pages', 'integer'),
+  col('published_at', 'date'),
+  col('tags', 'text[]'),
+  col('meta', 'jsonb'),
+]);
+
 export const cart = table(
   'shop.cart',
   [

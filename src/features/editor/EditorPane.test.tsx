@@ -58,7 +58,7 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
       sql: 'select title from book',
       statementType: 'select' as const,
       mode: 'final-only' as const,
-      touched: { tableIds: ['public.book'], columns: ['public.book.title'] },
+      touched: { tableIds: ['public.book'], columns: ['public.book.title'], expanded: [] },
       stages: [],
       result: null,
       error: null,
@@ -78,6 +78,27 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     });
     await act(async () => undefined);
     expect(useBoardStore.getState().highlightedColumns).toEqual(['public.book.title']);
+  });
+
+  it('звёздочка трейса разворачивает таблицу на доске, закрытая сцена сворачивает', async () => {
+    const trace = {
+      sql: 'select * from book',
+      statementType: 'select' as const,
+      mode: 'final-only' as const,
+      touched: { tableIds: ['public.book'], columns: [], expanded: ['public.book'] },
+      stages: [],
+      result: null,
+      error: null,
+      notices: [],
+      timingMs: 1,
+    };
+    useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
+    render(<EditorPane />);
+    await act(async () => undefined);
+    expect(useBoardStore.getState().expandedTables).toEqual(['public.book']);
+    act(() => useSceneStore.getState().close());
+    await act(async () => undefined);
+    expect(useBoardStore.getState().expandedTables).toEqual([]);
   });
 });
 

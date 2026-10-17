@@ -28,6 +28,15 @@ describe('useBoardStore', () => {
     expect(useBoardStore.getState().highlightedColumns).toEqual([]);
   });
 
+  it('expandTables с тем же набором не меняет состояние', () => {
+    useBoardStore.getState().expandTables(['public.book', 'public.author']);
+    const before = useBoardStore.getState();
+    useBoardStore.getState().expandTables(['public.author', 'public.book']);
+    expect(useBoardStore.getState()).toBe(before);
+    useBoardStore.getState().expandTables([]);
+    expect(useBoardStore.getState().expandedTables).toEqual([]);
+  });
+
   it('requestFit увеличивает счётчик, setDimmed и setVisibleTables пишут поля', () => {
     const s = useBoardStore.getState();
     s.requestFit();

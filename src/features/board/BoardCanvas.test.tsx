@@ -115,6 +115,14 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 300, minZoom: 0.6 }));
   });
 
+  it('кадр берёт только таблицы, без рамок схем', () => {
+    renderBoard();
+    act(() => useBoardStore.getState().requestFit());
+    const ids = vi.mocked(flow().fitView).mock.lastCall?.[0]?.nodes?.map((n) => n.id);
+    expect(ids).toHaveLength(SCHEMA.tables.length);
+    expect(ids).toEqual(expect.arrayContaining(SCHEMA.tables.map((t) => t.id)));
+  });
+
   it('смена режима фокуса вписывает доску после новой ширины контейнера', () => {
     mockReducedMotion(false);
     renderBoard();
