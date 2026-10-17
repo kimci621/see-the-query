@@ -129,6 +129,8 @@ function useCamera(
   const focusRequest = useBoardStore((s) => s.focusRequest);
   const focusMode = useSettingsStore((s) => s.focusMode);
   const prevFocusMode = useRef(focusMode);
+  const pendingFit = useRef(false);
+  const width = useStore((s) => s.width);
   const nodeKey = useMemo(() => nodes.map((n) => n.id).join('|'), [nodes]);
 
   // Сохранённая камера урока ставится один раз; без неё вписываем доску при каждой смене набора нод.
@@ -163,12 +165,20 @@ function useCamera(
     }
   }, [focusRequest, flow]);
 
-  // Режим фокуса меняет размер панели доски: вписываем заново
+  // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver
+  // уже после раскладки, поэтому вписываем не сразу, а когда придёт новая ширина
   useEffect(() => {
     if (prevFocusMode.current === focusMode) return;
     prevFocusMode.current = focusMode;
+    pendingFit.current = true;
+  }, [focusMode]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: width служит только триггером, в теле не читается
+  useEffect(() => {
+    if (!pendingFit.current) return;
+    pendingFit.current = false;
     void flow.fitView({ padding: 0.15, minZoom: FIT_MIN_ZOOM, duration: animationMs(300) });
-  }, [focusMode, flow]);
+  }, [width, flow]);
 
   // ⌘0 / Ctrl+0: по event.code, на русской раскладке key другой; preventDefault гасит сброс зума браузера.
   // Перехватываем только когда курсор над доской или фокус внутри неё, иначе ломаем сброс зума страницы

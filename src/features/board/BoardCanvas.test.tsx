@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { ReactFlowInstance } from '@xyflow/react';
+import type { ReactFlowInstance, useStoreApi } from '@xyflow/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBoardStore } from '@/stores/board';
@@ -8,13 +8,17 @@ import { SCHEMA } from './__fixtures__/schema';
 import { BoardCanvas } from './BoardCanvas';
 
 // Достаём экземпляр React Flow из useReactFlow, чтобы двигать камеру и шпионить за fitView
-const holder: { flow: ReactFlowInstance | null } = { flow: null };
+const holder: { flow: ReactFlowInstance | null; store: ReturnType<typeof useStoreApi> | null } = {
+  flow: null,
+  store: null,
+};
 vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
     useReactFlow: () => {
       const flow = actual.useReactFlow();
+      holder.store = actual.useStoreApi();
       if (holder.flow !== flow) {
         holder.flow = flow;
         vi.spyOn(flow, 'fitView');
@@ -50,6 +54,7 @@ function flow(): ReactFlowInstance {
 describe('BoardCanvas', () => {
   beforeEach(() => {
     holder.flow = null;
+    holder.store = null;
     useBoardStore.setState(useBoardStore.getInitialState(), true);
     useBoardStore.getState().setSchema(SCHEMA);
   });
@@ -110,13 +115,19 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 300, minZoom: 0.6 }));
   });
 
-  it('смена режима фокуса пересобирает камеру', () => {
+  it('смена режима фокуса вписывает доску после новой ширины контейнера', () => {
     mockReducedMotion(false);
     renderBoard();
     vi.mocked(flow().fitView).mockClear();
     act(() => useSettingsStore.getState().toggleFocusMode());
+    expect(flow().fitView).not.toHaveBeenCalled();
+    act(() => holder.store?.setState({ width: 900 }));
+    expect(flow().fitView).toHaveBeenCalledTimes(1);
     expect(flow().fitView).toHaveBeenCalledWith(
       expect.objectContaining({ padding: 0.15, minZoom: 0.6, duration: 300 }),
     );
+    // Дальнейшие смены ширины без режима фокуса камеру не трогают
+    act(() => holder.store?.setState({ width: 800 }));
+    expect(flow().fitView).toHaveBeenCalledTimes(1);
   });
 });

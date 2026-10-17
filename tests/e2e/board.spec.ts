@@ -53,7 +53,7 @@ test('камера урока переживает перезагрузку, ⌘
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
   await expect(viewport).toHaveAttribute('style', zoomed ?? '');
 
-  // После перезагрузки pointerenter не приходит, ⌘0 работает только над доской
+  // Сдвиг на 1px нужен: после перезагрузки pointerenter не приходит, а ⌘0 работает только над доской
   await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2 + 1);
   await page.keyboard.press('ControlOrMeta+0');
   await expect.poll(() => viewport.getAttribute('style')).not.toBe(zoomed);
@@ -98,4 +98,27 @@ test('далёкий зум: строки скрыты, рёбра остают�
     );
     expect(onHeader, `конец ребра ${JSON.stringify(end)} вне шапок ${JSON.stringify(cards)}`).toBe(true);
   }
+});
+
+test('режим фокуса: после смены ширины доска вписана целиком', async ({ page }) => {
+  await openBookstore(page);
+  await page.keyboard.press('ControlOrMeta+Backslash');
+  await expect(page.getByText(/Заглушка урока/)).toBeHidden();
+  const board = page.getByTestId('board-canvas');
+  const inside = async () => {
+    const b = await board.boundingBox();
+    if (!b) throw new Error('нет доски');
+    const boxes = await page
+      .locator('[data-testid^="table-node-"]')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    return boxes.every(
+      (r) =>
+        r.left >= b.x - 4 &&
+        r.right <= b.x + b.width + 4 &&
+        r.top >= b.y - 4 &&
+        r.bottom <= b.y + b.height + 4,
+    );
+  };
+  // Рефит анимируется 300 мс, ждём, пока камера осядет
+  await expect.poll(inside).toBe(true);
 });
