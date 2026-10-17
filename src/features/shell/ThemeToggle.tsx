@@ -27,7 +27,14 @@ export function ThemeToggle() {
           <Icon className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        // Меню размонтируется после анимации закрытия и возвращает фокус на кнопку.
+        // Если за это время ученик уже кликнул в редактор, фокус не отбираем
+        onCloseAutoFocus={(e) => {
+          if (document.activeElement && document.activeElement !== document.body) e.preventDefault();
+        }}
+      >
         <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as ThemeSetting)}>
           {OPTIONS.map((o) => (
             <DropdownMenuRadioItem key={o.value} value={o.value}>
