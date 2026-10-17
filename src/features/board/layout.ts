@@ -8,6 +8,10 @@ export const MAX_VISIBLE_ROWS = 15;
 export const COLUMN_WIDTH = 132;
 export const COLUMN_HEADER_HEIGHT = 40;
 export const SCHEMA_GAP = 120;
+// Ниже этого зума доска показывает только шапки и имена колонок (семантический зум, CSS в board.css)
+export const FAR_ZOOM = 0.5;
+// Нижняя граница зума автоподгонки: мельче текст не читается
+export const FIT_MIN_ZOOM = 0.6;
 
 export type Positions = Record<string, { x: number; y: number }>;
 

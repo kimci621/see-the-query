@@ -36,3 +36,22 @@
   --xy-minimap-background-color: var(--card);
   --xy-background-color: transparent;
 }
+
+/* Семантический зум: при далёком масштабе остаются шапки и имена колонок крупно, строки и мета скрыты.
+   Только стили контейнера, ноды не пересобираются; handles стоят в шапке, рёбра не отрываются */
+.vs-board[data-far] .vs-rows,
+.vs-board[data-far] .vs-col-meta {
+  display: none;
+}
+
+.vs-board[data-far] .vs-table {
+  height: auto;
+}
+
+.vs-board[data-far] .vs-col-name {
+  font-size: 18px;
+}
+
+.vs-board[data-far] .vs-table-name {
+  font-size: 24px;
+}

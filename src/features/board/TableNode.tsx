@@ -50,9 +50,9 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
       <div className="flex items-center gap-1 text-xs font-medium">
         {column.isPk && <KeyRound aria-label="Первичный ключ" className="size-3 shrink-0" />}
         {column.fk && <Link2 aria-label="Внешний ключ" className="size-3 shrink-0" />}
-        <span className="truncate font-mono">{column.name}</span>
+        <span className="vs-col-name truncate font-mono">{column.name}</span>
       </div>
-      <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+      <div className="vs-col-meta flex items-center gap-1 text-[11px] text-muted-foreground">
         <span className="truncate font-mono">{column.type}</span>
         {!column.nullable && !column.isPk && <Flag>NN</Flag>}
         {column.isUnique && !column.isPk && <Flag>U</Flag>}
@@ -78,7 +78,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       data-testid={`table-node-${id}`}
       data-focused={focused || undefined}
       className={cn(
-        'h-full w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',
+        'vs-table h-full w-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',
         focused && 'ring-2 ring-touched',
       )}
     >
@@ -100,7 +100,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
         className="flex items-center justify-between gap-2 border-b px-3"
         style={{ height: HEADER_HEIGHT }}
       >
-        <span className="truncate font-mono text-sm font-semibold">
+        <span className="vs-table-name truncate font-mono text-sm font-semibold">
           {table.schema}.{table.name}
         </span>
         <Badge variant="secondary" data-testid="row-count" title="Строк в таблице">
@@ -115,7 +115,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       {rows.map((row) => (
         <div
           key={row.key}
-          className="flex border-b border-border/50 font-mono text-xs"
+          className="vs-rows flex border-b border-border/50 font-mono text-xs"
           style={{ height: ROW_HEIGHT }}
         >
           {table.columns.map((c, j) => (
@@ -133,12 +133,12 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
         </div>
       ))}
       {hidden > 0 && (
-        <div className="px-3 text-xs text-muted-foreground" style={footer}>
+        <div className="vs-rows px-3 text-xs text-muted-foreground" style={footer}>
           + ещё {hidden}
         </div>
       )}
       {table.rowCount === 0 && (
-        <div className="px-3 text-xs text-muted-foreground italic" style={footer}>
+        <div className="vs-rows px-3 text-xs text-muted-foreground italic" style={footer}>
           пусто
         </div>
       )}

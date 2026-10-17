@@ -8,7 +8,7 @@ async function openBookstore(page: Page) {
 test('bookstore разложен без наложений, FK и рамка схемы на месте', async ({ page }) => {
   await openBookstore(page);
   const nodes = page.locator('[data-testid^="table-node-"]');
-  await expect(nodes).toHaveCount(8);
+  await expect(nodes).toHaveCount(2);
   const boxes = await nodes.evaluateAll((els) =>
     els.map((el) => {
       const r = el.getBoundingClientRect();
@@ -22,7 +22,7 @@ test('bookstore разложен без наложений, FK и рамка с�
       expect(overlap, `${a.id} перекрывает ${b.id}`).toBe(false);
     }
   }
-  await expect(page.locator('.react-flow__edge-fk')).toHaveCount(9);
+  await expect(page.locator('.react-flow__edge-fk')).toHaveCount(1);
   await expect(page.getByTestId('schema-group-public')).toBeVisible();
   const book = page.getByTestId('table-node-public.book');
   await expect(book.getByTestId('row-count')).toHaveText('11');
@@ -53,6 +53,49 @@ test('камера урока переживает перезагрузку, ⌘
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
   await expect(viewport).toHaveAttribute('style', zoomed ?? '');
 
+  // После перезагрузки pointerenter не приходит, ⌘0 работает только над доской
+  await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2 + 1);
   await page.keyboard.press('ControlOrMeta+0');
   await expect.poll(() => viewport.getAttribute('style')).not.toBe(zoomed);
+});
+
+test('далёкий зум: строки скрыты, рёбра остаются на шапках таблиц', async ({ page }) => {
+  await openBookstore(page);
+  const board = page.getByTestId('board-canvas');
+  const box = await board.boundingBox();
+  if (!box) throw new Error('нет доски');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('.vs-rows').first()).toBeVisible();
+  for (let i = 0; i < 20 && (await board.getAttribute('data-far')) === null; i++) {
+    await page.mouse.wheel(0, 300);
+  }
+  await expect(board).toHaveAttribute('data-far', 'true');
+  await expect(book.locator('.vs-rows').first()).toBeHidden();
+  await expect(book.locator('.vs-col-meta').first()).toBeHidden();
+  await expect(book.locator('[data-column="title"]')).toBeVisible();
+
+  // Концы ребра лежат в полосе шапки таблицы: handles привязаны к шапке, а не к строкам
+  const ends = await page
+    .locator('.react-flow__edge-fk path.vs-fk-path')
+    .first()
+    .evaluate((path) => {
+      const p = path as SVGPathElement;
+      const m = p.getScreenCTM();
+      const len = p.getTotalLength();
+      const toScreen = (pt: DOMPoint) => ({
+        x: pt.x * (m?.a ?? 1) + (m?.e ?? 0),
+        y: pt.y * (m?.d ?? 1) + (m?.f ?? 0),
+      });
+      return [toScreen(p.getPointAtLength(0)), toScreen(p.getPointAtLength(len))];
+    });
+  const cards = await page
+    .locator('[data-testid^="table-node-"] > header')
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+  for (const end of ends) {
+    const onHeader = cards.some(
+      (r) => end.y >= r.top - 2 && end.y <= r.bottom + 2 && end.x >= r.left - 6 && end.x <= r.right + 6,
+    );
+    expect(onHeader, `конец ребра ${JSON.stringify(end)} вне шапок ${JSON.stringify(cards)}`).toBe(true);
+  }
 });

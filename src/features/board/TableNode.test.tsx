@@ -116,6 +116,25 @@ describe('TableNode: акцент touched', () => {
   });
 });
 
+describe('TableNode: читаемость', () => {
+  it('мета колонки и NULL-плашка 11px, не 10px', () => {
+    render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    const meta = el.querySelector('.vs-col-meta');
+    expect(meta?.className).toContain('text-[11px]');
+    expect(el.querySelector('[data-kind="null"]')?.className).toContain('text-[11px]');
+    expect(el.innerHTML).not.toContain('text-[10px]');
+  });
+
+  it('классы для семантического зума: таблица, строки, мета', () => {
+    render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    expect(el.className).toContain('vs-table');
+    expect(el.querySelectorAll('.vs-rows').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.vs-col-meta')).toHaveLength(book.columns.length);
+  });
+});
+
 describe('columnTitle', () => {
   it('собирает ограничения колонки', () => {
     const [id] = author.columns;
