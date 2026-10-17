@@ -27,6 +27,12 @@ export function useSchemaSync(): void {
     if (sandbox.status === 'ready') void sync();
     const off = sandbox.subscribe((e) => {
       if (e.type === 'changed') void sync();
+      // Пересборка под другой урок: схема прошлого урока на доске неверна, стартовый кадр ждёт первую схему нового.
+      // Ответ introspect, уже летящий к стору, отбрасываем
+      if (e.type === 'rebuilding') {
+        generation++;
+        useBoardStore.getState().setSchema(null);
+      }
     });
     return () => {
       alive = false;

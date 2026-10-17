@@ -57,12 +57,18 @@ describe('sandbox: загрузка урока', () => {
     async () => {
       const { sandbox, factory, events } = await bookstore();
       expect(sandbox.status).toBe('ready');
-      expect(events).toEqual([{ type: 'status', status: 'ready' }, { type: 'changed' }]);
+      expect(events).toEqual([
+        { type: 'rebuilding' },
+        { type: 'status', status: 'ready' },
+        { type: 'changed' },
+      ]);
       expect(await count(sandbox.client(), 'book')).toBe(11);
       expect(factory).toHaveBeenLastCalledWith(undefined);
 
+      events.length = 0;
       await sandbox.loadLesson('bookstore', []); // тот же датасет и журнал: без пересборки
       expect(factory).toHaveBeenCalledTimes(1);
+      expect(events).toEqual([]); // схема на доске остаётся верной
 
       await sandbox.loadLesson('bookstore', [`insert into author (name) values ('Новый')`]);
       expect(factory).toHaveBeenCalledTimes(2);

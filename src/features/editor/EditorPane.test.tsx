@@ -231,7 +231,7 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     const { rerender } = render(<EditorPane />);
     await act(async () => undefined);
     expect(useBoardStore.getState().focused).toEqual([]);
-    // useLessonSandbox при смене урока сбрасывает схему, потом приходит схема нового урока
+    // пересборка базы (useSchemaSync, событие rebuilding) сбрасывает схему, потом приходит схема нового урока
     route.lessonId = 'unknown2';
     useLessonStore.getState().setLastQuery('unknown2', 'select title from book');
     act(() => useBoardStore.getState().setSchema(null));

@@ -18,6 +18,7 @@ export interface Sandbox {
 export type SandboxEvent =
   | { type: 'status'; status: Sandbox['status'] }
   | { type: 'restarted'; reason: 'timeout' | 'crash' }
+  | { type: 'rebuilding' } // loadLesson пересобирает базу: схема на доске устарела, новая придёт с changed
   | { type: 'changed' }; // после apply/undo/reset/loadLesson: пора обновить доску
 
 const isDeath = (e: unknown): e is DbException =>
@@ -189,6 +190,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
           entries.every((s, i) => s === journal[i])
         )
           return;
+        emit({ type: 'rebuilding' });
         setStatus('booting');
         try {
           await rebuild(id, entries);

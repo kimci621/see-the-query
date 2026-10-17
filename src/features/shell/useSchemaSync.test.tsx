@@ -48,4 +48,17 @@ describe('useSchemaSync', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(useBoardStore.getState().schema).toBe(schemaB);
   });
+
+  it('пересборка под другой урок сбрасывает схему и отбрасывает летящий ответ', async () => {
+    let resolveOld: (s: SchemaSnapshot) => void = () => undefined;
+    introspect.mockResolvedValueOnce(schemaA).mockReturnValueOnce(new Promise((r) => (resolveOld = r)));
+    renderHook(() => useSchemaSync());
+    await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaA));
+    listener({ type: 'changed' });
+    listener({ type: 'rebuilding' });
+    expect(useBoardStore.getState().schema).toBeNull();
+    resolveOld(schemaB);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(useBoardStore.getState().schema).toBeNull();
+  });
 });
