@@ -14,7 +14,7 @@ const ROOT = process.cwd();
 const LESSONS = collectLessonsMeta(ROOT);
 
 // Уроки, написанные по docs/content-style.md. Задача урока добавляет сюда свой id первым шагом
-const GUIDE_LESSONS: string[] = ['how-to-use', 'table-anatomy'];
+const GUIDE_LESSONS: string[] = ['how-to-use', 'table-anatomy', 'select-basics'];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts
 const MDX_TAGS = new Set(['TlDr', 'Callout', 'DontDoThis', 'Cheatsheet', 'Scene', 'Step', 'T', 'C']);
