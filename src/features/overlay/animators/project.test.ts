@@ -51,6 +51,12 @@ describe('projectAnimator', () => {
     expect(p[0].frame.tables[0].columns.find((c) => c.name === 'title')?.state).toBe('highlight');
     expect(p[0].caption).toContain('title → name');
   });
+
+  it('переименованная колонка тоже остаётся в выдаче', () => {
+    const renamed = { ...stage, kept: ['price'], renamed: { title: 'name' } };
+    const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
+    expect(p[0].caption).toMatch(/^SELECT: оставляем 3,/);
+  });
 });
 
 describe('projectAnimator: одноимённые колонки JOIN', () => {

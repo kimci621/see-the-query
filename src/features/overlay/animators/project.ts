@@ -46,7 +46,8 @@ export const projectAnimator: Animator<StageOf<'project'>> = (prev, stage, stage
     state: stage.computed.includes(c.name) ? 'computed' : 'normal',
   }));
 
-  const parts: string[] = [`оставляем ${stage.kept.length + stage.computed.length}`];
+  const kept = stage.kept.length + stage.computed.length + Object.keys(stage.renamed).length;
+  const parts: string[] = [`оставляем ${kept}`];
   if (stage.removed.length) parts.push(`убираем ${stage.removed.join(', ')}`);
   if (stage.computed.length) parts.push(`вычисляем ${stage.computed.join(', ')}`);
   const renames = Object.entries(stage.renamed).map(([from, to]) => `${from} → ${to}`);
