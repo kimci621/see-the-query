@@ -1,10 +1,11 @@
-import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useEffect } from 'react';
+import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLessonStore } from '@/stores/lesson';
 import { mdxComponents } from './mdx/components';
 import { loadLessonContent, neighbours } from './registry';
 import type { LessonMeta } from './types';
+import { useLessonProgress } from './useLessonProgress';
 
 // Один lazy-компонент на урок, иначе Suspense будет перезагружать урок на каждый рендер
 const cache = new Map<string, LazyExoticComponent<ComponentType<{ components?: Record<string, unknown> }>>>();
@@ -31,6 +32,8 @@ function LessonSkeleton() {
 export function LessonView({ meta }: { meta: LessonMeta }) {
   const markVisited = useLessonStore((s) => s.markVisited);
   useEffect(() => markVisited(meta.id), [meta.id, markVisited]);
+  const [end, setEnd] = useState<HTMLDivElement | null>(null);
+  useLessonProgress(meta, end);
 
   const Content = lessonComponent(meta);
   const { prev, next } = neighbours(meta.id);
@@ -46,6 +49,7 @@ export function LessonView({ meta }: { meta: LessonMeta }) {
       </header>
       <Suspense fallback={<LessonSkeleton />}>
         <Content components={mdxComponents} />
+        <div ref={setEnd} aria-hidden="true" data-lesson-end />
       </Suspense>
       {meta.docs.length > 0 && (
         <section aria-labelledby="lesson-docs" className="mt-10">

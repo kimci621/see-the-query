@@ -15,6 +15,10 @@ const route = vi.hoisted(() => ({ lessonId: null as string | null }));
 vi.mock('@/features/db/SandboxProvider', () => ({
   useSandbox: () => ({ sandbox: sandboxState.sandbox, status: 'ready', version: null }),
 }));
+vi.mock('@/features/lessons/registry', () => ({
+  getLesson: (id: string) =>
+    id === 'with-initial' ? { id, initialQuery: 'select * from book;' } : undefined,
+}));
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
   useParams: () => ({ lessonId: route.lessonId }),
@@ -168,6 +172,16 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     act(() => useEditorStore.getState().setHoveredColumn(null));
     await act(async () => undefined);
     expect(useBoardStore.getState().queryColumns).toEqual(['public.book.title', 'public.book.price']);
+  });
+
+  it('открытие урока: initialQuery, а при возврате lastQuery важнее initialQuery', () => {
+    route.lessonId = 'with-initial';
+    const { unmount } = render(<EditorPane />);
+    expect(useEditorStore.getState().text).toBe('select * from book;');
+    unmount();
+    useLessonStore.getState().setLastQuery('with-initial', 'select 1;');
+    render(<EditorPane />);
+    expect(useEditorStore.getState().text).toBe('select 1;');
   });
 
   it('открытие урока ставит стартовый кадр на таблицы стартового текста', async () => {

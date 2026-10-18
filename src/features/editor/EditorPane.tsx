@@ -93,10 +93,10 @@ export function EditorPane() {
     useBoardStore.getState().focus(touchedOf(stmt, useBoardStore.getState().schema).tableIds);
   }, [activeClause, cursor, text]);
 
-  // Открытие урока: initialQuery из мета или последний запрос ученика
+  // Открытие урока: последний запрос ученика важнее initialQuery из мета
   useEffect(() => {
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.lastQuery : undefined;
-    const initial = meta?.initialQuery ?? saved ?? '';
+    const initial = saved ?? meta?.initialQuery ?? '';
     const editor = useEditorStore.getState();
     if (editor.text !== initial) {
       editor.setText(initial);

@@ -35,6 +35,19 @@ if (!globalThis.ResizeObserver) {
   } as unknown as typeof ResizeObserver;
 }
 
+// jsdom не умеет IntersectionObserver: заглушка, которая никогда не срабатывает
+globalThis.IntersectionObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+  root = null;
+  rootMargin = '';
+  thresholds = [];
+} as unknown as typeof IntersectionObserver;
+
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => undefined;
 }
