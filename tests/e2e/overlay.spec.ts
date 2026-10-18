@@ -105,6 +105,6 @@ test('«На доску» и «Дальше» из урока проигрыва
   await scene.getByRole('button', { name: 'На доску' }).click();
   await scene.getByRole('button', { name: 'Дальше' }).click();
   await scene.getByRole('button', { name: 'Дальше' }).click();
-  await expect(page.getByTestId('result-count')).toHaveText('2 строки', { timeout: 10_000 });
-  await expect(page.getByTestId('ghost-row')).toHaveCount(2, { timeout: 10_000 });
+  await expect(page.getByTestId('result-count')).toHaveText('3 строки', { timeout: 10_000 });
+  await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
 });
