@@ -57,6 +57,32 @@ describe('projectAnimator', () => {
     const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
     expect(p[0].caption).toMatch(/^SELECT: оставляем 3,/);
   });
+
+  it('переименования и вычисления в подписи раньше «убираем»: длинный список не прячет их', () => {
+    const renamed = { ...stage, kept: ['price'], renamed: { title: 'name' } };
+    const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
+    expect(p[0].caption).toBe(
+      'SELECT: оставляем 3, переименовываем title → name, вычисляем sale, убираем book_id',
+    );
+  });
+
+  it('два алиаса одной колонки: «оставляем» по числу колонок выдачи', () => {
+    // select price as a, price as b: сводка трассировщика кладёт в renamed только последний алиас
+    const col = (name: string) => ({ name, type: 'numeric', source: { alias: 'b', column: 'price' } });
+    const twice = {
+      ...stage,
+      kept: [],
+      computed: [],
+      removed: ['book_id', 'title'],
+      renamed: { price: 'b' },
+      output: {
+        columns: [col('a'), col('b')],
+        rows: stage.output.rows.map((r) => ({ ...r, values: [r.values[1], r.values[1]] })),
+      },
+    };
+    const p = projectAnimator(afterWhere(), twice, 2, testCtx());
+    expect(p[0].caption).toMatch(/^SELECT: оставляем 2,/);
+  });
 });
 
 describe('projectAnimator: одноимённые колонки JOIN', () => {

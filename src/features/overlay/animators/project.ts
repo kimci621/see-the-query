@@ -46,12 +46,12 @@ export const projectAnimator: Animator<StageOf<'project'>> = (prev, stage, stage
     state: stage.computed.includes(c.name) ? 'computed' : 'normal',
   }));
 
-  const kept = stage.kept.length + stage.computed.length + Object.keys(stage.renamed).length;
-  const parts: string[] = [`оставляем ${kept}`];
-  if (stage.removed.length) parts.push(`убираем ${stage.removed.join(', ')}`);
-  if (stage.computed.length) parts.push(`вычисляем ${stage.computed.join(', ')}`);
+  // Подпись в плеере обрезается по ширине: короткие части раньше длинного списка «убираем»
+  const parts: string[] = [`оставляем ${stage.output.columns.length}`];
   const renames = Object.entries(stage.renamed).map(([from, to]) => `${from} → ${to}`);
   if (renames.length) parts.push(`переименовываем ${renames.join(', ')}`);
+  if (stage.computed.length) parts.push(`вычисляем ${stage.computed.join(', ')}`);
+  if (stage.removed.length) parts.push(`убираем ${stage.removed.join(', ')}`);
 
   return [
     {
