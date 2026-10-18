@@ -136,6 +136,12 @@ describe('checkBlocks', () => {
     expect(problems).toEqual(['строка 1: в run-блоке должен быть один оператор, а их 2']);
   });
 
+  it('синтаксическая ошибка с expectError=42601 не считается проблемой парсера', async () => {
+    const blocks = extractSqlBlocks(mdx('~~~sql run expectError=42601\nselect from from book;\n~~~\n'));
+    const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db));
+    expect(problems).toEqual([]);
+  });
+
   it('сбой трассировщика даёт проблему со строкой, а не роняет урок', async () => {
     vi.mocked(traceStatement).mockRejectedValueOnce(new Error('бум'));
     const blocks = extractSqlBlocks(mdx('~~~sql run expect=rows:11\nselect * from book;\n~~~\n'));

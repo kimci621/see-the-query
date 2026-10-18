@@ -69,7 +69,9 @@ export async function checkBlocks(
     if (meta.run) {
       const parsed = parseSql(sql);
       if (!parsed.ok) {
-        problems.push(`${at}: парсер не принял блок: ${parsed.error.message}`);
+        // Синтаксическая ошибка может быть ожидаемой (expectError=42601): её проверит выполнение ниже
+        if (meta.expectError === undefined)
+          problems.push(`${at}: парсер не принял блок: ${parsed.error.message}`);
       } else if (parsed.statements.length !== 1) {
         problems.push(`${at}: в run-блоке должен быть один оператор, а их ${parsed.statements.length}`);
       } else if (opts.trace && meta.expectError === undefined && meta.trace !== 'final-only') {
