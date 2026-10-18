@@ -10,6 +10,13 @@ describe('parseDiagnostic', () => {
     expect(d.message).toBe('syntax error');
   });
 
+  it('кириллица и имя в двойных кавычках подчёркиваются целиком', () => {
+    const quoted = parseDiagnostic('select "Тихий Дон" from book', { message: 'нет колонки', position: 7 });
+    expect([quoted.from, quoted.to]).toEqual([7, 18]);
+    const cyr = parseDiagnostic('select имя from book', { message: 'нет колонки', position: 7 });
+    expect([cyr.from, cyr.to]).toEqual([7, 10]);
+  });
+
   it('позиция в конце текста подчёркивает один символ', () => {
     const d = parseDiagnostic('select 1', { message: 'ой', position: 8 });
     expect(d.from).toBe(7);

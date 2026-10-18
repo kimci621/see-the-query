@@ -6,10 +6,11 @@ export interface EditorDiagnostic {
   message: string;
 }
 
-// Слово под позицией: диагностика подчёркивает лексему, а не один символ
+// Слово под позицией: диагностика подчёркивает лексему, а не один символ.
+// Имя в двойных кавычках целиком, буквы любого алфавита: \w знает только латиницу
 function wordAt(text: string, at: number): { from: number; to: number } {
   const from = Math.max(0, Math.min(at, Math.max(0, text.length - 1)));
-  const m = /[\w$]+/.exec(text.slice(from));
+  const m = /"[^"]*"?|[\p{L}\p{N}_$]+/u.exec(text.slice(from));
   return m ? { from: from + m.index, to: from + m.index + m[0].length } : { from, to: from + 1 };
 }
 
