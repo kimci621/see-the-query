@@ -29,7 +29,10 @@ describe('CommandMenu', () => {
 
   it('Enter открывает урок и закрывает меню', async () => {
     const { router, onOpenChange } = renderMenu();
-    await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'алиас{Enter}');
+    await userEvent.type(
+      screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'),
+      'выражения{Enter}',
+    );
     expect(router.state.location.pathname).toBe('/l/select-basics');
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
