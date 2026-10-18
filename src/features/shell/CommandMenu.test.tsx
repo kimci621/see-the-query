@@ -21,6 +21,12 @@ describe('CommandMenu', () => {
     expect(screen.queryByRole('option', { name: /Как пользоваться доской/ })).not.toBeInTheDocument();
   });
 
+  it('лучшее совпадение первым, даже из поздней главы', async () => {
+    renderMenu();
+    await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'алиас');
+    expect(screen.getAllByRole('option')[0]).toHaveAccessibleName(/SELECT: колонки, выражения, алиасы/);
+  });
+
   it('ищет по номеру урока', async () => {
     renderMenu();
     await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), '4.1');
@@ -29,10 +35,7 @@ describe('CommandMenu', () => {
 
   it('Enter открывает урок и закрывает меню', async () => {
     const { router, onOpenChange } = renderMenu();
-    await userEvent.type(
-      screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'),
-      'выражения{Enter}',
-    );
+    await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'алиас{Enter}');
     expect(router.state.location.pathname).toBe('/l/select-basics');
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

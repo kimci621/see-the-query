@@ -204,7 +204,7 @@ test('переход how-to-use → select-basics заканчивается с�
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
   await page.keyboard.press('ControlOrMeta+k');
-  await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('выражения');
+  await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('алиас');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/l\/select-basics$/);
   await expect(book.getByTestId('hidden-columns')).toBeVisible({ timeout: 20_000 });

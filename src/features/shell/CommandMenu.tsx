@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useCommandState } from 'cmdk';
+import { Fragment, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
   CommandDialog,
@@ -39,25 +40,40 @@ export function CommandMenu({
       <CommandInput placeholder="Урок, тема, ключевое слово SQL..." />
       <CommandList>
         <CommandEmpty>Ничего не нашлось</CommandEmpty>
-        {lessonsByChapter().map(({ chapter, lessons }) => (
-          <CommandGroup key={chapter.id} heading={`${chapter.number}. ${chapter.title}`}>
-            {lessons.map((l) => (
-              <CommandItem
-                key={l.id}
-                value={`${l.number} ${l.title}`}
-                keywords={[...l.tags, chapter.title]}
-                onSelect={() => {
-                  navigate(`/l/${l.id}`);
-                  onOpenChange(false);
-                }}
-              >
-                <span className="font-mono text-xs text-muted-foreground">{l.number}</span>
-                {l.title}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
+        <LessonItems
+          onPick={(id) => {
+            navigate(`/l/${id}`);
+            onOpenChange(false);
+          }}
+        />
       </CommandList>
     </CommandDialog>
   );
+}
+
+// cmdk 1.1.1 сортирует пункты внутри группы, но не сами группы (ищет группу по useId, а в data-value
+// у неё заголовок). С группами первым стоял бы пункт первой главы с любым слабым совпадением.
+// Поэтому при поиске список плоский: cmdk ставит выше пункт с лучшим score
+function LessonItems({ onPick }: { onPick: (id: string) => void }) {
+  const searching = useCommandState((s) => s.search !== '');
+  return lessonsByChapter().map(({ chapter, lessons }) => {
+    const items = lessons.map((l) => (
+      <CommandItem
+        key={l.id}
+        value={`${l.number} ${l.title}`}
+        keywords={[...l.tags, chapter.title]}
+        onSelect={() => onPick(l.id)}
+      >
+        <span className="font-mono text-xs text-muted-foreground">{l.number}</span>
+        {l.title}
+      </CommandItem>
+    ));
+    return searching ? (
+      <Fragment key={chapter.id}>{items}</Fragment>
+    ) : (
+      <CommandGroup key={chapter.id} heading={`${chapter.number}. ${chapter.title}`}>
+        {items}
+      </CommandGroup>
+    );
+  });
 }
