@@ -154,6 +154,17 @@ describe('TableNode: свёртка широкой таблицы', () => {
     expect(el.querySelector('[data-column="tags"]')).not.toHaveAttribute('data-highlighted');
   });
 
+  it('подсвеченная свёрнутая колонка подсвечивает заглушку', () => {
+    render(<ReactFlowProvider>{node(wideBook)}</ReactFlowProvider>);
+    const stub = screen.getByTestId('hidden-columns');
+    expect(stub).not.toHaveAttribute('data-highlighted');
+    act(() => useBoardStore.getState().highlightColumns(['public.book.pages']));
+    expect(stub).toHaveAttribute('data-highlighted', 'true');
+    expect(stub).toHaveClass('bg-touched/10');
+    act(() => useBoardStore.getState().highlightColumns(['public.book.title']));
+    expect(stub).not.toHaveAttribute('data-highlighted');
+  });
+
   it('разворот другой таблицы эту ноду не перерисовывает', () => {
     const renders = { book: 0 };
     render(<ReactFlowProvider>{node(wideBook, () => renders.book++)}</ReactFlowProvider>);

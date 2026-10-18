@@ -91,6 +91,8 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   const fold = foldColumns(table, queried, expanded);
   const shown = fold.visible.map((c) => ({ c, j: table.columns.indexOf(c) }));
   const stub = fold.hidden.length;
+  // Подсвеченная колонка свёрнута: подсвечиваем заглушку, размер ноды не меняется
+  const stubHighlighted = fold.hidden.some((c) => highlighted.includes(c.name));
   const rows = table.sampleRows
     .slice(0, MAX_VISIBLE_ROWS)
     .map((values, i) => ({ key: table.sampleCtids[i] ?? String(i), values }));
@@ -139,8 +141,12 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
         {stub > 0 && (
           <div
             data-testid="hidden-columns"
+            data-highlighted={stubHighlighted || undefined}
             title={fold.hidden.map((c) => c.name).join(', ')}
-            className="flex shrink-0 items-center px-2 text-xs text-muted-foreground"
+            className={cn(
+              'flex shrink-0 items-center px-2 text-xs text-muted-foreground',
+              stubHighlighted && 'bg-touched/10',
+            )}
             style={{ width: STUB_WIDTH }}
           >
             +{stub} {plural(stub, 'колонка', 'колонки', 'колонок')}
