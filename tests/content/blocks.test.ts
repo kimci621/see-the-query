@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { traceStatement } from '@/features/tracer/trace';
 import { withDataset } from '../helpers/db';
-import { checkBlocks, checkFinalOnlyNotes, extractSqlBlocks } from './blocks';
+import { checkBlocks, checkFinalOnlyNotes, checkForeignSqlFences, extractSqlBlocks } from './blocks';
 
 // Настоящий трассировщик по умолчанию, в одном тесте подменяем на падающий
 vi.mock('@/features/tracer/trace', async (importOriginal) => {
@@ -50,6 +50,15 @@ describe('extractSqlBlocks', () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0]?.sql).toBe('select *\nfrom book\nwhere true;');
     expect(blocks[0]?.line).toBe(5);
+  });
+
+  it('пустой блок не глотает соседний', () => {
+    const blocks = extractSqlBlocks(
+      mdx('~~~sql noexec\n~~~\n\nтекст\n\n~~~sql run expect=rows:3\nselect 1;\n~~~\n'),
+    );
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({ line: 1, rawMeta: 'noexec', sql: '' });
+    expect(blocks[1]).toMatchObject({ line: 6, rawMeta: 'run expect=rows:3', sql: 'select 1;' });
   });
 
   it('ошибка меты называет строку', () => {
@@ -147,6 +156,29 @@ describe('checkBlocks', () => {
     const blocks = extractSqlBlocks(mdx('~~~sql run expect=rows:11\nselect * from book;\n~~~\n'));
     const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db));
     expect(problems).toEqual(['строка 1: трассировщик упал: Error: бум']);
+  });
+});
+
+describe('checkForeignSqlFences', () => {
+  const bt = (n: number) => '`'.repeat(n);
+
+  it('ловит чужие заборы sql с номером строки', () => {
+    expect(checkForeignSqlFences('a\n~~~sql\nselect 1;\n~~~\n')).toEqual([
+      expect.stringContaining('строка 2'),
+    ]);
+    expect(checkForeignSqlFences(`a\n\n${bt(4)}sql\nselect 1;\n${bt(4)}\n`)).toEqual([
+      expect.stringContaining('строка 3'),
+    ]);
+    expect(checkForeignSqlFences(`a\n    ${bt(3)}sql\nselect 1;\n`)).toEqual([
+      expect.stringContaining('строка 2'),
+    ]);
+  });
+
+  it('обычные заборы, ```sqlite и другие языки не трогает', () => {
+    const src = mdx(
+      '~~~sql run\nselect 1;\n~~~\n\n   ~~~sql\nx\n~~~\n\n~~~sqlite\ny\n~~~\n\n~~~ts\nz\n~~~\n',
+    );
+    expect(checkForeignSqlFences(src)).toEqual([]);
   });
 });
 

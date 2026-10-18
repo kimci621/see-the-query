@@ -13,8 +13,19 @@ export interface SqlBlockSource {
 }
 
 // Забор ```sql с начала строки (до трёх пробелов отступа, как в CommonMark), закрывающий тоже с начала строки.
-// Три обратные кавычки посреди строки SQL блок не закрывают
-const SQL_FENCE = /^ {0,3}```sql(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n {0,3}```[ \t]*$/gm;
+// Три обратные кавычки посреди строки SQL блок не закрывают. Тело может быть пустым: ленивое `??`
+// сначала пробует закрыть забор сразу, иначе пустой блок съел бы следующий
+const SQL_FENCE = /^ {0,3}```sql(?:[ \t]+([^\n]*))?\n(?:([\s\S]*?)\n)?? {0,3}```[ \t]*$/gm;
+
+// Заборы, которые MDX отрисует как sql-блок, а SQL_FENCE не извлечёт: ~~~sql, 4+ кавычек, отступ от 4 пробелов или таб
+const FOREIGN_SQL_FENCE = /^(?:[ \t]*(?:`{4,}|~{3,})|(?: {4,}|\t)[ \t]*`{3})[ \t]*sql\b/gm;
+
+export function checkForeignSqlFences(mdx: string): string[] {
+  return [...mdx.matchAll(FOREIGN_SQL_FENCE)].map(
+    (m) =>
+      `строка ${mdx.slice(0, m.index).split('\n').length}: забор sql-блока в виде, который раннер не проверяет; нужен ровно \`\`\`sql без отступа`,
+  );
+}
 
 export function extractSqlBlocks(mdx: string): SqlBlockSource[] {
   return [...mdx.matchAll(SQL_FENCE)].map((m) => {

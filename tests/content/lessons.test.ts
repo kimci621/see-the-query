@@ -8,7 +8,7 @@ import type { DbClient } from '@/features/db/types';
 import { CALLOUT_KINDS } from '@/features/lessons/mdx/Callouts';
 import { collectLessonsMeta } from '../../plugins/lessons-meta';
 import { withDataset } from '../helpers/db';
-import { checkBlocks, checkFinalOnlyNotes, extractSqlBlocks } from './blocks';
+import { checkBlocks, checkFinalOnlyNotes, checkForeignSqlFences, extractSqlBlocks } from './blocks';
 
 const ROOT = process.cwd();
 const LESSONS = collectLessonsMeta(ROOT);
@@ -84,7 +84,11 @@ describe.each(LESSONS.map((meta) => [meta.id, meta] as const))('урок %s', (_
     const blocks = extractSqlBlocks(source);
     expect(blocks.length, 'в уроке нет sql-блоков').toBeGreaterThan(0);
     const problems = await withDataset(meta.dataset, async (db) => {
-      const found = [...checkFinalOnlyNotes(source, blocks), ...(await checkBlocks(blocks, db))];
+      const found = [
+        ...checkForeignSqlFences(source),
+        ...checkFinalOnlyNotes(source, blocks),
+        ...(await checkBlocks(blocks, db)),
+      ];
       const known = await knownObjects(db);
       for (const [, tag, id] of withoutCode(source).matchAll(/<([TC]) id="([^"]+)"/g)) {
         if (id && !known.has(id)) found.push(`<${tag} id="${id}">: такого объекта нет в датасете`);
