@@ -28,6 +28,27 @@ export function extractSqlBlocks(mdx: string): SqlBlockSource[] {
   });
 }
 
+const FINAL_ONLY_NOTE = /^\{\/\*\s*final-only:\s*\S.*\*\/\}$/;
+
+// Блок с trace=final-only обязан иметь над собой MDX-комментарий с причиной (предыдущая непустая строка)
+export function checkFinalOnlyNotes(mdx: string, blocks: SqlBlockSource[]): string[] {
+  const lines = mdx.split('\n');
+  const problems: string[] = [];
+  for (const { line, meta } of blocks) {
+    if (meta.trace !== 'final-only') continue;
+    const prev = lines
+      .slice(0, line - 1)
+      .map((l) => l.trim())
+      .findLast((l) => l !== '');
+    if (!prev || !FINAL_ONLY_NOTE.test(prev)) {
+      problems.push(
+        `строка ${line}: над блоком trace=final-only нужен комментарий {/* final-only: причина */}`,
+      );
+    }
+  }
+  return problems;
+}
+
 type Outcome = { ok: true; results: QueryResult[] } | { ok: false; code: string; message: string };
 
 async function run(db: DbClient, sql: string): Promise<Outcome> {

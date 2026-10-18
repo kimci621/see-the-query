@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { traceStatement } from '@/features/tracer/trace';
 import { withDataset } from '../helpers/db';
-import { checkBlocks, extractSqlBlocks } from './blocks';
+import { checkBlocks, checkFinalOnlyNotes, extractSqlBlocks } from './blocks';
 
 // Настоящий трассировщик по умолчанию, в одном тесте подменяем на падающий
 vi.mock('@/features/tracer/trace', async (importOriginal) => {
@@ -147,5 +147,31 @@ describe('checkBlocks', () => {
     const blocks = extractSqlBlocks(mdx('~~~sql run expect=rows:11\nselect * from book;\n~~~\n'));
     const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db));
     expect(problems).toEqual(['строка 1: трассировщик упал: Error: бум']);
+  });
+});
+
+describe('checkFinalOnlyNotes', () => {
+  const check = (text: string) => {
+    const source = mdx(text);
+    return checkFinalOnlyNotes(source, extractSqlBlocks(source));
+  };
+
+  it('final-only без комментария с причиной даёт проблему со строкой блока', () => {
+    expect(check('Текст\n\n~~~sql run expect=rows:1 trace=final-only\nselect 1;\n~~~')).toHaveLength(1);
+    expect(
+      check('{/* final-only: */}\n~~~sql run expect=rows:1 trace=final-only\nselect 1;\n~~~'),
+    ).toHaveLength(1);
+    expect(
+      check('{/* final-only: причина */}\n~~~sql run expect=rows:1 trace=final-only\nselect 1;\n~~~'),
+    ).toEqual([]);
+  });
+
+  it('пустые строки между комментарием и блоком допустимы, обычные блоки не требуют комментария', () => {
+    expect(
+      check(
+        '{/* final-only: подзапрос во FROM */}\n\n~~~sql run expect=rows:1 trace=final-only\nselect 1;\n~~~',
+      ),
+    ).toEqual([]);
+    expect(check('~~~sql run expect=rows:1\nselect 1;\n~~~')).toEqual([]);
   });
 });
