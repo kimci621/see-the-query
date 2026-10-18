@@ -44,8 +44,9 @@ describe('sortLessons', () => {
 });
 
 describe('реестр настоящих уроков', () => {
-  it('заглушки найдены и идут в порядке программы', () => {
-    expect(LESSONS.map((l) => l.id)).toEqual(['how-to-use', 'select-basics']);
+  it('уроки найдены, первый урок 0.1', () => {
+    expect(LESSONS[0]?.id).toBe('how-to-use');
+    expect(LESSONS.map((l) => l.id)).toContain('select-basics');
   });
 
   it('getLesson и неизвестный id', () => {
@@ -54,13 +55,22 @@ describe('реестр настоящих уроков', () => {
   });
 
   it('neighbours на краях и в середине', () => {
-    expect(neighbours('how-to-use')).toEqual({ prev: null, next: LESSONS[1] });
-    expect(neighbours('select-basics')).toEqual({ prev: LESSONS[0], next: null });
+    const last = LESSONS.at(-1);
+    if (!last) throw new Error('нет уроков');
+    expect(neighbours('how-to-use')).toEqual({ prev: null, next: LESSONS[1] ?? null });
+    expect(neighbours(last.id).next).toBeNull();
+    const i = LESSONS.findIndex((l) => l.id === 'select-basics');
+    expect(neighbours('select-basics')).toEqual({
+      prev: LESSONS[i - 1] ?? null,
+      next: LESSONS[i + 1] ?? null,
+    });
     expect(neighbours('nope')).toEqual({ prev: null, next: null });
   });
 
   it('lessonsByChapter пропускает пустые главы', () => {
-    expect(lessonsByChapter().map((g) => g.chapter.id)).toEqual(['start', 'select']);
+    const groups = lessonsByChapter();
+    expect(groups[0]?.chapter.id).toBe('start');
+    expect(groups.every((g) => g.lessons.length > 0)).toBe(true);
   });
 
   it('loadLessonContent лениво грузит MDX-компонент', async () => {

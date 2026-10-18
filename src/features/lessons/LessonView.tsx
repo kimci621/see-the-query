@@ -2,11 +2,12 @@ import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useEffect
 import { Link } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLessonStore } from '@/stores/lesson';
+import { mdxComponents } from './mdx/components';
 import { loadLessonContent, neighbours } from './registry';
 import type { LessonMeta } from './types';
 
 // Один lazy-компонент на урок, иначе Suspense будет перезагружать урок на каждый рендер
-const cache = new Map<string, LazyExoticComponent<ComponentType>>();
+const cache = new Map<string, LazyExoticComponent<ComponentType<{ components?: Record<string, unknown> }>>>();
 
 function lessonComponent(meta: LessonMeta) {
   let component = cache.get(meta.id);
@@ -44,8 +45,22 @@ export function LessonView({ meta }: { meta: LessonMeta }) {
         </h1>
       </header>
       <Suspense fallback={<LessonSkeleton />}>
-        <Content />
+        <Content components={mdxComponents} />
       </Suspense>
+      {meta.docs.length > 0 && (
+        <section aria-labelledby="lesson-docs" className="mt-10">
+          <h2 id="lesson-docs">Документация PostgreSQL</h2>
+          <ul>
+            {meta.docs.map((url) => (
+              <li key={url}>
+                <a href={url} target="_blank" rel="noreferrer">
+                  {url.replace('https://www.postgresql.org/docs/current/', '')}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <nav
         className="not-prose mt-12 flex justify-between gap-4 border-t pt-4 text-sm"
         aria-label="Соседние уроки"

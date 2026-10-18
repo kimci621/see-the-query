@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { LESSONS } from '@/features/lessons/registry';
 import { useLessonStore } from '@/stores/lesson';
 import { LessonSidebar } from './LessonSidebar';
 
@@ -26,7 +27,7 @@ describe('LessonSidebar', () => {
     renderSidebar();
     expect(screen.getByText('0. Старт')).toBeInTheDocument();
     expect(screen.getByText('4. Выборка из одной таблицы')).toBeInTheDocument();
-    expect(screen.queryByText('6. Соединения')).not.toBeInTheDocument();
+    expect(screen.queryByText('9. Оконные функции')).not.toBeInTheDocument();
   });
 
   it('статусы уроков подписаны текстом, а не только иконкой', () => {
@@ -43,7 +44,7 @@ describe('LessonSidebar', () => {
       byId: { 'how-to-use': { visited: true, completed: true, journal: [], ranExample: true } },
     });
     renderSidebar();
-    expect(screen.getByText('Пройдено 1 из 2')).toBeInTheDocument();
+    expect(screen.getByText(`Пройдено 1 из ${LESSONS.length}`)).toBeInTheDocument();
   });
 
   it('активный урок помечен', () => {

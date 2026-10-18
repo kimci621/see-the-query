@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '@/app/router';
+import { neighbours } from '@/features/lessons/registry';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 
@@ -73,18 +74,23 @@ describe('AppShell', () => {
 
   it('урок рендерит MDX и навигацию вперёд', async () => {
     renderAt('/l/how-to-use');
-    expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
+    await screen.findAllByRole('button', { name: 'На доску' });
+    const next = neighbours('how-to-use').next;
+    if (!next) throw new Error('у how-to-use нет следующего урока');
     // Ссылка на урок есть и в левой колонке, поэтому ищем внутри навигации по соседним урокам
-    const pager = screen.getByRole('navigation', { name: 'Соседние уроки' });
-    expect(within(pager).getByRole('link', { name: /SELECT: колонки, выражения, алиасы/ })).toHaveAttribute(
-      'href',
-      '/l/select-basics',
-    );
+    const nav = screen.getByRole('navigation', { name: 'Соседние уроки' });
+    expect(within(nav).getByRole('link')).toHaveAttribute('href', `/l/${next.id}`);
+  });
+
+  it('урок рендерит MDX-компоненты и документацию', async () => {
+    renderAt('/l/how-to-use');
+    expect((await screen.findAllByRole('button', { name: 'На доску' })).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Документация PostgreSQL' })).toBeInTheDocument();
   });
 
   it('открытый урок отмечается посещённым', async () => {
     renderAt('/l/select-basics');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     expect(useLessonStore.getState().byId['select-basics']?.visited).toBe(true);
   });
 
@@ -112,14 +118,14 @@ describe('AppShell', () => {
 
   it('⌘\\ прячет теорию и сайдбар, доска на всю ширину; повтор возвращает раскладку', async () => {
     renderAt('/l/how-to-use');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     // userEvent.keyboard не проставляет code: 'Backslash', поэтому keyDown вручную
     fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
-    expect(screen.queryByText(/Заглушка урока/)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: 'На доску' })).toHaveLength(0);
     expect(screen.queryByRole('navigation', { name: 'Уроки' })).not.toBeInTheDocument();
     expect(screen.queryByRole('separator', { name: 'Ширина списка уроков' })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
-    expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: 'На доску' })).length).toBeGreaterThan(0);
     expect(screen.getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
   });
 
@@ -129,7 +135,7 @@ describe('AppShell', () => {
     const { container } = render(
       <RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/l/how-to-use'] })} />,
     );
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     expect(container.querySelector('[id="sidebar"]')).toBeNull();
     expect(screen.queryByRole('navigation', { name: 'Уроки' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Уроки' }));
@@ -141,7 +147,7 @@ describe('AppShell', () => {
     mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     const router = renderAt('/l/how-to-use');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     await user.click(screen.getByRole('button', { name: 'Уроки' }));
     const dialog = await screen.findByRole('dialog', { name: 'Уроки' });
     // глава с целевым уроком свёрнута: раскрываем
@@ -155,7 +161,7 @@ describe('AppShell', () => {
     mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     await user.click(screen.getByRole('button', { name: 'Уроки' }));
     await screen.findByRole('dialog', { name: 'Уроки' });
     await user.keyboard('{Escape}');
@@ -177,7 +183,7 @@ describe('AppShell', () => {
     const resize = mockResizableMedia([NARROW]);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     await user.click(screen.getByRole('button', { name: 'Уроки' }));
     await screen.findByRole('dialog', { name: 'Уроки' });
     resize([]);
@@ -190,7 +196,7 @@ describe('AppShell', () => {
     mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
     renderAt('/l/how-to-use');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     await user.click(screen.getByRole('button', { name: 'Уроки' }));
     const sheet = await screen.findByRole('dialog', { name: 'Уроки' });
     await user.click(within(sheet).getByRole('button', { name: /Поиск/ }));
@@ -201,7 +207,7 @@ describe('AppShell', () => {
 
   it('на широком экране сайдбар на месте, кнопки «Уроки» нет', async () => {
     renderAt('/l/how-to-use');
-    await screen.findByText(/Заглушка урока/);
+    await screen.findAllByRole('button', { name: 'На доску' });
     expect(screen.getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Уроки' })).not.toBeInTheDocument();
   });
@@ -211,7 +217,7 @@ describe('AppShell', () => {
     useSettingsStore.setState({ focusMode: true });
     const user = userEvent.setup();
     render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/l/how-to-use'] })} />);
-    expect(screen.queryByText(/Заглушка урока/)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: 'На доску' })).toHaveLength(0);
     await user.click(await screen.findByRole('button', { name: 'Уроки' }));
     expect(await screen.findByRole('dialog', { name: 'Уроки' })).toBeInTheDocument();
   });
@@ -223,6 +229,6 @@ describe('AppShell', () => {
     expect(await screen.findByText('see-the-query рассчитан на экран от 640 px')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Всё равно открыть' }));
     expect(screen.queryByText('see-the-query рассчитан на экран от 640 px')).not.toBeInTheDocument();
-    expect(await screen.findByText(/Заглушка урока/)).toBeInTheDocument();
+    expect((await screen.findAllByRole('button', { name: 'На доску' })).length).toBeGreaterThan(0);
   });
 });

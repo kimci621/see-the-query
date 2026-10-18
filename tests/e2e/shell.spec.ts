@@ -6,7 +6,7 @@ test('навигация по урокам, поиск, режим фокуса'
   await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeVisible();
 
   await page.getByRole('navigation', { name: 'Соседние уроки' }).getByRole('link').click();
-  await expect(page).toHaveURL(/\/l\/select-basics$/);
+  await expect(page).not.toHaveURL(/\/l\/how-to-use$/);
 
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('доска');
@@ -14,9 +14,9 @@ test('навигация по урокам, поиск, режим фокуса'
   await expect(page).toHaveURL(/\/l\/how-to-use$/);
 
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByText(/Заглушка урока/)).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeHidden();
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByText(/Заглушка урока/)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeVisible();
 });
 
 test('раскладка и тема переживают перезагрузку', async ({ page }) => {

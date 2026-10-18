@@ -203,7 +203,9 @@ test('переход how-to-use → select-basics заканчивается с�
   await page.goto('/l/how-to-use');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('navigation', { name: 'Соседние уроки' }).getByRole('link').click();
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('алиас');
+  await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/l\/select-basics$/);
   await expect(book.getByTestId('hidden-columns')).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => zoomOf(page)).toBeGreaterThanOrEqual(0.85);
@@ -313,7 +315,7 @@ test('режим фокуса: доска на всю ширину, зум не 
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
   const before = await zoomOf(page);
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByText(/Заглушка урока/)).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1 })).toBeHidden();
   const workspace = await page.locator('[id="workspace"]').boundingBox();
   expect(workspace?.width ?? 0).toBeGreaterThanOrEqual(1440 - 2);
   // рефит анимируется, ждём, пока камера осядет: book в кадре, зум не меньше прежнего
@@ -326,7 +328,7 @@ test('режим фокуса: доска на всю ширину, зум не 
     .toBe(true);
 
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByText(/Заглушка урока/)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toBeVisible();
 });
 
