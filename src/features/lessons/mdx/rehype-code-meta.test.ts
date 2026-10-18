@@ -39,6 +39,14 @@ describe('rehypeCodeMeta', () => {
     expect(html).toContain('data-meta=""');
   });
 
+  it('sql-блок внутри компонента MDX тоже получает мету', async () => {
+    const html = await render(
+      'export const Box = (p) => p.children\n\n<Box>\n\n```sql run expect=rows:6\nselect 1;\n```\n\n</Box>\n',
+    );
+    expect(html).toContain('data-meta="run expect=rows:6"');
+    expect(html).toContain('data-code="select 1;"');
+  });
+
   it('неизвестный язык подсвечивается как текст и не роняет сборку', async () => {
     const html = await render('```brainfuck\n+++\n```\n');
     expect(html).toContain('data-lang="brainfuck"');

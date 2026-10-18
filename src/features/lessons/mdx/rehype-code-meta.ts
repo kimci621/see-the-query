@@ -29,15 +29,15 @@ interface Target {
 
 function collect(parent: Root | Element, out: Target[]) {
   parent.children.forEach((child, index) => {
-    if (child.type !== 'element') return;
-    if (child.tagName === 'pre') {
+    if (child.type === 'element' && child.tagName === 'pre') {
       const code = child.children.find((c): c is Element => c.type === 'element' && c.tagName === 'code');
       if (code) {
         out.push({ parent, index, code });
         return;
       }
     }
-    collect(child, out);
+    // Не только элементы: компоненты MDX (Scene, Step, Callout) приходят узлами mdxJsxFlowElement со своими children
+    if ('children' in child) collect(child as Element, out);
   });
 }
 

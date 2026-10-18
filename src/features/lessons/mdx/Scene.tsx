@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactNode, useState } from 'react';
+import { Children, isValidElement, type ReactNode, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { sendToBoard } from './SqlBlock';
@@ -28,11 +28,17 @@ export function Step({ caption, children }: { caption: string; children?: ReactN
 export function Scene({ children }: { children: ReactNode }) {
   const { lessonId } = useParams();
   const [index, setIndex] = useState(0);
+  const back = useRef<HTMLButtonElement>(null);
+  const forward = useRef<HTMLButtonElement>(null);
   // MDX кладёт между шагами текстовые переводы строк, их отбрасываем
   const steps = Children.toArray(children).filter(isValidElement);
 
   const go = (next: number) => {
     setIndex(next);
+    // Крайний шаг выключает нажатую кнопку, и фокус улетел бы на body. Переносим его на вторую кнопку:
+    // так клавиатура не теряет место, а оверлей видит, что сцену запустил пользователь
+    if (next === steps.length - 1) back.current?.focus();
+    else if (next === 0) forward.current?.focus();
     const sql = sqlOf(steps[next]);
     if (sql !== null) sendToBoard(sql, lessonId);
   };
@@ -44,10 +50,10 @@ export function Scene({ children }: { children: ReactNode }) {
           Шаг {index + 1} из {steps.length}
         </span>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled={index === 0} onClick={() => go(index - 1)}>
+          <Button ref={back} size="sm" variant="outline" disabled={index === 0} onClick={() => go(index - 1)}>
             Назад
           </Button>
-          <Button size="sm" disabled={index >= steps.length - 1} onClick={() => go(index + 1)}>
+          <Button ref={forward} size="sm" disabled={index >= steps.length - 1} onClick={() => go(index + 1)}>
             Дальше
           </Button>
         </div>

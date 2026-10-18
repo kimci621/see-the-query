@@ -93,3 +93,18 @@ test('после Esc клик по чипу снова показывает сц
   await page.getByTestId('stage-chip').nth(1).click();
   await expect(page.getByTestId('ghost-row')).toHaveCount(7);
 });
+
+test('«На доску» и «Дальше» из урока проигрывают сцену, и на последнем шаге тоже', async ({ page }) => {
+  await page.goto('/l/how-to-use');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+  const block = page.getByTestId('sql-block').filter({ hasText: 'select title, price from book;' });
+  await block.getByRole('button', { name: 'На доску' }).click();
+  await expect(page.getByTestId('ghost-table').first()).toBeVisible({ timeout: 10_000 });
+  // в сцене sql-блок шага с кнопкой: rehype видит блоки внутри компонентов MDX
+  const scene = page.getByRole('region', { name: 'Сцена' });
+  await scene.getByRole('button', { name: 'На доску' }).click();
+  await scene.getByRole('button', { name: 'Дальше' }).click();
+  await scene.getByRole('button', { name: 'Дальше' }).click();
+  await expect(page.getByTestId('result-count')).toHaveText('2 строки', { timeout: 10_000 });
+  await expect(page.getByTestId('ghost-row')).toHaveCount(2, { timeout: 10_000 });
+});

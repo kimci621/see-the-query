@@ -71,4 +71,16 @@ describe('Scene', () => {
     expect(screen.getByText('Шаг 2 из 3')).toBeInTheDocument();
     expect(useEditorStore.getState().text).toBe(Q[1]);
   });
+
+  it('на крайнем шаге фокус переходит на вторую кнопку, а не теряется', () => {
+    renderScene();
+    const next = screen.getByRole('button', { name: 'Дальше' });
+    next.focus();
+    fireEvent.click(next);
+    fireEvent.click(next);
+    expect(screen.getByRole('button', { name: 'Назад' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
+    expect(screen.getByRole('button', { name: 'Дальше' })).toHaveFocus();
+  });
 });

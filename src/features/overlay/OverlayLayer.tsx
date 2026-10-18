@@ -17,9 +17,11 @@ const MOTION_SHARE = 0.85;
 const DISSOLVE_SEC = 0.3;
 
 // Камера сцены двигается, только пока пользователь работает с запросом: фокус в редакторе,
-// на доске или в таймлайне. При открытии урока остаётся его сохранённая камера (спека 5.12).
+// на доске, в таймлайне или на кнопках примера урока («На доску», «Дальше» сцены, спека 3.3).
+// При открытии урока остаётся его сохранённая камера (спека 5.12).
 // ponytail: эвристика по фокусу; если не хватит, завести в сторе флаг «сцену запустил пользователь»
-const USER_SCENE = '.cm-editor, [data-testid="board-area"], [data-testid="timeline"]';
+const USER_SCENE =
+  '.cm-editor, [data-testid="board-area"], [data-testid="timeline"], [data-testid="sql-block"], [aria-label="Сцена"]';
 
 function userDrivesScene(): boolean {
   return document.activeElement?.closest(USER_SCENE) != null;
