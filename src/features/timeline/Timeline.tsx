@@ -33,7 +33,7 @@ export function Timeline() {
         <p data-testid="final-only-note" aria-live="polite">
           {trace.error
             ? 'Запрос завершился ошибкой, см. «Сообщения»'
-            : `Пошаговый разбор для этой конструкции пока не умею: ${trace.fallbackReason ?? 'неизвестная конструкция'}`}
+            : (trace.fallbackReason ?? 'Пошаговый разбор для этой конструкции пока не умею')}
         </p>
       </div>
     );

@@ -61,9 +61,7 @@ describe('Timeline', () => {
       ),
     );
     render(<Timeline />);
-    expect(screen.getByTestId('final-only-note').textContent).toBe(
-      'Пошаговый разбор для этой конструкции пока не умею: JOIN LATERAL',
-    );
+    expect(screen.getByTestId('final-only-note').textContent).toBe('JOIN LATERAL');
     expect(screen.queryAllByTestId('stage-chip')).toHaveLength(0);
   });
 
