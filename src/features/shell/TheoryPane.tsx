@@ -25,7 +25,7 @@ export function TheoryPane({
           </Button>
         </div>
       )}
-      <article className="prose prose-neutral max-w-none px-8 py-6 break-words dark:prose-invert">
+      <article className="prose prose-neutral max-w-none px-8 py-6 break-words dark:prose-invert prose-code:before:content-none prose-code:after:content-none">
         {meta ? (
           <LessonView key={meta.id} meta={meta} />
         ) : (
