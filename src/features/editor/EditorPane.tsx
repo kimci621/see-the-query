@@ -119,12 +119,16 @@ export function EditorPane() {
     board.frameStart(touched.tableIds);
   }, [lessonId, hasSchema, parserReady]);
 
-  // Последний запрос урока: сохраняем через секунду после того, как ученик перестал печатать
+  // Последний запрос урока: сохраняем через секунду после того, как ученик перестал печатать.
+  // Текст, равный initialQuery, не храним (и стираем прежний): иначе новый initialQuery урока до ученика не дойдёт
   useEffect(() => {
     if (!lessonId) return;
-    const timer = setTimeout(() => useLessonStore.getState().setLastQuery(lessonId, text), 1000);
+    const timer = setTimeout(
+      () => useLessonStore.getState().setLastQuery(lessonId, text === meta?.initialQuery ? undefined : text),
+      1000,
+    );
     return () => clearTimeout(timer);
-  }, [text, lessonId]);
+  }, [text, lessonId, meta]);
 
   // единый путь применения для кнопки, ⌘⏎ из keymap CodeMirror и ⌘⏎ вне редактора
   const applyCurrent = () => {

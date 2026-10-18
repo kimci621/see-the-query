@@ -15,9 +15,10 @@ const route = vi.hoisted(() => ({ lessonId: null as string | null }));
 vi.mock('@/features/db/SandboxProvider', () => ({
   useSandbox: () => ({ sandbox: sandboxState.sandbox, status: 'ready', version: null }),
 }));
+// Объект стабильный, как в настоящем реестре: иначе эффект открытия урока срабатывал бы на каждый рендер
+const WITH_INITIAL = { id: 'with-initial', initialQuery: 'select * from book;' };
 vi.mock('@/features/lessons/registry', () => ({
-  getLesson: (id: string) =>
-    id === 'with-initial' ? { id, initialQuery: 'select * from book;' } : undefined,
+  getLesson: (id: string) => (id === 'with-initial' ? WITH_INITIAL : undefined),
 }));
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
@@ -182,6 +183,42 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     useLessonStore.getState().setLastQuery('with-initial', 'select 1;');
     render(<EditorPane />);
     expect(useEditorStore.getState().text).toBe('select 1;');
+  });
+
+  it('lastQuery не хранит текст, равный initialQuery, и стирает прежний', () => {
+    vi.useFakeTimers();
+    try {
+      route.lessonId = 'with-initial';
+      useLessonStore.getState().setLastQuery('with-initial', 'select 1;');
+      render(<EditorPane />);
+      // открылся initialQuery: старый lastQuery на открытие ещё влияет, поэтому правим текст вручную
+      act(() => useEditorStore.getState().setText('select * from book;'));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBeUndefined();
+      act(() => useEditorStore.getState().setText('select 2;'));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBe('select 2;');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('открытие урока ничего не меняя не создаёт lastQuery', () => {
+    vi.useFakeTimers();
+    try {
+      route.lessonId = 'with-initial';
+      render(<EditorPane />);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('открытие урока ставит стартовый кадр на таблицы стартового текста', async () => {

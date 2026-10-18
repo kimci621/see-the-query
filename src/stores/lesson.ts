@@ -15,7 +15,7 @@ export interface LessonStore {
   markVisited(id: string): void;
   markRanExample(id: string): void;
   markCompleted(id: string): void;
-  setLastQuery(id: string, q: string): void;
+  setLastQuery(id: string, q: string | undefined): void;
   setJournal(id: string, j: string[]): void;
   setViewport(id: string, v: LessonProgress['viewport']): void;
 }
