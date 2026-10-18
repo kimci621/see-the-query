@@ -315,7 +315,7 @@ test('режим фокуса: доска на всю ширину, зум не 
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
   const before = await zoomOf(page);
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByRole('heading', { level: 1 })).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1 }).first()).toBeHidden();
   const workspace = await page.locator('[id="workspace"]').boundingBox();
   expect(workspace?.width ?? 0).toBeGreaterThanOrEqual(1440 - 2);
   // рефит анимируется, ждём, пока камера осядет: book в кадре, зум не меньше прежнего
@@ -328,7 +328,7 @@ test('режим фокуса: доска на всю ширину, зум не 
     .toBe(true);
 
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toBeVisible();
 });
 

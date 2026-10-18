@@ -5,8 +5,11 @@ test('навигация по урокам, поиск, режим фокуса'
   await expect(page).toHaveURL(/\/l\/how-to-use$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeVisible();
 
-  await page.getByRole('navigation', { name: 'Соседние уроки' }).getByRole('link').click();
-  await expect(page).not.toHaveURL(/\/l\/how-to-use$/);
+  const nextLink = page.getByRole('navigation', { name: 'Соседние уроки' }).getByRole('link');
+  const nextHref = await nextLink.getAttribute('href');
+  expect(nextHref).toMatch(/^\/l\/(?!how-to-use$)/);
+  await nextLink.click();
+  await expect(page).toHaveURL(new RegExp(`${nextHref}$`));
 
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('доска');

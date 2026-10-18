@@ -1,3 +1,4 @@
+import { CHAPTERS } from '@content/chapters';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -27,7 +28,10 @@ describe('LessonSidebar', () => {
     renderSidebar();
     expect(screen.getByText('0. Старт')).toBeInTheDocument();
     expect(screen.getByText('4. Выборка из одной таблицы')).toBeInTheDocument();
-    expect(screen.queryByText('9. Оконные функции')).not.toBeInTheDocument();
+    // главы без уроков в сайдбаре не показываются
+    for (const c of CHAPTERS.filter((c) => !LESSONS.some((l) => l.chapter === c.id))) {
+      expect(screen.queryByText(`${c.number}. ${c.title}`)).not.toBeInTheDocument();
+    }
   });
 
   it('статусы уроков подписаны текстом, а не только иконкой', () => {
