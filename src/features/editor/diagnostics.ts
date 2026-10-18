@@ -14,9 +14,10 @@ function wordAt(text: string, at: number): { from: number; to: number } {
   return m ? { from: from + m.index, to: from + m.index + m[0].length } : { from, to: from + 1 };
 }
 
-// Ошибка парсинга: position - символьная, 0-based, уже в координатах редактора
+// Ошибка парсинга: position libpg-query 0-based в кодовых точках, редактор считает в UTF-16
 export function parseDiagnostic(text: string, err: { message: string; position: number }): EditorDiagnostic {
-  return { ...wordAt(text, err.position), message: err.message };
+  const at = Array.from(text).slice(0, err.position).join('').length;
+  return { ...wordAt(text, at), message: err.message };
 }
 
 // Абсолютная позиция ошибки Postgres в тексте редактора: position 1-based от начала оператора.

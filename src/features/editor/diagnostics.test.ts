@@ -17,6 +17,12 @@ describe('parseDiagnostic', () => {
     expect([cyr.from, cyr.to]).toEqual([7, 10]);
   });
 
+  it('эмодзи перед ошибкой: позиция libpg-query в кодовых точках', () => {
+    // 'book' на кодовой точке 16, в UTF-16 на 18: каждый эмодзи занимает два кода
+    const d = parseDiagnostic("select '😀😀' frm book", { message: 'syntax error', position: 16 });
+    expect([d.from, d.to]).toEqual([18, 22]);
+  });
+
   it('позиция в конце текста подчёркивает один символ', () => {
     const d = parseDiagnostic('select 1', { message: 'ой', position: 8 });
     expect(d.from).toBe(7);
