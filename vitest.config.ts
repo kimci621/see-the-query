@@ -41,6 +41,8 @@ export default mergeConfig(
           test: {
             name: 'content',
             environment: 'node',
+            // Тесты с PGlite и трассировщиком: под нагрузкой дольше 5 с
+            testTimeout: 20000,
             include: ['tests/content/**/*.test.ts'],
           },
         },
