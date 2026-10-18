@@ -1,4 +1,5 @@
 import { Children, isValidElement, type ReactNode, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { sendToBoard } from './SqlBlock';
@@ -34,9 +35,10 @@ export function Scene({ children }: { children: ReactNode }) {
   const steps = Children.toArray(children).filter(isValidElement);
 
   const go = (next: number) => {
-    setIndex(next);
     // Крайний шаг выключает нажатую кнопку, и фокус улетел бы на body. Переносим его на вторую кнопку:
-    // так клавиатура не теряет место, а оверлей видит, что сцену запустил пользователь
+    // так клавиатура не теряет место, а оверлей видит, что сцену запустил пользователь.
+    // flushSync: в сцене из двух шагов вторая кнопка включается только после перерисовки
+    flushSync(() => setIndex(next));
     if (next === steps.length - 1) back.current?.focus();
     else if (next === 0) forward.current?.focus();
     const sql = sqlOf(steps[next]);

@@ -19,13 +19,13 @@ function block(sql: string) {
   );
 }
 
-function renderScene() {
+function renderScene(count = 3) {
   const element = (
     <Scene>
       <Step caption="Берём книги">{block(Q[0] ?? '')}</Step>
       {'\n'}
       <Step caption="Убираем книги без цены">{block(Q[1] ?? '')}</Step>
-      <Step caption="Оставляем только название">{block(Q[2] ?? '')}</Step>
+      {count > 2 && <Step caption="Оставляем только название">{block(Q[2] ?? '')}</Step>}
     </Scene>
   );
   const router = createMemoryRouter([{ path: '/l/:lessonId', element }], {
@@ -80,6 +80,16 @@ describe('Scene', () => {
     fireEvent.click(next);
     expect(screen.getByRole('button', { name: 'Назад' })).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
+    expect(screen.getByRole('button', { name: 'Дальше' })).toHaveFocus();
+  });
+
+  it('в сцене из двух шагов фокус тоже не теряется', () => {
+    renderScene(2);
+    const next = screen.getByRole('button', { name: 'Дальше' });
+    next.focus();
+    fireEvent.click(next);
+    expect(screen.getByRole('button', { name: 'Назад' })).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
     expect(screen.getByRole('button', { name: 'Дальше' })).toHaveFocus();
   });
