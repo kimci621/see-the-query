@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type DbError, hasRowCount } from '@/features/db/types';
 import { explainError } from '@/features/errors/explain';
+import { emptyResultHint } from '@/features/overlay/emptyHint';
 import { rowsWord } from '@/lib/plural';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
@@ -91,10 +92,11 @@ export function ResultsPanel() {
           ) : result ? (
             <ResultGrid
               result={result}
+              // Под «0 строк» подсказка, на каком шаге запрос потерял все строки
               emptyHint={
                 isDml
                   ? `${result.command} не возвращает строк.${counted ? ` Затронуто: ${count}` : ''}`
-                  : '0 строк'
+                  : ['0 строк', trace && emptyResultHint(trace)].filter(Boolean).join('. ')
               }
             />
           ) : trace?.error ? (

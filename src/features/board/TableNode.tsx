@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '@/components/ui/badge';
 import type { ColumnInfo } from '@/features/db/introspect';
 import { plural } from '@/lib/plural';
+import { bumpRenderCount } from '@/lib/renderCount';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';
@@ -79,6 +80,7 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
 }
 
 export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFlowNode>) {
+  bumpRenderCount('tableNode');
   const { table } = data;
   // Селекторы вместо data: при фокусе другой таблицы эта нода не рендерится
   const focused = useBoardStore((s) => s.focused.includes(id));

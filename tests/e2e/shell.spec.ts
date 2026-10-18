@@ -58,10 +58,8 @@ test('SQL-блок урока подсвечен и несёт мету', async 
 test('Tab с доски фокусирует ноду таблицы с подписью', async ({ page }) => {
   await page.goto('/l/select-basics');
   await expect(page.getByTestId('rf__node-public.book')).toBeVisible({ timeout: 20_000 });
-  // клик по пустому месту доски, затем Tab: фокус попадает на первую по DOM ноду таблицы
-  const box = await page.getByTestId('board-canvas').boundingBox();
-  if (!box) throw new Error('нет доски');
-  await page.mouse.click(box.x + 4, box.y + 4);
+  // доска сама остановка Tab (клавиши плеера), следующий Tab попадает на первую по DOM ноду таблицы
+  await page.getByTestId('board-area').focus();
   await page.keyboard.press('Tab');
   const focused = page.locator('.react-flow__node-table:focus');
   await expect(focused).toHaveCount(1);

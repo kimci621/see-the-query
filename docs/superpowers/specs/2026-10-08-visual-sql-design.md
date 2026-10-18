@@ -411,7 +411,7 @@ docs/
 
 **Фолбэк «только итог»**: если в AST есть неподдерживаемый узел (список поддерживаемых ведём явно, whitelist), стадий нет. Подсвечиваем упомянутые таблицы и колонки, показываем результат и пометку.
 
-**Недетерминированность**: `random()`, `now()`, `nextval()` вызываются в пробах заново и дают другие значения. Стадии с volatile-функциями помечаются, значения в них берутся из эталонного выполнения, а не из проб.
+**Недетерминированность**: `random()`, `now()`, `nextval()` вызываются в пробах заново и дают другие значения. Стадии с volatile-функциями помечаются, значения в них считаются один раз в одной пробе трассировщика и одинаковы на всех стадиях. С эталонным выполнением сверяются строки и колонки без volatile-функций; значения volatile-колонок на доске и в панели результата могут различаться. Volatile в ORDER BY вместе с LIMIT или OFFSET, а также в WHERE и с DISTINCT уходит в `final-only`: выбор строк зависит от случайных значений.
 
 ### 5.7 Модель данных Trace
 
@@ -437,7 +437,8 @@ type Stage = StageBase & (
       pairs: Array<[RowKey | null, RowKey | null]>; onColumns: string[] }
   | { kind: 'filter'; clause: 'where' | 'having';
       verdicts: Record<RowKey, true | false | null> }
-  | { kind: 'group'; keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> }
+  | { kind: 'group'; keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }>;
+      running?: unknown[][] }            // без GROUP BY: значения агрегатов после каждой строки (окно в Postgres)
   | { kind: 'window'; partitions: Array<{ members: RowKey[] }>; computed: string[] }
   | { kind: 'project'; kept: string[]; removed: string[]; computed: string[]; renamed: Record<string, string> }
   | { kind: 'distinct'; stacks: Array<{ winner: RowKey; members: RowKey[] }> }
@@ -452,7 +453,8 @@ type Stage = StageBase & (
       cascades: Array<{ table: string; deleted: RowKey[]; updated: RowKey[] }> }
   | { kind: 'ddl'; diff: SchemaDiff }
   | { kind: 'error'; sqlstate: string; message: string; detail?: string;
-      constraint?: string; focus?: { table?: string; column?: string; position?: number } }
+      constraint?: string; focus?: { table?: string; column?: string; position?: number };
+      group?: { keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> } } // 42803: стопки групп
 );
 
 interface Trace {

@@ -95,17 +95,17 @@ describe('AppShell', () => {
     expect(screen.getByRole('region', { name: 'Доска' })).toBeInTheDocument();
   });
 
-  it('правая колонка из трёх панелей, у ручек ресайза есть имена', async () => {
+  it('правая колонка из четырёх панелей, у ручек ресайза есть имена', async () => {
     renderAt('/l/how-to-use');
-    for (const name of ['Доска', 'Редактор', 'Результат']) {
+    for (const name of ['Доска', 'Таймлайн', 'Редактор', 'Результат']) {
       expect(await screen.findByRole('region', { name })).toBeInTheDocument();
     }
-    expect(screen.queryByRole('region', { name: 'Таймлайн' })).toBeNull();
     const handles = screen.getAllByRole('separator').map((el) => el.getAttribute('aria-label'));
     expect(handles).toEqual([
       'Ширина списка уроков',
       'Граница теории и доски',
       'Высота доски',
+      'Высота таймлайна',
       'Граница редактора и результата',
     ]);
   });

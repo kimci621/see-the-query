@@ -4,8 +4,8 @@ import { persist } from 'zustand/middleware';
 export type ThemeSetting = 'light' | 'dark' | 'system';
 
 export const DEFAULT_MAIN_LAYOUT = [15, 35, 50];
-// Доска, редактор, результат. Таймлайн вернётся панелью в Ф6
-export const DEFAULT_RIGHT_LAYOUT = [52, 18, 30];
+// Доска, таймлайн, редактор, результат
+export const DEFAULT_RIGHT_LAYOUT = [52, 12, 18, 18];
 
 export interface SettingsStore {
   theme: ThemeSetting;
@@ -46,8 +46,8 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: 'vs-settings',
       version: 2,
-      // v1: в правой колонке была заглушка таймлайна (4 панели). Такую раскладку берём по дефолту,
-      // остальные настройки переносим как есть
+      // v1: раскладка правой колонки от заглушки таймлайна, берём дефолт. Остальные настройки переносим как есть.
+      // Раскладку v2 из трёх панелей (таймлайн был спрятан) отбрасывает sanitizeLayout по длине
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
         return version < 2 ? { ...p, rightLayout: DEFAULT_RIGHT_LAYOUT } : p;

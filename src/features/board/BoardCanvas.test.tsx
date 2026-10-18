@@ -41,6 +41,9 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   };
 });
 
+// Оверлей зовёт свой useReactFlow, и шпион выше цеплялся бы к его экземпляру. Здесь проверяем только камеру доски
+vi.mock('@/features/overlay/OverlayLayer', () => ({ OverlayLayer: () => null }));
+
 // Кадры оставляют снизу пустую полосу хрома доски (кнопки зума, плашка версии): 3.5rem при шрифте 16px
 const FOCUS_PAD = { x: 0.1, top: 0.1, bottom: '56px' };
 const BOARD_PAD = { x: 0.15, top: 0.15, bottom: '56px' };

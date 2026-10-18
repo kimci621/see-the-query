@@ -1,15 +1,17 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { BoardCanvas } from '@/features/board/BoardCanvas';
 import { BoardStatus } from '@/features/board/BoardStatus';
+import { useBoardHotkeys } from '@/features/board/useBoardHotkeys';
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
 import { ResultsPanel } from '@/features/results/ResultsPanel';
+import { Timeline } from '@/features/timeline/Timeline';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
 // Панели правой колонки, порядок совпадает с rightLayout; панель без содержимого показывает подсказку-заглушку.
-// handle - имя ручки под панелью. Таймлайн вернётся отдельной панелью в Ф6.
+// handle - имя ручки под панелью.
 // Минимум редактора в rem: при крупном тексте (200%) поле и тулбар не схлопываются
 const PANELS = [
   {
@@ -18,6 +20,13 @@ const PANELS = [
     hint: 'Здесь будет доска с таблицами',
     minSize: '25%',
     handle: 'Высота доски',
+  },
+  {
+    id: 'timeline',
+    title: 'Таймлайн',
+    hint: 'Шаги выполнения запроса',
+    minSize: '5%',
+    handle: 'Высота таймлайна',
   },
   {
     id: 'editor',
@@ -32,8 +41,16 @@ const PANELS = [
 function BoardSlot() {
   useSchemaSync();
   const { status, version } = useSandbox();
+  const boardRef = useRef<HTMLDivElement>(null);
+  useBoardHotkeys(boardRef);
   return (
-    <div className="relative h-full w-full">
+    <div
+      ref={boardRef}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: доска принимает фокус ради клавиш плеера
+      tabIndex={0}
+      data-testid="board-area"
+      className="relative h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <BoardCanvas />
       <BoardStatus status={status} version={version} />
     </div>
@@ -43,6 +60,7 @@ function BoardSlot() {
 // Содержимое панелей правой колонки
 const SLOTS: Partial<Record<string, ReactNode>> = {
   board: <BoardSlot />,
+  timeline: <Timeline />,
   editor: <EditorPane />,
   results: <ResultsPanel />,
 };

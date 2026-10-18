@@ -44,7 +44,7 @@ describe('useSettingsStore', () => {
     expect(s.focusMode).toBe(false);
   });
 
-  it('раскладка версии 1 (с таймлайном, 4 панели) мигрирует в 3 панели, остальное сохраняется', async () => {
+  it('раскладка версии 1 (заглушка таймлайна) сбрасывается на дефолт, остальное сохраняется', async () => {
     localStorage.setItem(
       'vs-settings',
       JSON.stringify({
@@ -54,11 +54,17 @@ describe('useSettingsStore', () => {
     );
     await useSettingsStore.persist.rehydrate();
     const s = useSettingsStore.getState();
-    expect(s.rightLayout).toEqual([52, 18, 30]);
+    expect(s.rightLayout).toEqual(DEFAULT_RIGHT_LAYOUT);
     expect(s.theme).toBe('dark');
     expect(s.mainLayout).toEqual([20, 30, 50]);
     expect(s.focusMode).toBe(true);
     useSettingsStore.setState({ theme: 'system', mainLayout: DEFAULT_MAIN_LAYOUT, focusMode: false });
+  });
+
+  it('раскладка версии 2 из трёх панелей (таймлайн был спрятан) сбрасывается на дефолт', async () => {
+    localStorage.setItem('vs-settings', JSON.stringify({ state: { rightLayout: [52, 18, 30] }, version: 2 }));
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().rightLayout).toEqual(DEFAULT_RIGHT_LAYOUT);
   });
 
   it('toggleFocusMode переключает режим', () => {

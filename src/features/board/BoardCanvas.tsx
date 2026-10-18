@@ -16,6 +16,7 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useResolvedTheme } from '@/app/ThemeProvider';
 import { getLesson } from '@/features/lessons/registry';
+import { OverlayLayer } from '@/features/overlay/OverlayLayer';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
@@ -169,6 +170,7 @@ function BoardFlow() {
         </Controls>
         {/* Справа снизу плашка версии Postgres, миникарта сверху */}
         {miniMap && <MiniMap pannable zoomable position="top-right" />}
+        <OverlayLayer />
       </ReactFlow>
     </div>
   );

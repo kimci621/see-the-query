@@ -6,10 +6,23 @@ const colsWord = (n: number) => `${n} ${plural(n, 'колонка', 'колон�
 export const captions = {
   scan: (table: string, alias: string, n: number) =>
     `FROM ${table}${alias !== table ? ` AS ${alias}` : ''}: ${rowsWord(n)}`,
+  join: (label: string, pairs: number, noLeft: number, noRight: number) => {
+    const parts = [`${label}: ${pairs} ${plural(pairs, 'пара', 'пары', 'пар')}`];
+    if (noLeft) parts.push(`${rowsWord(noLeft)} слева без пары`);
+    if (noRight) parts.push(`${rowsWord(noRight)} справа без пары`);
+    return parts.join(', ');
+  },
+  cross: (left: number, right: number) => `CROSS JOIN: ${left} × ${right} = ${rowsWord(left * right)}`,
+  joinCompressed: (type: string, n: number) => `${type} JOIN: ${rowsWord(n)}`,
   filter: (before: number, after: number, unknown: number) =>
     `WHERE: осталось ${after} из ${rowsWord(before)}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   project: (kept: number, from: number, computed: number) =>
     `SELECT: ${colsWord(kept)} из ${from}${computed ? `, вычислено ${computed}` : ''}`,
+  group: (keys: string[], groups: number, rows: number) =>
+    `GROUP BY ${keys.join(', ')}: ${rowsWord(rows)} → ${groups} ${plural(groups, 'группа', 'группы', 'групп')}`,
+  having: (before: number, after: number, unknown: number) =>
+    `HAVING: осталось ${after} из ${before} ${plural(before, 'группа', 'группы', 'групп')}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
+  aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
     `DISTINCT: ${rowsWord(before)} → ${after} ${plural(after, 'уникальная', 'уникальные', 'уникальных')}`,
