@@ -6,6 +6,9 @@ import { useRef } from 'react';
 import { formatCell } from '@/features/board/format';
 import type { QueryResult } from '@/features/db/types';
 
+// OID встроенного типа date: PGlite отдаёт его как Date, без типа ячейка покажет время
+const DATE_OID = 1082;
+
 // Виртуализированная таблица результата: моно-шрифт, NULL-плашки как на доске
 export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHint?: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -76,7 +79,13 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
                 style={{ top: item.start, minWidth }}
               >
                 {row.map((cell, i) => (
-                  <Cell key={result.fields[i]?.name ?? i} row={item.index} col={i} value={cell} />
+                  <Cell
+                    key={result.fields[i]?.name ?? i}
+                    row={item.index}
+                    col={i}
+                    value={cell}
+                    type={result.fields[i]?.dataTypeID === DATE_OID ? 'date' : undefined}
+                  />
                 ))}
               </div>
             );
@@ -87,8 +96,8 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
   );
 }
 
-function Cell({ row, col, value }: { row: number; col: number; value: unknown }) {
-  const cell = formatCell(value);
+function Cell({ row, col, value, type }: { row: number; col: number; value: unknown; type?: string }) {
+  const cell = formatCell(value, type);
   return (
     <div
       role="cell"

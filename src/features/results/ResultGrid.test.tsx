@@ -50,6 +50,17 @@ describe('ResultGrid', () => {
     expect(screen.getByTestId('cell-2-0')).toHaveAttribute('data-kind', 'empty');
   });
 
+  it('date без времени, как на доске', () => {
+    const dated: QueryResult = {
+      fields: [{ name: 'published_at', dataTypeID: 1082 }],
+      rows: [[new Date('1940-01-01T00:00:00Z')]],
+      command: 'SELECT',
+      rowCount: 1,
+    };
+    render(<ResultGrid result={dated} />);
+    expect(screen.getByTestId('cell-0-0')).toHaveTextContent(/^1940-01-01$/);
+  });
+
   it('пустой результат показывает подсказку', () => {
     const empty: QueryResult = { fields: [{ name: 'x', dataTypeID: 25 }], rows: [] };
     render(<ResultGrid result={empty} emptyHint="0 строк: WHERE отсек всё" />);
