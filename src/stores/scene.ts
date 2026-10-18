@@ -136,7 +136,11 @@ export const useSceneStore = create<SceneStore>()(
   ),
 );
 
+// Множитель всех скоростей плеера: длительности фаз в аниматорах рассчитаны на него,
+// на «1x» сцена идёт вдвое медленнее, чем задано в аниматорах
+const SPEED_SCALE = 0.5;
+
 // Скорость с учётом автопроигрывания: после правки запроса не медленнее 2x
 export function effectiveSpeed(s: Pick<SceneStore, 'speed' | 'autoRun'>): number {
-  return s.autoRun ? Math.max(2, s.speed) : s.speed;
+  return (s.autoRun ? Math.max(2, s.speed) : s.speed) * SPEED_SCALE;
 }

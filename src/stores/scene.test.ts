@@ -143,13 +143,13 @@ describe('useSceneStore', () => {
     expect(st.playing).toBe(true);
   });
 
-  it('effectiveSpeed при autoRun не меньше 2', () => {
+  it('effectiveSpeed: вдвое медленнее выбранной, при autoRun не медленнее 2x', () => {
     useSceneStore.getState().setSpeed(0.5);
     useSceneStore.getState().setAutoplay(true);
     useSceneStore.getState().setPlayback(playback(3));
-    expect(effectiveSpeed(useSceneStore.getState())).toBe(2);
+    expect(effectiveSpeed(useSceneStore.getState())).toBe(1);
     useSceneStore.getState().pause();
-    expect(effectiveSpeed(useSceneStore.getState())).toBe(0.5);
+    expect(effectiveSpeed(useSceneStore.getState())).toBe(0.25);
   });
 
   it('close очищает сцену и проигрывание', () => {

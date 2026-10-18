@@ -26,14 +26,14 @@ describe('usePlayer', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('автоплей идёт на 2x и останавливается на последней фазе', () => {
+  it('автоплей идёт на 2x (с общим замедлением фаза 500 мс длится 500 мс) и останавливается на последней фазе', () => {
     renderHook(() => usePlayer());
     act(() => useSceneStore.getState().setPlayback(pb(3)));
-    act(() => vi.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(500));
     expect(useSceneStore.getState().phaseIndex).toBe(1);
-    act(() => vi.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(500));
     expect(useSceneStore.getState().phaseIndex).toBe(2);
-    act(() => vi.advanceTimersByTime(250));
+    act(() => vi.advanceTimersByTime(500));
     expect(useSceneStore.getState().playing).toBe(false);
   });
 
@@ -46,7 +46,7 @@ describe('usePlayer', () => {
       useSceneStore.getState().seek(0);
       useSceneStore.getState().play();
     });
-    act(() => vi.advanceTimersByTime(999));
+    act(() => vi.advanceTimersByTime(1999));
     expect(useSceneStore.getState().phaseIndex).toBe(0);
     act(() => vi.advanceTimersByTime(1));
     expect(useSceneStore.getState().phaseIndex).toBe(1);
@@ -55,9 +55,9 @@ describe('usePlayer', () => {
   it('смена playback перезапускает таймер', () => {
     renderHook(() => usePlayer());
     act(() => useSceneStore.getState().setPlayback(pb(5)));
-    act(() => vi.advanceTimersByTime(200));
-    act(() => useSceneStore.getState().setPlayback(pb(2, 1000)));
     act(() => vi.advanceTimersByTime(400));
+    act(() => useSceneStore.getState().setPlayback(pb(2, 1000)));
+    act(() => vi.advanceTimersByTime(900));
     expect(useSceneStore.getState().phaseIndex).toBe(0);
     act(() => vi.advanceTimersByTime(100));
     expect(useSceneStore.getState().phaseIndex).toBe(1);
