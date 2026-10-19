@@ -187,7 +187,7 @@ having count(*) > 1;
 select status, count(*) as cnt from orders group by status having cnt > 1;
 ```
 
-Код `42703`: по уроку 4.2 HAVING выполняется раньше SELECT, и имени `cnt` ещё нет. Повтори выражение: `having count(*) > 1`.
+Код `42703`: по уроку 4.2 HAVING выполняется раньше SELECT, и имени `cnt` ещё нет. GROUP BY алиас прощает (урок 7.2), HAVING нет. Повтори выражение: `having count(*) > 1`.
 </Callout>
 
 <Callout kind="tip">
