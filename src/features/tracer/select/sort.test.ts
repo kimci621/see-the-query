@@ -28,6 +28,17 @@ describe('стадия sort', () => {
         expect(sort.caption).toBe('ORDER BY price DESC NULLS LAST: 11 строк по порядку');
       }),
     ));
+  it('ключ-ключевое слово: подпись без кавычек, ключ в кавычках', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const sort = stageOf(
+          await traceSql(db, 'select name, position, salary from employee order by position, salary desc'),
+          'sort',
+        );
+        expect(sort.sortKeys).toEqual(['"position"', 'salary DESC']);
+        expect(sort.caption).toBe('ORDER BY position, salary DESC: 8 строк по порядку');
+      }),
+    ));
   it('по номеру колонки, по алиасу и по колонке вне SELECT', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

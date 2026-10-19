@@ -21,6 +21,16 @@ describe('стадия group', () => {
         expect(group.output.rows.map((r) => r.key)).toEqual(['g:0', 'g:1', 'g:2', 'g:3', 'g:4', 'g:5']);
       }),
     ));
+  it('ключ-ключевое слово: deparser берёт в кавычки, подпись без кавычек', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select position, count(*) from employee group by position');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const group = stageOf(trace, 'group');
+        expect(group.keys).toEqual(['"position"']);
+        expect(group.caption).toBe('GROUP BY position: 8 строк → 6 групп');
+      }),
+    ));
   it('агрегат без GROUP BY: одна строка даже на пустом входе', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

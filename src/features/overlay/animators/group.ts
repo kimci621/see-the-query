@@ -1,4 +1,5 @@
 import { formatCell } from '@/features/board/format';
+import { keyList } from '@/features/tracer/captions';
 import type { RowKey } from '@/features/tracer/types';
 import {
   clearMarks,
@@ -74,14 +75,15 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   rows.push(...colored.rows.filter((r) => !groupOf.has(r.key)));
 
   // Колонки: ключ GROUP BY подсвечен, колонка внутри агрегата видна, остальные перечёркнуты (ошибка 42803)
-  const keyCols = new Set(stage.keys.map((k) => k.split('.').at(-1)));
+  // Ключевые слова deparser берёт в кавычки: '"position"', 'e."position"'
+  const keyCols = new Set(stage.keys.map((k) => k.replaceAll('"', '').split('.').at(-1)));
   const inAggregate = (name: string) =>
     stage.aggregates.some((a) => a.split(/[^\p{L}\p{N}_$]+/u).includes(name));
   const stacked = mapColumns({ ...colored, rows }, (c) => ({
     state: keyCols.has(c.name) ? 'key' : inAggregate(c.name) ? 'highlight' : 'removed',
   }));
 
-  const head = stage.keys.length ? `GROUP BY ${stage.keys.join(', ')}` : 'Агрегат без GROUP BY';
+  const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';
 
   // Без GROUP BY значение набегает: фаза на строку стопки, счётчик рядом с таблицей, NULL в count(col) серый.
   // ponytail: не больше 20 фаз, на большой стопке шаг через несколько строк

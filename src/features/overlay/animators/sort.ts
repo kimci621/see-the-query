@@ -1,3 +1,4 @@
+import { keyList } from '@/features/tracer/captions';
 import { clearMarks, currentTable, mapColumns, rebuildTable, stageRows, withTable } from '../frame';
 import type { Animator, StageOf } from '../types';
 import { genericAnimator } from './generic';
@@ -28,7 +29,7 @@ export const sortAnimator: Animator<StageOf<'sort'>> = (prev, stage, stageIndex,
     {
       id: `${stageIndex}:keys`,
       stageIndex,
-      caption: `ORDER BY: сортируем по ${stage.sortKeys.join(', ')}`,
+      caption: `ORDER BY: сортируем по ${keyList(stage.sortKeys)}`,
       durationMs: 400,
       frame: { tables: withTable(prev, keys).tables, decorations: [] },
     },
