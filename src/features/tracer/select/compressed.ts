@@ -162,6 +162,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
       cut: [],
       limit,
       offset,
+      withTies,
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'limit', 'offset'),
       caption: captions.limit(limitLabel(limit, offset, withTies), before, n),

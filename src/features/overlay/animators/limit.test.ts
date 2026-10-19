@@ -27,7 +27,7 @@ describe('limitAnimator', () => {
       { kind: 'scissors', table: 't:b', afterRow: 0 },
       { kind: 'scissors', table: 't:b', afterRow: 1 },
     ]);
-    expect(phases[0].caption).toBe('LIMIT 1 OFFSET 1: отрезаем лишнее');
+    expect(phases[0].caption).toBe('OFFSET 1, LIMIT 1: отрезаем лишнее');
   });
 
   it('строки kept не подряд (окно по порядку эталона): без ножниц, только cut', () => {
@@ -38,11 +38,13 @@ describe('limitAnimator', () => {
   });
 
   it('WITH TIES: ножницы после последней оставленной строки, а не после limit', () => {
-    const ties = { ...stage, limit: 1, kept: ['b=(0,2)', 'b=(0,1)'], cut: ['b=(0,8)'] };
+    const ties = { ...stage, limit: 1, withTies: true, kept: ['b=(0,2)', 'b=(0,1)'], cut: ['b=(0,8)'] };
     const phases = limitAnimator(before, ties, 4, testCtx());
     expect(phases[0].frame.decorations.filter((d) => d.kind === 'scissors')).toEqual([
       { kind: 'scissors', table: 't:b', afterRow: 1 },
     ]);
+    // Подпись кадра не «LIMIT 1»: оставлено больше limit, ничья добрана
+    expect(phases[0].caption).toBe('FETCH FIRST 1 WITH TIES: оставляем 2, добрали ничью');
   });
 
   it('LIMIT больше числа строк не рисует нижние ножницы', () => {

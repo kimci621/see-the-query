@@ -1,3 +1,4 @@
+import { limitLabel } from '@/features/tracer/captions';
 import {
   clearMarks,
   counterNear,
@@ -31,12 +32,9 @@ export const limitAnimator: Animator<StageOf<'limit'>> = (prev, stage, stageInde
 
   const after = stageRows(stage);
   const result = rebuildTable(cur, stage.output, undefined, after);
-  const head = [
-    stage.limit !== null ? `LIMIT ${stage.limit}` : null,
-    stage.offset > 0 ? `OFFSET ${stage.offset}` : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  // Та же метка, что в подписи стадии; WITH TIES оставляет больше limit, это и говорим
+  const head = limitLabel(stage.limit, stage.offset, stage.withTies);
+  const tied = stage.withTies && stage.limit !== null && stage.kept.length > stage.limit;
   const cutPhase = {
     id: `${stageIndex}:cut`,
     stageIndex,
@@ -53,7 +51,7 @@ export const limitAnimator: Animator<StageOf<'limit'>> = (prev, stage, stageInde
     {
       id: `${stageIndex}:scissors`,
       stageIndex,
-      caption: `${head}: отрезаем лишнее`,
+      caption: tied ? `${head}: оставляем ${stage.kept.length}, добрали ничью` : `${head}: отрезаем лишнее`,
       durationMs: 600,
       frame: { tables: withTable(prev, marked).tables, decorations: scissors },
     },

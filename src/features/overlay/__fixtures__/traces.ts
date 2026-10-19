@@ -87,6 +87,7 @@ export function fullPipelineTrace(): Trace {
       cut: ['b=(0,8)'],
       limit: 2,
       offset: 0,
+      withTies: false,
       caption: 'LIMIT 2: осталось 2 из 3',
       output: { columns: projColumns, rows: sorted.slice(0, 2) },
     },

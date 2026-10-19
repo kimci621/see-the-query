@@ -13,6 +13,7 @@ describe('стадия limit', () => {
         expect(limit).toMatchObject({
           limit: 3,
           offset: 2,
+          withTies: false,
           caption: 'OFFSET 2, LIMIT 3: осталось 3 из 11 строк',
         });
         expect(limit.kept).toHaveLength(3);
@@ -31,6 +32,7 @@ describe('стадия limit', () => {
         const limit = stageOf(trace, 'limit');
         expect(column(limit, 'price')).toEqual(['350.00', '350.00']);
         expect(limit.caption).toBe('FETCH FIRST 1 WITH TIES: осталось 2 из 11 строк');
+        expect(limit.withTies).toBe(true);
       }),
     ));
   it('ничья на границе OFFSET: внутрь окна попадает та строка, что вернул Postgres', () =>

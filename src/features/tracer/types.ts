@@ -67,7 +67,14 @@ export type Stage = StageBase &
       }
     | { kind: 'distinct'; on: string[] | null; stacks: Array<{ winner: RowKey; members: RowKey[] }> }
     | { kind: 'sort'; order: RowKey[]; sortKeys: string[] }
-    | { kind: 'limit'; kept: RowKey[]; cut: RowKey[]; limit: number | null; offset: number }
+    | {
+        kind: 'limit';
+        kept: RowKey[];
+        cut: RowKey[];
+        limit: number | null;
+        offset: number;
+        withTies: boolean;
+      }
     | {
         kind: 'setop';
         op: 'union' | 'union all' | 'intersect' | 'intersect all' | 'except' | 'except all';
