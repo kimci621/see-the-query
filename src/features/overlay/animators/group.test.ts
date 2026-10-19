@@ -91,6 +91,17 @@ describe('groupAnimator: агрегат без GROUP BY', () => {
     expect(p[2].frame.tables[0].rows).toHaveLength(1);
     expect(p[2].frame.decorations).toContainEqual(expect.objectContaining({ text: '0 → 1' }));
   });
+  it('пустой вход: sum без строк в подписи NULL, как на доске', () => {
+    const trace = aggregateTrace();
+    const empty = {
+      ...trace.stages[1],
+      aggregates: ['sum(price)', 'count(price)'],
+      groups: [{ key: 'g:0', members: [] }],
+      output: { ...trace.stages[1].output, rows: [{ key: 'g:0', lineage: {}, values: [null, 0] }] },
+    } as StageOf<'group'>;
+    const p = groupAnimator(runUpTo(trace, 1, testCtx()), empty, 1, testCtx());
+    expect(p.at(-1)?.caption).toBe(`${empty.caption}: sum(price) = NULL, count(price) = 0`);
+  });
 });
 
 describe('groupAnimator: агрегат набегает по строкам', () => {

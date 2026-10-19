@@ -1,3 +1,4 @@
+import { formatCell } from '@/features/board/format';
 import type { RowKey } from '@/features/tracer/types';
 import {
   clearMarks,
@@ -28,7 +29,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   // Без GROUP BY итог агрегатов виден прямо в подписи: count(*) = 4
   const totals = stage.keys.length
     ? ''
-    : `: ${stage.aggregates.map((a, i) => `${a} = ${values[i]}`).join(', ')}`;
+    : `: ${stage.aggregates.map((a, i) => `${a} = ${formatCell(values[i]).text}`).join(', ')}`;
   const collapse: Phase = {
     id: `${stageIndex}:collapse`,
     stageIndex,
@@ -92,7 +93,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
     .filter((_, n) => (counted.length - 1 - n) % step === 0)
     .map((at, n): Phase => {
       const now = runAt.get(stacked.rows[at].key) ?? [];
-      const text = stage.aggregates.map((a, k) => `${a} = ${now[k]}`).join(', ');
+      const text = stage.aggregates.map((a, k) => `${a} = ${formatCell(now[k]).text}`).join(', ');
       const t = mapRows(stacked, (r, i) => ({
         state: i > at ? 'normal' : skipped(r) ? 'unknown' : i === at ? 'matched' : 'kept',
       }));
