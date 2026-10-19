@@ -22,6 +22,7 @@ const GUIDE_LESSONS: string[] = [
   'where-boolean',
   'null-logic',
   'order-by',
+  'limit-offset',
 ];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts

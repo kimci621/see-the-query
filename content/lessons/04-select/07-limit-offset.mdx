@@ -1,0 +1,213 @@
+---
+id: limit-offset
+title: LIMIT, OFFSET и постраничный вывод
+chapter: select
+number: "4.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, price from book order by price desc nulls last limit 3;
+docs:
+  - https://www.postgresql.org/docs/current/queries-limit.html
+  - https://www.postgresql.org/docs/current/sql-select.html#SQL-LIMIT
+course: ["11.21"]
+tags: [limit, offset, fetch first, with ties, пагинация, страницы, keyset]
+mvp: true
+---
+
+<TlDr>LIMIT оставляет первые N строк, OFFSET перед этим пропускает M. Вместе с ORDER BY по уникальному ключу они режут выдачу на страницы.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг. Расставим их по цене от дорогих к дешёвым, а книгу без цены отправим в конец через `NULLS LAST` (урок 4.6): 3200, 2400, 1990, 890, 610, 610, 560, 420, 350, 350 и «Остров погибших кораблей» без цены.
+
+В списке две ничьи. По 610 стоят «Путешествие к центру Земли» и «Дети капитана Гранта», по 350 «Судьба человека» и «Сказка о рыбаке и рыбке». Резать список будем на страницы по 3 книги.
+
+## Первые три: LIMIT
+
+`LIMIT` выполняется последним (урок 4.2), поэтому режет уже отсортированный список:
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last limit 3;
+```
+
+3 строки: «Изучаем Python» (3200), «Python. К вершинам мастерства» (2400), «Простой Python» (1990). На доске под третьей строкой появляется линия-ножницы, строки ниже гаснут и уходят.
+
+Без `NULLS LAST` первым был бы «Остров»: при `DESC` строка без цены стоит наверху.
+
+## Вторая страница: OFFSET
+
+`OFFSET` пропускает строки с начала списка, а `LIMIT` берёт следующие:
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last limit 3 offset 3;
+```
+
+Пропустили 3, взяли 3: «Тихий Дон» (890) и обе книги по 610. Ножниц на доске две: над четвёртой строкой и под шестой.
+
+Страница номер N по K строк: `limit K offset (N - 1) * K`. Третья страница по 3 книги это `limit 3 offset 6`.
+
+## Ничья на границе страницы
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last limit 3 offset 6;
+```
+
+3 строки: 560, 420 и одна из книг за 350. Какая именно, Postgres не обещает: по цене они равны (урок 4.6). Вторая книга за 350 уедет на четвёртую страницу. Если на запросе следующей страницы Postgres расставит пару иначе, одна книга покажется дважды, а другая не покажется ни разу.
+
+Лечится уникальным ключом в конце `ORDER BY`. У каждой книги свой `book_id`:
+
+```sql run expect=rows:3
+select title, price, book_id from book order by price desc nulls last, book_id limit 3 offset 6;
+```
+
+Теперь третья страница одна и та же при любом запуске: «Голова профессора Доуэля», «Капитанская дочка» и «Судьба человека» (`book_id` 3). «Сказка о рыбаке и рыбке» (`book_id` 5) всегда уходит на четвёртую.
+
+## Последняя страница короче
+
+```sql run expect=rows:2
+select title, price from book order by price desc nulls last, book_id limit 3 offset 9;
+```
+
+2 строки: «Сказка о рыбаке и рыбке» и «Остров» без цены. Просили 3, а осталось только 2. Последняя страница бывает короче остальных, это не ошибка. А если уйти за край?
+
+```sql run expect=rows:0
+select title, price from book order by price desc nulls last, book_id limit 3 offset 20;
+```
+
+0 строк, и тоже без ошибки: за 11-й книгой ничего нет. На доске ножниц нет, гаснут все 11 строк. Под результатом написано «0 строк» и на каком шаге строки пропали.
+
+Пролистай весь список сценой. Первый шаг отправь «На доску», дальше листай «Дальше»:
+
+<Scene>
+<Step caption="Первая страница">
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last, book_id limit 3;
+```
+
+</Step>
+<Step caption="Вторая: OFFSET пропустил три">
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last, book_id limit 3 offset 3;
+```
+
+</Step>
+<Step caption="Четвёртая: осталось две">
+
+```sql run expect=rows:2
+select title, price from book order by price desc nulls last, book_id limit 3 offset 9;
+```
+
+</Step>
+<Step caption="За краем списка: пусто">
+
+```sql run expect=rows:0
+select title, price from book order by price desc nulls last, book_id limit 3 offset 20;
+```
+
+</Step>
+</Scene>
+
+## OFFSET без LIMIT
+
+`OFFSET` работает и сам по себе:
+
+```sql run expect=rows:9
+select title, price from book order by price desc nulls last offset 2;
+```
+
+9 строк: пропустили две самые дорогие, остальные отдали все. Ножницы на доске одни, над третьей строкой.
+
+## FETCH FIRST: та же операция по стандарту
+
+`LIMIT` и `OFFSET` это синтаксис Postgres (его понимает и MySQL), в стандарте SQL их нет. Стандарт пишет то же самое длиннее:
+
+```sql run expect=rows:2
+select title, price from book order by price desc nulls last fetch first 2 rows only;
+```
+
+2 строки, как у `limit 2`. На доске шаг так и подписан: `LIMIT 2`.
+
+У `FETCH FIRST` есть вариант, которого у `LIMIT` нет: `WITH TIES`. Он забирает ещё и все строки, равные последней по ключу сортировки:
+
+```sql run expect=rows:6
+select title, price from book order by price desc nulls last fetch first 5 rows with ties;
+```
+
+Просили 5, пришло 6. Пятое место делят две книги по 610, и `WITH TIES` взял обе: ножницы на доске прошли под шестой строкой. Без `ORDER BY` Postgres на `WITH TIES` отвечает ошибкой: ничью не по чему считать.
+
+## Глубокие страницы: OFFSET тормозит
+
+Строки, которые пропускает `OFFSET`, Postgres всё равно находит и пересчитывает, а потом выбрасывает. `offset 100000` значит «найди сто тысяч строк и выкинь». Чем дальше страница, тем больше лишней работы.
+
+Есть другой способ, **keyset-пагинация**: запомнить ключ последней строки страницы и попросить строки после него. Первая страница кончилась на «Простом Python» за 1990, значит, следующая это книги дешевле 1990.
+
+Сначала так, как часто пишут с первого раза:
+
+```sql run expectError=42601
+select title, price from book order by price desc where price < 1990 limit 3;
+```
+
+Ошибка 42601: Postgres не понял запрос в месте «where» (в оригинале `syntax error at or near "where"`). Порядок записи фиксирован: `WHERE` стоит до `ORDER BY`, `LIMIT` в самом конце. Выполняются части запроса в другом порядке (урок 4.2), но пишутся только так.
+
+```sql run expect=rows:3
+select title, price from book where price < 1990 order by price desc limit 3;
+```
+
+Те же 3 строки, что на второй странице через `OFFSET`: 890, 610, 610. `NULLS LAST` здесь не нужен: у «Острова» цены нет, и `price < 1990` его не пропускает (урок 4.5). На доске строки отсеивает `WHERE`, и `LIMIT` режет только снизу.
+
+<Callout kind="analogy">
+Толстая книга. `OFFSET` открывает её на первой странице и каждый раз отсчитывает прочитанные листы заново: чем дальше читаешь, тем дольше листать. Keyset это закладка: открыл сразу там, где остановился.
+</Callout>
+
+На 11 книгах разницы в скорости не заметишь. На большой таблице с индексом по ключу сортировки Postgres сразу находит место «после закладки», а не пересчитывает всё с начала. Индексы разберём в главе 12.
+
+## Чего нет в выдаче и почему
+
+- ❌ 8 книг в первом примере: `LIMIT 3` оставил верхние три после сортировки.
+- ❌ Три самые дорогие книги на второй странице: их пропустил `OFFSET 3`.
+- ❌ «Сказка о рыбаке и рыбке» на третьей странице с ключом `book_id`: при равной цене её `book_id` больше, она на четвёртой.
+- ❌ Все книги при `offset 20`: список кончился на 11-й строке.
+- ❌ «Остров» в keyset-запросе: `price < 1990` при NULL даёт не TRUE.
+
+## Ловушки
+
+<Callout kind="trap">
+`LIMIT` без `ORDER BY`:
+
+```sql run expect=rows:3
+select title, price from book limit 3;
+```
+
+Вернутся 3 строки, но какие именно, Postgres не обещает. Он строит план с учётом `LIMIT` и `OFFSET`, поэтому `offset 0` и `offset 3` без сортировки могут нарезать список по-разному. Одна книга может попасть на две страницы, другая ни на одну. Сначала сортируй, потом режь.
+</Callout>
+
+<Callout kind="tip">
+Keyset по одной цене ломается на ничьей: если страница кончилась на «Детях капитана Гранта» за 610, то `where price < 610` потеряет «Путешествие к центру Земли» с той же ценой. В продакшене сравнивают пару «ключ, id» и сортируют по обоим в одну сторону: `where (price, book_id) < (610, 9) order by price desc, book_id desc limit 3`.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `order by price desc nulls last limit 5 offset 8`? Сначала посчитай, потом запусти.
+2. Напиши запрос для четвёртой страницы по 2 книги с ключом `book_id`. Какие книги на ней?
+3. Возьми третью страницу через keyset: книги дешевле 610, по цене вниз, `limit 3`. Что не так с третьей строкой?
+
+<Cheatsheet>
+- `limit n`: первые n строк после сортировки. `limit all` то же, что без `LIMIT`.
+- `offset m`: пропустить m строк. `offset 0` то же, что без `OFFSET`.
+- Страница N по K строк: `limit K offset (N - 1) * K`.
+- Последняя страница бывает короче. За краем 0 строк, без ошибки.
+- `fetch first n rows only` то же, что `limit n`. `with ties` добирает строки, равные последней.
+- В конце `ORDER BY` уникальный ключ, иначе граница страницы может пройти по ничьей.
+- Глубокие страницы: keyset `where ключ < последний order by ключ desc limit n` вместо `OFFSET`.
+
+```sql noexec
+select title, price from book
+order by price desc nulls last, book_id
+limit 3 offset 6;
+```
+</Cheatsheet>
