@@ -79,7 +79,9 @@ export const DICTIONARY: Record<string, Entry> = {
     // invalid reference to FROM-clause entry: таблица есть, но в запросе у неё алиас
     if (err.message.startsWith('invalid reference to FROM-clause entry')) {
       const alias = /alias "([^"]+)"/.exec(err.hint ?? '')?.[1];
-      const column = new RegExp(`\\b${name}\\.([a-z_][a-z0-9_]*)`, 'i').exec(ctx.sql)?.[1];
+      // имя в кавычках может содержать спецсимволы регэкспа: экранируем
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const column = new RegExp(`\\b${escaped}\\.([a-z_][a-z0-9_]*)`, 'i').exec(ctx.sql)?.[1];
       const owner = ctx.schema?.tables.find((t) => t.name === name);
       return {
         title: alias ? `Таблица ${name} здесь называется ${alias}` : `К таблице ${name} отсюда не обратиться`,

@@ -18,6 +18,7 @@ const CASES: Record<string, string> = {
   ambiguousComment: '-- book list\nselect author_id from book join author on true',
   ambiguousCte: 'with author as (select * from author) select author_id from book join author on true',
   aliasedTable: 'select book.title from book b join author a on a.author_id = b.author_id',
+  aliasedSpecial: 'with "a(b" as (select 1 as x) select "a(b".x from "a(b" t',
   grouping: 'select author_id, title from book group by author_id',
   groupingNoGroupBy: 'select title, max(price) from book',
   aggregateInWhere: 'select title from book where price = max(price)',
@@ -134,6 +135,10 @@ describe('explainError', () => {
       highlight: { tableIds: ['public.book'] },
     });
     expect(explain('aliasedTable').fix).toBeUndefined();
+  });
+
+  it('42P01: спецсимволы в имени таблицы не ломают разбор', () => {
+    expect(explain('aliasedSpecial').title).toBe('Таблица a(b здесь называется t');
   });
 
   it('42803: колонка вне GROUP BY', () => {
