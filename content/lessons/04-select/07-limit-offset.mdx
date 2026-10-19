@@ -12,6 +12,7 @@ initialQuery: |
 docs:
   - https://www.postgresql.org/docs/current/queries-limit.html
   - https://www.postgresql.org/docs/current/sql-select.html#SQL-LIMIT
+  - https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
 course: ["11.21"]
 tags: [limit, offset, fetch first, with ties, пагинация, страницы, keyset]
 mvp: true
@@ -112,19 +113,9 @@ select title, price from book order by price desc nulls last, book_id limit 3 of
 </Step>
 </Scene>
 
-## OFFSET без LIMIT
-
-`OFFSET` работает и сам по себе:
-
-```sql run expect=rows:9
-select title, price from book order by price desc nulls last offset 2;
-```
-
-9 строк: пропустили две самые дорогие, остальные отдали все. Ножницы на доске одни, над третьей строкой.
-
 ## FETCH FIRST: та же операция по стандарту
 
-`LIMIT` и `OFFSET` это синтаксис Postgres (его понимает и MySQL), в стандарте SQL их нет. Стандарт пишет то же самое длиннее:
+`LIMIT` понимают Postgres и MySQL, но в стандарте SQL его нет. Стандарт пишет длиннее: `FETCH FIRST`, а пропуск как `OFFSET 3 ROWS`. Postgres принимает оба:
 
 ```sql run expect=rows:2
 select title, price from book order by price desc nulls last fetch first 2 rows only;
@@ -158,7 +149,9 @@ select title, price from book order by price desc where price < 1990 limit 3;
 select title, price from book where price < 1990 order by price desc limit 3;
 ```
 
-Те же 3 строки, что на второй странице через `OFFSET`: 890, 610, 610. `NULLS LAST` здесь не нужен: у «Острова» цены нет, и `price < 1990` его не пропускает (урок 4.5). На доске строки отсеивает `WHERE`, и `LIMIT` режет только снизу.
+Те же 3 строки, что на второй странице через `OFFSET`: 890, 610, 610. На доске строки отсеивает `WHERE`, и `LIMIT` режет только снизу.
+
+Обратная сторона: у «Острова» цены нет, `price < 1990` для него не TRUE (урок 4.5), и keyset по `price` не отдаст его ни на одной странице. Ключ для keyset должен быть без NULL, а строки с NULL добирают отдельным запросом.
 
 <Callout kind="analogy">
 Толстая книга. `OFFSET` открывает её на первой странице и каждый раз отсчитывает прочитанные листы заново: чем дальше читаешь, тем дольше листать. Keyset это закладка: открыл сразу там, где остановился.
@@ -187,7 +180,7 @@ select title, price from book limit 3;
 </Callout>
 
 <Callout kind="tip">
-Keyset по одной цене ломается на ничьей: если страница кончилась на «Детях капитана Гранта» за 610, то `where price < 610` потеряет «Путешествие к центру Земли» с той же ценой. В продакшене сравнивают пару «ключ, id» и сортируют по обоим в одну сторону: `where (price, book_id) < (610, 9) order by price desc, book_id desc limit 3`.
+Keyset по одной цене ломается на ничьей. В продакшене ключ берут парой «цена, id» и сортируют оба в одну сторону: `order by price desc, book_id desc`. В таком порядке «Дети капитана Гранта» (`book_id` 9) идут раньше «Путешествия к центру Земли» (8). Если страница кончилась на «Детях», `where price < 610` потеряет «Путешествие» с той же ценой. Сравнение пары не теряет: `where (price, book_id) < (610, 9) order by price desc, book_id desc limit 3` начинает следующую страницу с «Путешествия».
 </Callout>
 
 ## Проверь себя
@@ -198,12 +191,12 @@ Keyset по одной цене ломается на ничьей: если с�
 
 <Cheatsheet>
 - `limit n`: первые n строк после сортировки. `limit all` то же, что без `LIMIT`.
-- `offset m`: пропустить m строк. `offset 0` то же, что без `OFFSET`.
+- `offset m`: пропустить m строк. `offset 0` то же, что без `OFFSET`. Без `limit` отдаёт все строки после m.
 - Страница N по K строк: `limit K offset (N - 1) * K`.
 - Последняя страница бывает короче. За краем 0 строк, без ошибки.
 - `fetch first n rows only` то же, что `limit n`. `with ties` добирает строки, равные последней.
 - В конце `ORDER BY` уникальный ключ, иначе граница страницы может пройти по ничьей.
-- Глубокие страницы: keyset `where ключ < последний order by ключ desc limit n` вместо `OFFSET`.
+- Глубокие страницы: keyset `where ключ < последний order by ключ desc limit n` вместо `OFFSET`. Ключ уникальный и без NULL.
 
 ```sql noexec
 select title, price from book
