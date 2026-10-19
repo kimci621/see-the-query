@@ -15,6 +15,8 @@ import './overlay.css';
 const MOTION_SHARE = 0.85;
 // Растворение призраков, когда сцену прячут или закрывают
 const DISSOLVE_SEC = 0.3;
+// Пауза перед возвратом камеры к таблицам, когда сцена ушла
+const RETURN_DELAY_MS = 800;
 
 // Камера сцены двигается, только пока пользователь работает с запросом: фокус в редакторе,
 // на доске, в таймлайне или на кнопках примера урока («На доску», «Дальше» сцены, спека 3.3).
@@ -78,11 +80,14 @@ export function OverlayLayer() {
   }, [phase, followCamera, rf, durationSec]);
 
   // Сцена ушла (ошибка, итог без шагов, Esc), а камера стоит там, где был призрак: там пусто.
-  // Возвращаем её к таблицам запроса
+  // Возвращаем её к таблицам запроса, если сцену вёл пользователь (переход в урок держит его камеру).
+  // С задержкой: недописанное имя даёт ошибку на миг, новая сцена отменяет полёт
   useEffect(() => {
     if (phase || !lastCamera.current) return;
     lastCamera.current = '';
-    if (followCamera) useBoardStore.getState().requestFrame();
+    if (!followCamera || !userDrivesScene()) return;
+    const timer = setTimeout(() => useBoardStore.getState().requestFrame(), RETURN_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [phase, followCamera]);
 
   // Слой смонтирован всегда: без сцены список таблиц пуст, и AnimatePresence растворяет призраков

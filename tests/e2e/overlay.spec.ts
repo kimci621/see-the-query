@@ -119,3 +119,26 @@ test('после запроса с ошибкой камера возвраща�
   await expect(page.getByTestId('final-only-note')).toContainText('ошибкой', { timeout: 5_000 });
   await expect(page.getByTestId('table-node-public.book')).toBeInViewport({ timeout: 5_000 });
 });
+
+test('переход из урока со сценой не сдвигает сохранённую камеру другого урока', async ({ page }) => {
+  const viewport = () => page.locator('.react-flow__viewport').getAttribute('style');
+  // сохраняем камеру null-logic колесом над доской
+  await page.goto('/l/null-logic');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  const box = await page.getByTestId('board-canvas').boundingBox();
+  if (!box) throw new Error('нет доски');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(1000);
+  const saved = await viewport();
+  // в другом уроке сцену запускает пользователь, камера следит за призраком
+  await openBoard(page);
+  await typeQuery(page, QUERY);
+  await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
+  // переход по сайдбару: фокус на ссылке, сцену стартового запроса запустил не пользователь
+  await page.locator('a[href="/l/null-logic"]').click();
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(2500);
+  expect(await viewport()).toBe(saved);
+});
