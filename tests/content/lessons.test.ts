@@ -27,6 +27,7 @@ const GUIDE_LESSONS: string[] = [
   'left-right-join',
   'aggregate-functions',
   'group-by',
+  'having',
 ];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts

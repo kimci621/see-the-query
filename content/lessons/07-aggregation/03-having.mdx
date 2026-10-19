@@ -1,0 +1,211 @@
+---
+id: having
+title: HAVING против WHERE
+chapter: aggregation
+number: "7.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.orders, public.review, public.book]
+  layout:
+    orders: { x: 0, y: 0 }
+    review: { x: 0, y: 380 }
+    book: { x: 760, y: 380 }
+initialQuery: |
+  select status, count(*) from orders group by status having count(*) > 1;
+docs:
+  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUPBY
+  - https://www.postgresql.org/docs/current/tutorial-agg.html
+course: ["11.55"]
+tags: [having, where, group by, фильтр групп, агрегат]
+mvp: true
+---
+
+<TlDr>WHERE отбирает строки до группировки, HAVING отбирает готовые группы после неё. «Статусы, у которых больше одного заказа» пишется через HAVING.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.orders">orders</T> 8 заказов: 4 paid, 2 new, 1 shipped и 1 cancelled. С 1 апреля 2024 года, если смотреть по <C id="public.orders.created_at">created_at</C>, сделано 5 из них: 2 paid, 2 new и 1 cancelled.
+
+В <T id="public.review">review</T> 10 отзывов на 7 книг, оценка в <C id="public.review.rating">rating</C> от 1 до 5. У «Тихого Дона», «Python. К вершинам мастерства» и «Простого Python» по два отзыва, у остальных по одному. В <T id="public.book">book</T> 11 книг, у «Простого Python» нет категории.
+
+## WHERE не видит агрегатов
+
+Нужны статусы, у которых больше одного заказа. Первое, что приходит в голову:
+
+```sql run expectError=42803
+select status, count(*) from orders where count(*) > 1 group by status;
+```
+
+Карточка «Агрегат в WHERE», код `42803`, тот же, что в ловушке урока 7.1. Причина та же: по логическому порядку из урока 4.2 WHERE стоит до GROUP BY. Когда WHERE проверяет строку, стопок ещё нет и считать в них нечего.
+
+В уроке 7.1 мы обходили это сортировкой. Здесь сортировка не поможет: нужна не одна строка, а все группы, которые прошли порог.
+
+## HAVING фильтрует группы
+
+Для условия по группам есть **HAVING**. Он стоит сразу после GROUP BY и проверяет уже собранные стопки. Сначала все статусы:
+
+```sql run expect=rows:4
+select status, count(*) from orders group by status;
+```
+
+4 группы, запомни это число. Теперь с HAVING:
+
+```sql run expect=rows:2
+select status, count(*) from orders group by status having count(*) > 1;
+```
+
+2 группы: paid с четырьмя заказами и new с двумя. У shipped и cancelled по одному заказу, порог они не прошли.
+
+В плеере чипы идут в порядке выполнения: FROM, GROUP BY, HAVING, SELECT. На шаге HAVING доска выглядит как WHERE из урока 4.3, только сканер идёт по строкам групп, которые свернул GROUP BY. Подсвечена колонка `count`, прошедшие группы зелёные, остальные красные и уходят. Подпись шага: «HAVING: осталось 2 из 4 групп».
+
+<Callout kind="analogy">
+Вернёмся на почту из урока 7.2. WHERE стоит у окошка приёма: решает, какие письма вообще попадут в сортировку. HAVING работает в конце, когда письма уже разложены по ячейкам: в отчёт идут только ячейки, где писем больше одного. Окошко про ячейки ничего не знает, их ещё не разложили. А ячейку можно оценить только целиком.
+</Callout>
+
+## HAVING без GROUP BY
+
+В уроке 7.1 было правило: агрегат без GROUP BY и HAVING возвращает ровно одну строку. Теперь видно, зачем там HAVING. Без GROUP BY вся таблица считается одной группой, и HAVING может отбросить и её:
+
+```sql run expect=rows:0
+select count(*) from book having count(*) > 100;
+```
+
+Ноль строк. Книг 11, единственная группа порог не прошла. Поставь `> 10`, и строка с числом 11 вернётся.
+
+## WHERE и HAVING вместе
+
+В одном запросе можно писать оба фильтра. Они работают на разных шагах: сначала WHERE, потом GROUP BY, потом HAVING. Возьмём только заказы с апреля:
+
+```sql run expect=rows:3
+select status, count(*) from orders
+where created_at >= '2024-04-01'
+group by status;
+```
+
+3 группы: paid 2, new 2, cancelled 1. Shipped пропал целиком, его единственный заказ мартовский. Теперь добавим HAVING:
+
+```sql run expect=rows:2
+select status, count(*) from orders
+where created_at >= '2024-04-01'
+group by status
+having count(*) > 1;
+```
+
+Снова 2 группы, paid и new. Но у paid теперь 2, а не 4: до группировки дошли только два апрельских заказа из четырёх. В плеере чип WHERE стоит до GROUP BY, а HAVING после.
+
+## Условие по обычной колонке
+
+HAVING может проверять и ключ группы:
+
+```sql run expect=rows:3
+select status, count(*) from orders group by status having status <> 'cancelled';
+```
+
+3 строки, 4 минус cancelled. На доске на шаге HAVING подсвечена `status`. Запрос работает, но условие здесь про строки, а не про группы. Ему место в WHERE:
+
+```sql run expect=rows:3
+select status, count(*) from orders where status <> 'cancelled' group by status;
+```
+
+Ответ тот же. Документация советует именно так: строки отсеются до группировки и не пойдут в подсчёт. Postgres умеет и сам переносить такое условие из HAVING в WHERE, но читатель запроса этого не видит. HAVING оставь для агрегатов.
+
+В HAVING действует то же правило, что в SELECT после GROUP BY: можно ключи группы и агрегаты, другие колонки нельзя.
+
+```sql run expectError=42803
+select status, count(*) from orders group by status having customer_id = 1;
+```
+
+Карточка «Колонка вне GROUP BY», код `42803`: `customer_id` нет ни в GROUP BY, ни в агрегате. На доске строки съезжаются в стопки по статусу, а колонка `customer_id` краснеет. В стопке paid четыре заказа от покупателей 1, 2, 5 и снова 1. Равна ли эта стопка «покупателю 1», вопрос без ответа.
+
+## Дорогие категории
+
+Средняя цена по категориям из урока 7.2, только категории дороже 1000:
+
+```sql run expect=rows:2
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id
+having avg(price) > 1000;
+```
+
+2 строки: категория 6, «Python», со средней 2800.00 и категория NULL с одной книгой «Простой Python» за 1990.00. Классика (502.50) и фантастика (593.33) порог не прошли. В SELECT среднее округлено, а HAVING сравнивает точное `avg(price)`: агрегат в HAVING не обязан совпадать с тем, что в SELECT.
+
+## Книги с высоким рейтингом
+
+Книги со средней оценкой 4.5 и выше:
+
+```sql run expect=rows:4
+select book_id, avg(rating) from review group by book_id having avg(rating) >= 4.5;
+```
+
+4 книги: «Тихий Дон» и «Python. К вершинам мастерства» с оценками 5 и 4, «Судьба человека» и «Голова профессора Доуэля» с одной пятёркой. «Простой Python» получил 2 и 4, в среднем 3, и не прошёл.
+
+Пройди главное одной сценой. Первый шаг отправь «На доску», дальше листай «Дальше»:
+
+<Scene>
+<Step caption="Все статусы: 4 группы">
+
+```sql run expect=rows:4
+select status, count(*) from orders group by status;
+```
+
+</Step>
+<Step caption="HAVING: статусы, где больше одного заказа, 2 группы">
+
+```sql run expect=rows:2
+select status, count(*) from orders group by status having count(*) > 1;
+```
+
+</Step>
+<Step caption="Сначала WHERE по дате, потом HAVING: снова 2 группы, но заказов в них меньше">
+
+```sql run expect=rows:2
+select status, count(*) from orders
+where created_at >= '2024-04-01'
+group by status
+having count(*) > 1;
+```
+
+</Step>
+</Scene>
+
+## Чего нет в выдаче и почему
+
+- ❌ shipped и cancelled в запросе с `having count(*) > 1`: по одному заказу, порог не пройден.
+- ❌ shipped в запросах с апреля: его заказ мартовский, WHERE убрал его до группировки.
+- ❌ Число 4 у paid в запросе с WHERE: в стопку попали только 2 апрельских заказа.
+- ❌ Строка с числом книг в `having count(*) > 100`: единственная группа порог не прошла.
+- ❌ «Простой Python», «Путешествие к центру Земли» и «Дети капитана Гранта» в книгах с рейтингом: средние 3, 4 и 3, ниже 4.5.
+
+## Ловушки
+
+<Callout kind="trap">
+Псевдоним из SELECT в HAVING не работает. Хочется написать короче:
+
+```sql run expectError=42703
+select status, count(*) as cnt from orders group by status having cnt > 1;
+```
+
+Код `42703`, колонки `cnt` нет. Вспомни урок 4.2: HAVING выполняется раньше SELECT, и в момент проверки имени `cnt` ещё не существует. ORDER BY идёт после SELECT, поэтому там `order by cnt` работает. В HAVING повтори само выражение: `having count(*) > 1`.
+</Callout>
+
+<Callout kind="tip">
+Перед фильтром спроси себя: это условие про строку или про группу? Про строку (`status`, `created_at`, `price`): WHERE. Про группу (`count`, `avg`, `sum`): HAVING. Агрегат в WHERE или колонка вне GROUP BY в HAVING дадут `42803`.
+</Callout>
+
+## Проверь себя
+
+1. Подними порог в запросе с рейтингом до `>= 4.75`. Сколько книг останется? Сначала ответь, потом проверь.
+2. Какие книги получили больше одного отзыва? Напиши запрос по `review` с `having count(*) > 1`.
+3. Сколько книг останется, если в запросе с рейтингом написать `having avg(rating) > 3`? Посчитай по средним из урока, потом проверь.
+
+<Cheatsheet>
+- WHERE: строки, до GROUP BY. Агрегат в WHERE: ошибка `42803`.
+- HAVING: группы, после GROUP BY. Агрегаты можно.
+- Порядок: FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT.
+- В HAVING можно ключи GROUP BY и агрегаты. Другая колонка: `42803`.
+- Псевдоним из SELECT в HAVING не виден (`42703`): повтори выражение.
+- HAVING без GROUP BY: вся таблица одна группа, на выходе 1 строка или 0.
+- Условие по обычной колонке пиши в WHERE.
+</Cheatsheet>
