@@ -12,11 +12,14 @@ import {
 import type { Animator, RowState, StageOf } from '../types';
 import { genericAnimator } from './generic';
 
-// WHERE / HAVING: сканер проходит строки, каждая получает вердикт, отсеянные уходят
+// WHERE / HAVING: сканер проходит строки (у HAVING свёрнутые группы), каждая получает вердикт, отсеянные уходят
 export const filterAnimator: Animator<StageOf<'filter'>> = (prev, stage, stageIndex, ctx) => {
   const cur = currentTable(prev);
   if (!cur) return genericAnimator(prev, stage, stageIndex, ctx);
-  const clause = stage.clause === 'where' ? 'WHERE' : 'HAVING';
+  const where = stage.clause === 'where';
+  const clause = where ? 'WHERE' : 'HAVING';
+  // HAVING судит свёрнутые группы, не строки таблицы
+  const item = where ? 'строки' : 'группы';
   const before = totalRows(cur);
   const after = stageRows(stage);
   const result = rebuildTable(cur, stage.output, undefined, after);
@@ -67,8 +70,7 @@ export const filterAnimator: Animator<StageOf<'filter'>> = (prev, stage, stageIn
     {
       id: `${stageIndex}:check`,
       stageIndex,
-      // HAVING судит свёрнутые группы, не строки таблицы
-      caption: `${clause}: проверяем условие для каждой ${stage.clause === 'where' ? 'строки' : 'группы'}`,
+      caption: `${clause}: проверяем условие для каждой ${item}`,
       durationMs: 500,
       frame: check,
     },
