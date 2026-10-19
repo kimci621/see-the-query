@@ -56,15 +56,20 @@ describe('groupAnimator', () => {
     expect(rows.find((r) => r.key === 'b=(0,10)')?.badge).toBe('NULL не считается');
     expect(rows.find((r) => r.key === 'b=(0,1)')?.badge).toBeUndefined();
   });
-  it('ключ в кавычках тоже ключ, подпись без кавычек: deparser пишет «"position"», «b."author_id"»', () => {
+  it('ключ в кавычках: подпись без кавычек, deparser пишет «"position"», «b."author_id"»', () => {
     for (const key of ['"author_id"', 'b."author_id"']) {
       const trace = groupTrace();
       trace.stages[1] = { ...trace.stages[1], keys: [key] } as StageOf<'group'>;
-      const { phases: p } = run(trace);
-      const keys = p[1].frame.tables[0].columns.filter((c) => c.state === 'key').map((c) => c.name);
-      expect(keys, key).toEqual(['author_id']);
-      expect(p[0].caption, key).toMatch(/^GROUP BY (b\.)?author_id: /);
+      expect(run(trace).phases[0].caption, key).toMatch(/^GROUP BY (b\.)?author_id: /);
     }
+  });
+  it('ключ выражением: колонка под ним подсвечена по номеру, а не перечёркнута', () => {
+    const trace = groupTrace();
+    trace.stages[1] = { ...trace.stages[1], keys: ['lower(title)'], keyColumns: [1] } as StageOf<'group'>;
+    const cols = Object.fromEntries(
+      run(trace).phases[1].frame.tables[0].columns.map((c) => [c.name, c.state]),
+    );
+    expect(cols).toEqual({ book_id: 'removed', title: 'key', author_id: 'removed' });
   });
   it('квалифицированный ключ на JOIN: a.author_id подсвечивает только колонку author, не b.author_id', () => {
     const trace = joinTrace('left');
@@ -73,6 +78,7 @@ describe('groupAnimator', () => {
       id: 's3',
       kind: 'group',
       keys: ['a.author_id'],
+      keyColumns: [3],
       aggregates: ['count(*)'],
       groups: [{ key: 'g:0', members: rows.map((r) => r.key) }],
       caption: 'GROUP BY a.author_id',

@@ -1,4 +1,4 @@
-import type { Node, SelectStmt, SortBy } from '@pgsql/types';
+import type { ColumnRef, Node, SelectStmt, SortBy } from '@pgsql/types';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { QueryResult } from '@/features/db/types';
 import { clauseRanges } from '@/features/sql/clauses';
@@ -6,7 +6,7 @@ import type { ClauseName, ParsedStatement } from '@/features/sql/types';
 import { ident, type Prober, sqlOf, TraceFallback, typeNames } from '../probe';
 import type { Column, Row, RowKey, SourceRange, Stage } from '../types';
 import { canon, rowCanon } from '../verify';
-import { hasVolatile } from '../whitelist';
+import { hasVolatile, walk } from '../whitelist';
 import { alignWindow } from './align';
 import { type JoinNode, joinFragment, type Source } from './join';
 
@@ -227,6 +227,36 @@ export function outputIndex(node: Node, out: Output): number | null {
     if (i >= 0) return i;
   }
   return null;
+}
+
+// Колонки под ключом (GROUP BY, ORDER BY): номера в columns по ссылкам ключа на колонки источников.
+// Подсветка ключа на доске идёт по номерам, а не по разбору SQL-текста
+export function refColumns(ctx: SelectCtx, node: unknown, columns: Column[]): number[] {
+  const found: number[] = [];
+  walk(node, (key, value) => {
+    if (key !== 'ColumnRef') return;
+    const names = ((value as ColumnRef).fields ?? []).map((f) => ('String' in f ? f.String.sval : undefined));
+    const column = names.at(-1);
+    if (!column) return;
+    const alias = ctx.aliasOrder[sourceOf(ctx, names.at(-2) ?? null, column)];
+    columns.forEach((c, i) => {
+      if (c.source?.alias === alias && c.source.column === column && !found.includes(i)) found.push(i);
+    });
+  });
+  return found;
+}
+
+// Ключи ORDER BY → номера колонок выхода: номер или имя выхода, выражение из SELECT, иначе колонки под выражением
+export function sortKeyColumns(ctx: SelectCtx, out: Output): number[] {
+  const found = new Set<number>();
+  for (const node of ctx.sel.sortClause ?? []) {
+    const key = 'SortBy' in node ? node.SortBy.node : undefined;
+    if (!key) continue;
+    const text = sqlOf(key);
+    const i = outputIndex(key, out) ?? out.kinds.findIndex((k) => k.expr && sqlOf(k.expr) === text);
+    for (const j of i >= 0 ? [i] : refColumns(ctx, key, out.columns)) found.add(j);
+  }
+  return [...found];
 }
 
 async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {

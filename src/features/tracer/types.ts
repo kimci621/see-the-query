@@ -53,6 +53,7 @@ export type Stage = StageBase &
     | {
         kind: 'group';
         keys: string[];
+        keyColumns: number[]; // номера колонок входа стадии под ключами: их оверлей подсвечивает
         groups: Array<{ key: RowKey; members: RowKey[] }>;
         aggregates: string[];
         running?: unknown[][]; // без GROUP BY: значения агрегатов после каждого члена стопки
@@ -66,7 +67,7 @@ export type Stage = StageBase &
         renamed: Record<string, string>;
       }
     | { kind: 'distinct'; on: string[] | null; stacks: Array<{ winner: RowKey; members: RowKey[] }> }
-    | { kind: 'sort'; order: RowKey[]; sortKeys: string[] }
+    | { kind: 'sort'; order: RowKey[]; sortKeys: string[]; keyColumns: number[] } // keyColumns: номера колонок выхода под ключами
     | {
         kind: 'limit';
         kept: RowKey[];
@@ -104,7 +105,7 @@ export type Stage = StageBase &
         error: DbError;
         focus: { tableIds: string[]; columns: string[] };
         // 42803 «must appear»: состав групп, чтобы показать колонку вне GROUP BY в стопке
-        group?: { keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> };
+        group?: { keys: string[]; keyColumns: number[]; groups: Array<{ key: RowKey; members: RowKey[] }> };
       }
   );
 

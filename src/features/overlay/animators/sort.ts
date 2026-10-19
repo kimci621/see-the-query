@@ -7,15 +7,12 @@ import { genericAnimator } from './generic';
 export const sortAnimator: Animator<StageOf<'sort'>> = (prev, stage, stageIndex, ctx) => {
   const cur = currentTable(prev);
   if (!cur) return genericAnimator(prev, stage, stageIndex, ctx);
-  // Ключи Ф5 это SQL-текст: 'price DESC NULLS LAST'; ключевые слова deparser берёт в кавычки: '"position"'
-  const isKey = (name: string) =>
-    [name, `"${name.replaceAll('"', '""')}"`].some((n) =>
-      stage.sortKeys.some((k) => k === n || k.startsWith(`${n} `)),
-    );
-  const keys = mapColumns(clearMarks(cur), (c) => ({ state: isKey(c.name) ? 'key' : 'normal' }));
-  const reordered = mapColumns(rebuildTable(cur, stage.output, stage.order, stageRows(stage)), (c) => ({
-    state: isKey(c.name) ? 'key' : 'normal',
-  }));
+  // Колонки ключа по номерам от трассировщика: order by 2, b.price, lower(title)
+  const key = (_: unknown, i: number) => ({
+    state: stage.keyColumns.includes(i) ? ('key' as const) : ('normal' as const),
+  });
+  const keys = mapColumns(clearMarks(cur), key);
+  const reordered = mapColumns(rebuildTable(cur, stage.output, stage.order, stageRows(stage)), key);
   const reorderPhase = {
     id: `${stageIndex}:reorder`,
     stageIndex,

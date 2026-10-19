@@ -213,6 +213,6 @@ async function groupingStages(
   }
   const g = ctx.stages.pop();
   return g?.kind === 'group'
-    ? { stages: ctx.stages, group: { keys: g.keys, groups: g.groups } }
+    ? { stages: ctx.stages, group: { keys: g.keys, keyColumns: g.keyColumns, groups: g.groups } }
     : { stages: [] };
 }

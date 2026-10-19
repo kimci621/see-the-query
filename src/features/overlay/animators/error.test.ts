@@ -95,7 +95,7 @@ describe('errorAnimator: 42803 в стопке группы', () => {
   const group = trace.stages[1] as StageOf<'group'>;
   const stage = {
     ...errorStage('42803', ['public.book.title'], 'column "b.title" must appear in the GROUP BY clause'),
-    group: { keys: group.keys, groups: group.groups },
+    group: { keys: group.keys, keyColumns: group.keyColumns, groups: group.groups },
   };
   const phases = errorAnimator(runUpTo(trace, 1, ctx), stage, 1, ctx);
   const last = phases[phases.length - 1];
@@ -114,10 +114,21 @@ describe('errorAnimator: 42803 в стопке группы', () => {
     expect(last.caption).toContain('Колонка вне GROUP BY');
     expect(last.caption).toContain('title');
   });
-  it('ключ в кавычках тоже подсвечен: deparser пишет «"position"»', () => {
-    const quoted = { ...stage, group: { keys: ['"author_id"'], groups: group.groups } };
-    const p = errorAnimator(runUpTo(trace, 1, ctx), quoted, 1, ctx);
+  it('ключ выражением подсвечен по номеру колонки: group by lower(title)', () => {
+    const byExpr = {
+      ...errorStage(
+        '42803',
+        ['public.book.book_id'],
+        'column "b.book_id" must appear in the GROUP BY clause',
+      ),
+      group: { keys: ['lower(title)'], keyColumns: [1], groups: group.groups },
+    };
+    const p = errorAnimator(runUpTo(trace, 1, ctx), byExpr, 1, ctx);
     const cols = p[p.length - 1].frame.tables[0].columns;
-    expect(cols.find((c) => c.name === 'author_id')?.state).toBe('key');
+    expect(Object.fromEntries(cols.map((c) => [c.name, c.state]))).toEqual({
+      book_id: 'error',
+      title: 'key',
+      author_id: 'normal',
+    });
   });
 });

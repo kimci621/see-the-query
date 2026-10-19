@@ -21,17 +21,23 @@ describe('sortAnimator', () => {
     expect(phases[1].caption).toBe('ORDER BY price DESC');
   });
 
-  it('ключ Ф5 это SQL-текст: «price DESC» подсвечивает колонку price', () => {
+  it('ключ подсвечен и после переезда', () => {
     const t = phases[1].frame.tables[0];
     expect(t.columns.filter((c) => c.state === 'key').map((c) => c.name)).toEqual(['price']);
   });
 
-  it('имя в кавычках тоже ключ: deparser пишет «"position"», «"price" DESC»', () => {
-    // Точное совпадение ('"price"', как '"position"' без направления) и ключ с направлением
-    for (const key of ['"price"', '"price" DESC']) {
-      const p = sortAnimator(runUpTo(trace, 3, testCtx()), { ...stage, sortKeys: [key] }, 3, testCtx());
-      const keys = p[0].frame.tables[0].columns.filter((c) => c.state === 'key').map((c) => c.name);
-      expect(keys, key).toEqual(['price']);
+  it('ключ по номерам колонок трассировщика, текст ключа не разбирается: order by 2, b.price, lower(title)', () => {
+    for (const [sortKeys, keyColumns, names] of [
+      [['2'], [1], ['price']],
+      [['b.price DESC'], [1], ['price']],
+      [['lower(title)'], [0], ['title']],
+    ] as const) {
+      const s = { ...stage, sortKeys: [...sortKeys], keyColumns: [...keyColumns] };
+      const p = sortAnimator(runUpTo(trace, 3, testCtx()), s, 3, testCtx());
+      for (const phase of p) {
+        const keys = phase.frame.tables[0].columns.filter((c) => c.state === 'key').map((c) => c.name);
+        expect(keys, `${sortKeys} ${phase.id}`).toEqual(names);
+      }
     }
   });
 

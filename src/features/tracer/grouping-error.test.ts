@@ -36,6 +36,7 @@ describe('42803 grouping_error', () => {
         const kept = Object.values(stageOf(trace, 'filter').verdicts).filter((v) => v === true).length;
         const { group } = stageOf(trace, 'error');
         expect(group?.keys).toEqual(['author_id']);
+        expect(group?.keyColumns).toEqual([2]); // book_id, title, author_id
         expect(group?.groups.flatMap((g) => g.members)).toHaveLength(kept);
       }),
     ));

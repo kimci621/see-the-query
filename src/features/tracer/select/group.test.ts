@@ -31,6 +31,38 @@ describe('стадия group', () => {
         expect(group.caption).toBe('GROUP BY position: 8 строк → 6 групп');
       }),
     ));
+  it('keyColumns: колонки входа под ключом, у выражения и алиаса из SELECT тоже', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const cases: Array<[string, string[]]> = [
+          ['select author_id, count(*) from book group by author_id', ['book.author_id']],
+          ['select lower(title), count(*) from book group by lower(title)', ['book.title']],
+          [
+            "select date_trunc('month', created_at), count(*) from customer group by date_trunc('month', created_at)",
+            ['customer.created_at'],
+          ],
+          [
+            "select date_trunc('month', created_at) as m, count(*) from customer group by m",
+            ['customer.created_at'],
+          ],
+          ['select position, count(*) from employee group by 1', ['employee.position']],
+          [
+            'select a.author_id, a.name, count(b.book_id) from author a left join book b on a.author_id = b.author_id group by a.author_id, a.name',
+            ['a.author_id', 'a.name'],
+          ],
+        ];
+        for (const [sql, keys] of cases) {
+          for (const maxRows of [undefined, 5]) {
+            const trace = await traceSql(db, sql, maxRows ? { maxRows } : {});
+            expect(trace.mode, `${sql}: ${trace.fallbackReason}`).toBe('full');
+            const group = stageOf(trace, 'group');
+            const input = trace.stages[trace.stages.indexOf(group) - 1].output.columns;
+            const named = group.keyColumns.map((i) => `${input[i].source?.alias}.${input[i].name}`);
+            expect(named, `${sql}, maxRows ${maxRows}`).toEqual(keys);
+          }
+        }
+      }),
+    ));
   it('агрегат без GROUP BY: одна строка даже на пустом входе', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

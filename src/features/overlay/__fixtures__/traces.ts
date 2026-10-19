@@ -77,6 +77,7 @@ export function fullPipelineTrace(): Trace {
       kind: 'sort',
       order: sorted.map((r) => r.key),
       sortKeys: ['price DESC'],
+      keyColumns: [1],
       caption: 'ORDER BY price DESC',
       output: { columns: projColumns, rows: sorted },
     },
@@ -388,6 +389,7 @@ export function groupTrace(aggregates = ['count(*)']): Trace {
       id: 's1',
       kind: 'group',
       keys: ['author_id'],
+      keyColumns: [2],
       aggregates,
       groups: [
         { key: 'g:0', members: ['b=(0,1)', 'b=(0,3)'] },
@@ -421,6 +423,7 @@ export function aggregateTrace(): Trace {
       id: 's1',
       kind: 'group',
       keys: [],
+      keyColumns: [],
       aggregates: ['count(*)'],
       groups: [{ key: 'g:0', members: JOIN_BOOKS.map((r) => r.key) }],
       caption: 'Агрегат без GROUP BY: 4 строки → 1 строка',

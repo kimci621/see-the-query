@@ -1,5 +1,5 @@
 import { explainError } from '@/features/errors/explain';
-import { currentTable, isKeyColumn, mapColumns, withTable } from '../frame';
+import { currentTable, mapColumns, withTable } from '../frame';
 import type { Animator, GhostTable, Phase, StageOf } from '../types';
 import { groupAnimator } from './group';
 
@@ -48,13 +48,14 @@ function inStacks(
   column: string,
   title: string,
 ): Phase[] {
-  const { keys, groups } = stage.group ?? { keys: [], groups: [] };
+  const { keys, keyColumns, groups } = stage.group ?? { keys: [], keyColumns: [], groups: [] };
   const stacked = groupAnimator(
     prev,
     {
       id: stage.id,
       kind: 'group',
       keys,
+      keyColumns,
       groups,
       aggregates: [],
       caption: '',
@@ -70,8 +71,8 @@ function inStacks(
   const qualifier = stage.error.message.match(/column "([^".]+)\.[^"]+" must appear/)?.[1];
   const named = cur.columns.filter((c) => c.name === column);
   const target = named.find((c) => c.source?.alias === qualifier) ?? named[0];
-  const marked = mapColumns(cur, (c) => ({
-    state: c === target ? 'error' : isKeyColumn(c, keys) ? 'key' : 'normal',
+  const marked = mapColumns(cur, (c, i) => ({
+    state: c === target ? 'error' : keyColumns.includes(i) ? 'key' : 'normal',
   }));
   return [
     ...stacked,

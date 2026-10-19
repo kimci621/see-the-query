@@ -39,6 +39,27 @@ describe('стадия sort', () => {
         expect(sort.caption).toBe('ORDER BY position, salary DESC: 8 строк по порядку');
       }),
     ));
+  it('keyColumns: номера колонок выхода под ключом, без разбора SQL-текста', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const cases: Array<[string, number[]]> = [
+          ['select title, price from book order by 2 desc', [1]],
+          ['select b.title, b.price from book b order by b.price', [1]],
+          ['select title, price from book order by lower(title)', [0]],
+          ['select price, lower(title) from book order by lower(title)', [1]],
+          ['select title, price as cost from book order by price', [1]],
+          ['select name, position, salary from employee order by position, salary desc', [1, 2]],
+          ['select title from book order by price', []],
+        ];
+        for (const [sql, keys] of cases) {
+          for (const maxRows of [undefined, 5]) {
+            const trace = await traceSql(db, sql, maxRows ? { maxRows } : {});
+            expect(trace.mode, `${sql}: ${trace.fallbackReason}`).toBe('full');
+            expect(stageOf(trace, 'sort').keyColumns, `${sql}, maxRows ${maxRows}`).toEqual(keys);
+          }
+        }
+      }),
+    ));
   it('по номеру колонки, по алиасу и по колонке вне SELECT', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

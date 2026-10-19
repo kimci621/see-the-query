@@ -143,6 +143,9 @@ export const GOLDEN: Array<{ sql: string; stages: string }> = [
   },
   { sql: 'select title, upper(title) from book order by upper', stages: 'scan:11 > project:11 > sort:11' },
   { sql: 'select title, title from book order by 1', stages: 'scan:11 > project:11 > sort:11' },
+  // P8.34: ключ квалифицированным именем и выражением
+  { sql: 'select b.title, b.price from book b order by b.price', stages: 'scan:11 > project:11 > sort:11' },
+  { sql: 'select title, price from book order by lower(title)', stages: 'scan:11 > project:11 > sort:11' },
   {
     sql: "select * from book order by meta->>'lang', title limit 3",
     stages: 'scan:11 > project:11 > sort:11 > limit:3',
@@ -220,5 +223,14 @@ export const GOLDEN_F7: Array<{ sql: string; stages: string }> = [
   {
     sql: 'select o.status, sum(oi.qty * oi.price) from orders o join order_item oi on o.order_id = oi.order_id group by o.status',
     stages: 'scan:8 > scan:15 > join:15 > group:4 > project:4',
+  },
+  // P8.34: ключ выражением и алиасом выражения из SELECT
+  {
+    sql: 'select lower(title), count(*) from book group by lower(title)',
+    stages: 'scan:11 > group:11 > project:11',
+  },
+  {
+    sql: "select date_trunc('month', created_at) as m, count(*) from customer group by m",
+    stages: 'scan:6 > group:5 > project:5',
   },
 ];

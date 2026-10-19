@@ -5,7 +5,6 @@ import {
   clearMarks,
   counterNear,
   currentTable,
-  isKeyColumn,
   mapColumns,
   mapRows,
   rebuildTable,
@@ -78,8 +77,8 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   // Колонки: ключ GROUP BY подсвечен, колонка внутри агрегата видна, остальные перечёркнуты (ошибка 42803)
   const inAggregate = (name: string) =>
     stage.aggregates.some((a) => a.split(/[^\p{L}\p{N}_$]+/u).includes(name));
-  const stacked = mapColumns({ ...colored, rows }, (c) => ({
-    state: isKeyColumn(c, stage.keys) ? 'key' : inAggregate(c.name) ? 'highlight' : 'removed',
+  const stacked = mapColumns({ ...colored, rows }, (c, i) => ({
+    state: stage.keyColumns.includes(i) ? 'key' : inAggregate(c.name) ? 'highlight' : 'removed',
   }));
 
   const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';

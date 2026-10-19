@@ -1,5 +1,5 @@
 import { captions } from '../captions';
-import { alignToReference, rangeOf, stageId } from './context';
+import { alignToReference, rangeOf, sortKeyColumns, stageId } from './context';
 import type { SelectStep } from './pipeline';
 
 // ORDER BY: позиции строк из упорядоченной проекции P (ключ ctid последним)
@@ -21,6 +21,7 @@ export const sortStep: SelectStep = {
       kind: 'sort',
       order,
       sortKeys: ordered.sortKeys,
+      keyColumns: sortKeyColumns(ctx, await ctx.outputs()),
       volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'order'),
       caption: captions.sort(ordered.sortKeys, ctx.rows.length),

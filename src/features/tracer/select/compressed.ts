@@ -3,7 +3,7 @@ import type { QueryResult } from '@/features/db/types';
 import { captions, limitLabel } from '../captions';
 import { ident, sqlOf } from '../probe';
 import type { Column, Stage } from '../types';
-import { rangeOf, type SelectCtx, stageId } from './context';
+import { rangeOf, type SelectCtx, sortKeyColumns, stageId } from './context';
 import { groupCaption, groupParts, groupStep, setGroupColumns } from './group';
 import { joinLayout } from './join';
 import { projection } from './project';
@@ -88,6 +88,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       ...base('group', ctx.columns),
       kind: 'group',
       keys: parts.keys,
+      keyColumns: parts.keyColumns,
       groups: [],
       aggregates: parts.aggregates,
       rowCount: n,
@@ -148,6 +149,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       kind: 'sort',
       order: [],
       sortKeys,
+      keyColumns: sortKeyColumns(ctx, out),
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'order'),
       caption: captions.sort(sortKeys, n),

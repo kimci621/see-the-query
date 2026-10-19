@@ -1,11 +1,11 @@
-import type { FuncCall, SelectStmt } from '@pgsql/types';
+import type { FuncCall, Node, SelectStmt } from '@pgsql/types';
 import { DbException } from '@/features/db/types';
 import { captions } from '../captions';
 import { ident, sqlOf, TraceFallback } from '../probe';
 import { groupKey } from '../rowkey';
 import type { RowKey } from '../types';
 import { AGGREGATES, funcName, walk } from '../whitelist';
-import { rangeOf, type SelectCtx, stageId } from './context';
+import { rangeOf, refColumns, type SelectCtx, stageId } from './context';
 import type { SelectStep } from './pipeline';
 
 // Уникальные агрегатные выражения из SELECT и HAVING в порядке появления
@@ -24,7 +24,7 @@ export function aggregateExprs(sel: SelectStmt): string[] {
 // Ключи GROUP BY выражениями и ' GROUP BY …' для всех проб над группами
 export function groupParts(ctx: SelectCtx) {
   const targets = (ctx.sel.targetList ?? []).map((n) => ('ResTarget' in n ? n.ResTarget : {}));
-  const keys = (ctx.sel.groupClause ?? []).map((node) => {
+  const nodes = (ctx.sel.groupClause ?? []).map((node): Node => {
     if ('GroupingSet' in node) throw new TraceFallback('Пока не анимируется: GROUPING SETS, ROLLUP и CUBE');
     // GROUP BY 1 и GROUP BY <имя выхода>: Postgres берёт выражение из SELECT, если такой входной колонки нет
     const pos = 'A_Const' in node && node.A_Const.ival ? (node.A_Const.ival.ival ?? 0) : null;
@@ -36,11 +36,14 @@ export function groupParts(ctx: SelectCtx) {
         : name && !ctx.scanColumns.includes(name)
           ? targets.find((t) => t.name === name)
           : undefined;
-    return sqlOf(target?.val ?? node);
+    return target?.val ?? node;
   });
+  const keys = nodes.map(sqlOf);
   const aggregates = aggregateExprs(ctx.sel);
   ctx.sql.group = keys.length ? ` GROUP BY ${keys.join(', ')}` : '';
-  return { keys, aggregates, select: [...keys, ...aggregates].join(', ') };
+  // Колонки входа под ключами считаются до setGroupColumns: потом ctx.columns это колонки групп
+  const keyColumns = refColumns(ctx, nodes, ctx.columns);
+  return { keys, keyColumns, aggregates, select: [...keys, ...aggregates].join(', ') };
 }
 
 // Колонки группы и ключ строки над группами: номер группы ищется по тексту ROW(ключи)
@@ -85,7 +88,7 @@ export const groupStep: SelectStep = {
   applies: (ctx) => Boolean(ctx.sel.groupClause) || aggregateExprs(ctx.sel).length > 0,
   async run(ctx) {
     const parts = groupParts(ctx);
-    const { keys, aggregates } = parts;
+    const { keys, keyColumns, aggregates } = parts;
     const n = keys.length + aggregates.length;
     const ctids = ctx.aliasOrder.map((a) => `${ident(a)}.ctid`).join(', ');
     const order = keys.length ? ` ORDER BY ${keys.map((_, i) => i + 1).join(', ')}` : '';
@@ -110,6 +113,7 @@ export const groupStep: SelectStep = {
       id: stageId(ctx, 'group'),
       kind: 'group',
       keys,
+      keyColumns,
       groups,
       aggregates,
       ...(running ? { running } : {}),

@@ -9,16 +9,6 @@ export function columnIds(columns: GhostColumn[]): string[] {
   );
 }
 
-// Колонка это ключ GROUP BY? Ключ это SQL-текст трассировщика: 'author_id', 'a.author_id', '"position"'.
-// Квалификатор сверяется с алиасом источника: a.author_id не подсвечивает b.author_id после JOIN
-export function isKeyColumn(c: GhostColumn, keys: string[]): boolean {
-  return keys.some((k) => {
-    const parts = k.replaceAll('"', '').split('.');
-    const alias = parts.length > 1 ? parts.at(-2) : undefined;
-    return parts.at(-1) === c.name && (!alias || !c.source || c.source.alias === alias);
-  });
-}
-
 // Рабочая таблица сцены: последняя добавленная
 export function currentTable(frame: Frame): GhostTable | null {
   return frame.tables.length ? frame.tables[frame.tables.length - 1] : null;
