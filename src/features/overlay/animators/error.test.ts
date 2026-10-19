@@ -114,4 +114,10 @@ describe('errorAnimator: 42803 в стопке группы', () => {
     expect(last.caption).toContain('Колонка вне GROUP BY');
     expect(last.caption).toContain('title');
   });
+  it('ключ в кавычках тоже подсвечен: deparser пишет «"position"»', () => {
+    const quoted = { ...stage, group: { keys: ['"author_id"'], groups: group.groups } };
+    const p = errorAnimator(runUpTo(trace, 1, ctx), quoted, 1, ctx);
+    const cols = p[p.length - 1].frame.tables[0].columns;
+    expect(cols.find((c) => c.name === 'author_id')?.state).toBe('key');
+  });
 });

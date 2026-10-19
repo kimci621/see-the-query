@@ -70,7 +70,7 @@ function inStacks(
   const qualifier = stage.error.message.match(/column "([^".]+)\.[^"]+" must appear/)?.[1];
   const named = cur.columns.filter((c) => c.name === column);
   const target = named.find((c) => c.source?.alias === qualifier) ?? named[0];
-  const keyNames = new Set(keys.map((k) => k.split('.').at(-1)));
+  const keyNames = new Set(keys.map((k) => k.replaceAll('"', '').split('.').at(-1)));
   const marked = mapColumns(cur, (c) => ({
     state: c === target ? 'error' : keyNames.has(c.name) ? 'key' : 'normal',
   }));
