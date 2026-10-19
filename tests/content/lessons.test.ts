@@ -25,6 +25,7 @@ const GUIDE_LESSONS: string[] = [
   'limit-offset',
   'inner-join',
   'left-right-join',
+  'aggregate-functions',
 ];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts
