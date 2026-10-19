@@ -27,11 +27,12 @@ describe('sortAnimator', () => {
   });
 
   it('имя в кавычках тоже ключ: deparser пишет «"position"», «"price" DESC»', () => {
-    const quoted = { ...stage, sortKeys: ['"price" DESC'] };
-    const p = sortAnimator(runUpTo(trace, 3, testCtx()), quoted, 3, testCtx());
-    expect(p[0].frame.tables[0].columns.filter((c) => c.state === 'key').map((c) => c.name)).toEqual([
-      'price',
-    ]);
+    // Точное совпадение ('"price"', как '"position"' без направления) и ключ с направлением
+    for (const key of ['"price"', '"price" DESC']) {
+      const p = sortAnimator(runUpTo(trace, 3, testCtx()), { ...stage, sortKeys: [key] }, 3, testCtx());
+      const keys = p[0].frame.tables[0].columns.filter((c) => c.state === 'key').map((c) => c.name);
+      expect(keys, key).toEqual(['price']);
+    }
   });
 
   it('сжатый режим Ф5: одна фаза, строки по rowCount', () => {
