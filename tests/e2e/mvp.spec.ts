@@ -69,3 +69,20 @@ test('select * from book фокусирует таблицу и подсвечи
   await expect(node.locator('[data-column="title"][data-highlighted="true"]')).toBeVisible();
   await expect(page.getByTestId('result-count')).toHaveText('11 строк');
 });
+
+test('таблица, созданная учеником, встаёт на доску урока рядом с его таблицами', async ({ page }) => {
+  await openLesson(page, 'how-to-use');
+  await typeQuery(page, 'create table mine (id int, note text);');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.getByText('Записано в базу', { exact: true })).toBeVisible({ timeout: 10_000 });
+  // курсор во FROM запроса к новой таблице: камера летит к ней, как к любой таблице урока
+  // (из конца текста камера пока не следит, P8.12)
+  await typeQuery(page, 'select * from mine;');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  const node = page.getByTestId('table-node-public.mine');
+  await expect(node).toHaveAttribute('data-focused', 'true', { timeout: 10_000 });
+  await expect(node).toBeVisible();
+  // остальные таблицы датасета урок по-прежнему не показывает
+  await expect(page.getByTestId('table-node-public.customer')).toHaveCount(0);
+});

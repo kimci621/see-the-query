@@ -103,9 +103,12 @@ function BoardFlow() {
   // Boolean-селектор: ре-рендер только при пересечении порога, а не на каждый кадр зума
   const far = useStore((s) => s.transform[2] < FAR_ZOOM);
 
+  // Доска урока: его таблицы плюс созданные учеником (спека 4, CREATE TABLE: таблица встаёт на базовую доску)
+  const userTables = useBoardStore((s) => s.userTables);
   useEffect(() => {
-    useBoardStore.getState().setVisibleTables(meta?.board?.tables?.map(normalizeTableId) ?? null);
-  }, [meta]);
+    const lesson = meta?.board?.tables?.map(normalizeTableId);
+    useBoardStore.getState().setVisibleTables(lesson ? [...lesson, ...userTables] : null);
+  }, [meta, userTables]);
 
   // Ноды зависят только от схемы, фильтра и урока; фокус и подсветка их не пересобирают
   const { nodes, edges } = useMemo(() => {

@@ -1,4 +1,5 @@
 import { type DatasetId, loadDatasetSql } from './datasets';
+import { introspect } from './introspect';
 import { type DbClient, DbException, type QueryResult, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from './types';
 
 export interface Sandbox {
@@ -13,6 +14,7 @@ export interface Sandbox {
   undo(): Promise<void>; // снапшот датасета + журнал без последнего
   reset(): Promise<void>; // снапшот датасета, журнал пуст
   journal(): readonly string[];
+  datasetTables(): readonly string[]; // id таблиц самого датасета, без созданных учеником
   subscribe(listener: (e: SandboxEvent) => void): () => void;
 }
 export type SandboxEvent =
@@ -68,6 +70,7 @@ async function applyOne(db: DbClient, sql: string): Promise<QueryResult[]> {
 
 export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): Sandbox {
   const snapshots = new Map<DatasetId, Blob>();
+  const baseTables = new Map<DatasetId, string[]>();
   const listeners = new Set<(e: SandboxEvent) => void>();
   let status: Sandbox['status'] = 'booting';
   let datasetId: DatasetId | null = null;
@@ -107,6 +110,10 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       if (cached) return client;
       try {
         await client.exec(await loadDatasetSql(id));
+        baseTables.set(
+          id,
+          (await introspect(client, { sampleRows: 0 })).tables.map((t) => t.id),
+        );
         snapshots.set(id, await client.dump());
         return client;
       } catch (e) {
@@ -175,6 +182,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     },
     client: live,
     journal: () => journal,
+    datasetTables: () => (datasetId ? (baseTables.get(datasetId) ?? []) : []),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

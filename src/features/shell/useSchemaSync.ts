@@ -17,7 +17,9 @@ export function useSchemaSync(): void {
       const mine = ++generation;
       try {
         const schema = await introspect(sandbox.client(), { sampleRows: MAX_VISIBLE_ROWS });
-        if (alive && mine === generation) useBoardStore.getState().setSchema(schema);
+        const base = sandbox.datasetTables();
+        const userTables = schema.tables.filter((t) => !base.includes(t.id)).map((t) => t.id);
+        if (alive && mine === generation) useBoardStore.getState().setSchema(schema, userTables);
       } catch (e) {
         // песочница перезапускается и пришлёт changed ещё раз; старая схема остаётся на доске
         console.error('introspect', e);

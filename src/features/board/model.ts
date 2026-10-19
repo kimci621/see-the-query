@@ -7,6 +7,7 @@ import {
   foldWidth,
   isTableVisible,
   type Positions,
+  SCHEMA_GAP,
   schemaNames,
   tableHeight,
   tableWidth,
@@ -45,10 +46,21 @@ export function resolvePositions(
   visible: string[] | null,
   layout?: 'auto' | Record<string, { x: number; y: number }>,
 ): Positions {
-  const auto = autoLayout(schema, visible);
-  if (!layout || layout === 'auto') return auto;
-  const manual = Object.fromEntries(Object.entries(layout).map(([name, p]) => [normalizeTableId(name), p]));
-  return { ...auto, ...manual };
+  if (!layout || layout === 'auto') return autoLayout(schema, visible);
+  const manual: Positions = Object.fromEntries(
+    Object.entries(layout).map(([name, p]) => [normalizeTableId(name), p]),
+  );
+  // Таблицы без координат урока (например, созданные учеником) встают правее таблиц урока, а не поверх них
+  const rest = schema.tables.filter((t) => isTableVisible(visible, t.id) && !manual[t.id]).map((t) => t.id);
+  const right = Math.max(
+    0,
+    ...schema.tables.filter((t) => manual[t.id]).map((t) => manual[t.id].x + tableWidth(t)),
+  );
+  const auto = Object.entries(autoLayout(schema, rest)).map(([id, p]) => [
+    id,
+    { x: p.x + right + SCHEMA_GAP, y: p.y },
+  ]);
+  return { ...Object.fromEntries(auto), ...manual };
 }
 
 export function buildNodes(

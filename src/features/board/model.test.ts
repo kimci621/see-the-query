@@ -27,11 +27,13 @@ describe('tableAriaLabel', () => {
 });
 
 describe('resolvePositions', () => {
-  it('координаты урока заменяют только указанные таблицы', () => {
+  it('координаты урока ставят указанные таблицы, остальные встают правее них', () => {
     const auto = resolvePositions(SCHEMA, null, 'auto');
     const manual = resolvePositions(SCHEMA, null, { book: { x: 5, y: 7 } });
     expect(manual['public.book']).toEqual({ x: 5, y: 7 });
-    expect(manual['public.author']).toEqual(auto['public.author']);
+    const right = 5 + tableWidth(book);
+    for (const id of ['public.author', 'public.book_category', 'shop.cart'])
+      expect(manual[id].x).toBeGreaterThan(right);
     expect(resolvePositions(SCHEMA, null)).toEqual(auto);
   });
 });

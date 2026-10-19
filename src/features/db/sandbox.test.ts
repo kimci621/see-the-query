@@ -79,6 +79,17 @@ describe('sandbox: загрузка урока', () => {
   );
 
   it(
+    'datasetTables: таблицы датасета без созданных учеником',
+    async () => {
+      const { sandbox } = await bookstore(['create table mine (id int)']);
+      expect(await count(sandbox.client(), 'mine')).toBe(0);
+      expect(sandbox.datasetTables()).toContain('public.book');
+      expect(sandbox.datasetTables()).not.toContain('public.mine');
+    },
+    T,
+  );
+
+  it(
     'обрезает журнал на первой записи, которая больше не выполняется',
     async () => {
       const ok = `insert into author (name) values ('A')`;

@@ -4,6 +4,8 @@ import type { SchemaSnapshot } from '@/features/db/introspect';
 export interface BoardStore {
   schema: SchemaSnapshot | null;
   visibleTables: string[] | null;
+  // Таблицы, которых нет в датасете (создал ученик): доска урока показывает их вместе с board.tables
+  userTables: string[];
   focused: string[];
   // Цель рефита камеры: focused или таблицы SELECT-трейса. Рамку не рисует
   frameTarget: string[];
@@ -18,7 +20,7 @@ export interface BoardStore {
   frameRequest: number;
   focusRequest: number;
   startRequest: number;
-  setSchema(s: SchemaSnapshot | null): void;
+  setSchema(s: SchemaSnapshot | null, userTables?: string[]): void;
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
   retarget(tableIds: string[]): void;
@@ -37,6 +39,7 @@ const sameList = (a: string[], b: string[]) => a.length === b.length && a.every(
 export const useBoardStore = create<BoardStore>()((set) => ({
   schema: null,
   visibleTables: null,
+  userTables: [],
   focused: [],
   frameTarget: [],
   highlightedColumns: [],
@@ -47,7 +50,8 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   frameRequest: 0,
   focusRequest: 0,
   startRequest: 0,
-  setSchema: (schema) => set({ schema }),
+  setSchema: (schema, userTables = []) =>
+    set((s) => ({ schema, userTables: sameList(s.userTables, userTables) ? s.userTables : userTables })),
   setVisibleTables: (visibleTables) => set({ visibleTables }),
   // Камера летит только при смене набора: ввод в редакторе вызывает focus на каждый символ
   focus: (tableIds) =>

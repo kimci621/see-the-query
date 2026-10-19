@@ -15,6 +15,7 @@ let listener: (e: SandboxEvent) => void = () => undefined;
 const sandbox = {
   status: 'ready',
   client: () => ({}),
+  datasetTables: () => ['public.book'],
   subscribe: (l: (e: SandboxEvent) => void) => {
     listener = l;
     return () => undefined;
@@ -36,6 +37,13 @@ describe('useSchemaSync', () => {
     await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaA));
     listener({ type: 'changed' });
     await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaB));
+  });
+
+  it('таблицы вне датасета уходят в userTables', async () => {
+    const table = (id: string) => ({ id }) as SchemaSnapshot['tables'][number];
+    introspect.mockResolvedValueOnce({ ...schemaA, tables: [table('public.book'), table('public.mine')] });
+    renderHook(() => useSchemaSync());
+    await waitFor(() => expect(useBoardStore.getState().userTables).toEqual(['public.mine']));
   });
 
   it('медленный старый ответ не перетирает новый', async () => {
