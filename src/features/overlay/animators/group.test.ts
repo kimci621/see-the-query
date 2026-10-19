@@ -109,6 +109,12 @@ describe('groupAnimator: агрегат без GROUP BY', () => {
       expect.objectContaining({ kind: 'counter', text: '4 → 1' }),
     );
   });
+  it('подписи окраски и стопки про одну стопку, а не про группы', () => {
+    expect(phases.slice(0, 2).map((p) => p.caption)).toEqual([
+      'Агрегат без GROUP BY: одна группа на все строки',
+      'Агрегат без GROUP BY: строки собираются в одну стопку',
+    ]);
+  });
   it('итоговое значение агрегата в подписи', () => {
     expect(phases[2].caption).toBe(`${stage.caption}: count(*) = 4`);
   });
@@ -125,6 +131,10 @@ describe('groupAnimator: агрегат без GROUP BY', () => {
     expect(p[1].frame.decorations.filter((d) => d.kind === 'bracket')).toEqual([]);
     expect(p[2].frame.tables[0].rows).toHaveLength(1);
     expect(p[2].frame.decorations).toContainEqual(expect.objectContaining({ text: '0 → 1' }));
+    expect(p.slice(0, 2).map((x) => x.caption)).toEqual([
+      'Агрегат без GROUP BY: строк нет',
+      'Агрегат без GROUP BY: стопка пустая, итог всё равно одна строка',
+    ]);
   });
   it('пустой вход: sum без строк в подписи NULL, как на доске', () => {
     const trace = aggregateTrace();

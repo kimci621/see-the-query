@@ -82,6 +82,12 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   }));
 
   const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';
+  // Без GROUP BY группа одна: подписи про одну стопку, на пустом входе стопка пустая, а строка итога есть
+  const [colorText, stackText] = stage.keys.length
+    ? ['строки окрашиваются в цвет своей группы', 'группы съезжаются в стопки']
+    : !totalRows(cur)
+      ? ['строк нет', 'стопка пустая, итог всё равно одна строка']
+      : ['одна группа на все строки', 'строки собираются в одну стопку'];
 
   // Без GROUP BY значение набегает: фаза на строку стопки, счётчик рядом с таблицей, NULL в count(col) серый.
   // ponytail: не больше 20 фаз, на большой стопке шаг через несколько строк
@@ -117,14 +123,14 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
     {
       id: `${stageIndex}:color`,
       stageIndex,
-      caption: `${head}: строки окрашиваются в цвет своей группы`,
+      caption: `${head}: ${colorText}`,
       durationMs: 600,
       frame: { tables: withTable(prev, colored).tables, decorations: [] },
     },
     {
       id: `${stageIndex}:stack`,
       stageIndex,
-      caption: `${head}: группы съезжаются в стопки`,
+      caption: `${head}: ${stackText}`,
       durationMs: 800,
       frame: { tables: withTable(prev, stacked).tables, decorations: brackets },
     },
