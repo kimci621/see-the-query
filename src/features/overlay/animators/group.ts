@@ -5,6 +5,7 @@ import {
   clearMarks,
   counterNear,
   currentTable,
+  isKeyColumn,
   mapColumns,
   mapRows,
   rebuildTable,
@@ -75,12 +76,10 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   rows.push(...colored.rows.filter((r) => !groupOf.has(r.key)));
 
   // Колонки: ключ GROUP BY подсвечен, колонка внутри агрегата видна, остальные перечёркнуты (ошибка 42803)
-  // Ключевые слова deparser берёт в кавычки: '"position"', 'e."position"'
-  const keyCols = new Set(stage.keys.map((k) => k.replaceAll('"', '').split('.').at(-1)));
   const inAggregate = (name: string) =>
     stage.aggregates.some((a) => a.split(/[^\p{L}\p{N}_$]+/u).includes(name));
   const stacked = mapColumns({ ...colored, rows }, (c) => ({
-    state: keyCols.has(c.name) ? 'key' : inAggregate(c.name) ? 'highlight' : 'removed',
+    state: isKeyColumn(c, stage.keys) ? 'key' : inAggregate(c.name) ? 'highlight' : 'removed',
   }));
 
   const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';

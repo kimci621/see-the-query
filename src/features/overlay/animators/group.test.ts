@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runUpTo } from '../__fixtures__/runUpTo';
-import { aggregateTrace, groupTrace, testCtx } from '../__fixtures__/traces';
+import { aggregateTrace, groupTrace, joinTrace, testCtx } from '../__fixtures__/traces';
+import { currentTable } from '../frame';
 import type { StageOf } from '../types';
 import { groupAnimator } from './group';
 
@@ -64,6 +65,24 @@ describe('groupAnimator', () => {
       expect(keys, key).toEqual(['author_id']);
       expect(p[0].caption, key).toMatch(/^GROUP BY (b\.)?author_id: /);
     }
+  });
+  it('квалифицированный ключ на JOIN: a.author_id подсвечивает только колонку author, не b.author_id', () => {
+    const trace = joinTrace('left');
+    const rows = trace.stages[2].output.rows;
+    const keyed = {
+      id: 's3',
+      kind: 'group',
+      keys: ['a.author_id'],
+      aggregates: ['count(*)'],
+      groups: [{ key: 'g:0', members: rows.map((r) => r.key) }],
+      caption: 'GROUP BY a.author_id',
+      output: { columns: [], rows: [] },
+    } as StageOf<'group'>;
+    const p = groupAnimator(runUpTo(trace, 3, testCtx()), keyed, 3, testCtx());
+    const cols = currentTable(p[1].frame)?.columns ?? [];
+    expect(cols.filter((c) => c.state === 'key').map((c) => `${c.source?.alias}.${c.name}`)).toEqual([
+      'a.author_id',
+    ]);
   });
   it('сжатый режим: только схлопывание', () => {
     const trace = groupTrace();
