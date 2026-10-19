@@ -67,7 +67,8 @@ export const filterAnimator: Animator<StageOf<'filter'>> = (prev, stage, stageIn
     {
       id: `${stageIndex}:check`,
       stageIndex,
-      caption: `${clause}: проверяем условие для каждой строки`,
+      // HAVING судит свёрнутые группы, не строки таблицы
+      caption: `${clause}: проверяем условие для каждой ${stage.clause === 'where' ? 'строки' : 'группы'}`,
       durationMs: 500,
       frame: check,
     },

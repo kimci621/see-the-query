@@ -51,9 +51,10 @@ describe('filterAnimator', () => {
     expect(t.x).toBe(500);
   });
 
-  it('HAVING подписывается как HAVING', () => {
+  it('HAVING подписывается как HAVING и проверяет группы, а не строки', () => {
     const p = filterAnimator(afterScan(), { ...stage, clause: 'having' }, 1, testCtx());
-    expect(p[0].caption.startsWith('HAVING')).toBe(true);
+    expect(p[0].caption).toBe('HAVING: проверяем условие для каждой группы');
+    expect(phases[0].caption).toBe('WHERE: проверяем условие для каждой строки');
   });
 
   it('сжатый режим: счётчик показывает настоящие числа', () => {
