@@ -45,6 +45,12 @@ describe('pgDiagnostic', () => {
     expect(text.slice(d?.from, d?.to)).toBe('nme');
   });
 
+  it('позиция на операторе подчёркивает оператор, а не следующее слово', () => {
+    const text = 'select title from book where price == 890';
+    const d = pgDiagnostic(text, text, { code: '42883', message: 'operator does not exist', position: 36 });
+    expect(text.slice(d?.from, d?.to)).toBe('==');
+  });
+
   it('без position или без оператора в тексте: null', () => {
     expect(pgDiagnostic('select 1', 'select 1', { code: '23503', message: 'x' })).toBeNull();
     expect(pgDiagnostic('другое', 'select 1', err(1))).toBeNull();
