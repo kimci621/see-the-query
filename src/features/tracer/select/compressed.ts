@@ -1,4 +1,5 @@
 import type { Node } from '@pgsql/types';
+import type { QueryResult } from '@/features/db/types';
 import { captions, limitLabel } from '../captions';
 import { ident, sqlOf } from '../probe';
 import type { Column, Stage } from '../types';
@@ -7,8 +8,9 @@ import { groupCaption, groupParts, groupStep, setGroupColumns } from './group';
 import { joinLayout } from './join';
 import { projection } from './project';
 
-// Сжатый режим: таблица больше maxRows. Стадии без строк, только точные счётчики (оверлей рисует полосы)
-export async function runCompressed(ctx: SelectCtx): Promise<void> {
+// Сжатый режим: таблица больше maxRows. Стадии без строк, только точные счётчики (оверлей рисует полосы).
+// Возвращает итог по тем же фрагментам, что и счётчики: его строки trace сверяет с прямым выполнением
+export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
   const { sql, sel } = ctx;
   const count = async (q: string) =>
     Number((await ctx.prober.run(`SELECT count(*) FROM (${q}) AS __vs_c`)).rows[0][0]);
@@ -121,13 +123,13 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
     caption: captions.project(out.columns.length - p.computed.length, input.length, p.computed.length),
   });
 
+  const nodes = (sel.distinctClause ?? []) as Node[];
+  const on = nodes.length && Object.keys(nodes[0]).length ? nodes.map(sqlOf) : null;
+  const distinct = !sel.distinctClause ? '' : on ? ` DISTINCT ON (${on.join(', ')})` : ' DISTINCT';
+  const select = `SELECT${distinct} ${sql.targets}${sql.from}${sql.where}${sql.group}`;
   if (sel.distinctClause) {
-    const nodes = sel.distinctClause as Node[];
-    const on = Object.keys(nodes[0]).length ? nodes.map(sqlOf) : null;
     const before = n;
-    n = await count(
-      `SELECT DISTINCT${on ? ` ON (${on.join(', ')})` : ''} ${sql.targets}${sql.from}${sql.where}${sql.group}`,
-    );
+    n = await count(select);
     ctx.stages.push({
       ...base('distinct', out.columns),
       kind: 'distinct',
@@ -138,8 +140,9 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
       caption: on ? captions.distinctOn(on, before, n) : captions.distinct(before, n),
     });
   }
+  const sortKeys = (sel.sortClause ?? []).map(sqlOf);
+  const order = sortKeys.length ? ` ORDER BY ${sortKeys.join(', ')}` : '';
   if (sel.sortClause) {
-    const sortKeys = sel.sortClause.map(sqlOf);
     ctx.stages.push({
       ...base('sort', out.columns),
       kind: 'sort',
@@ -150,22 +153,24 @@ export async function runCompressed(ctx: SelectCtx): Promise<void> {
       caption: captions.sort(sortKeys, n),
     });
   }
-  if (sel.limitCount || sel.limitOffset) {
-    const { limit, offset, withTies } = await ctx.limitParams();
-    const before = n;
-    // Итог окна (в том числе WITH TIES) берём у прямого выполнения
-    n = ctx.reference.rows.length;
-    ctx.stages.push({
-      ...base('limit', out.columns),
-      kind: 'limit',
-      kept: [],
-      cut: [],
-      limit,
-      offset,
-      withTies,
-      rowCount: n,
-      sourceRange: rangeOf(ctx.stmt, 'limit', 'offset'),
-      caption: captions.limit(limitLabel(limit, offset, withTies), before, n),
-    });
-  }
+  if (!sel.limitCount && !sel.limitOffset) return ctx.prober.run(`${select}${order}`);
+  const { limit, offset, withTies } = await ctx.limitParams();
+  // Целый SelectStmt не депарсим (теряет WITH TIES): окно собираем из вычисленных LIMIT и OFFSET
+  const window = withTies
+    ? ` OFFSET ${offset} ROWS FETCH FIRST ${limit} ROWS WITH TIES`
+    : ` LIMIT ${limit ?? 'ALL'} OFFSET ${offset}`;
+  const result = await ctx.prober.run(`${select}${order}${window}`);
+  ctx.stages.push({
+    ...base('limit', out.columns),
+    kind: 'limit',
+    kept: [],
+    cut: [],
+    limit,
+    offset,
+    withTies,
+    rowCount: result.rows.length,
+    sourceRange: rangeOf(ctx.stmt, 'limit', 'offset'),
+    caption: captions.limit(limitLabel(limit, offset, withTies), n, result.rows.length),
+  });
+  return result;
 }

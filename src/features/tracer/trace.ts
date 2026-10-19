@@ -115,15 +115,14 @@ export async function traceStatement(
   const { sources, joins } = from;
   const args = { stmt, sel, prober, reference, volatile, sources, joins, schema: opts.schema };
   let ctx = createSelectCtx(args);
-  let compressed = false;
+  let compressed: QueryResult | null = null;
   try {
     try {
       await runSelect(ctx);
     } catch (e) {
       if (!(e instanceof ProbeOverflow)) throw e;
       ctx = createSelectCtx(args);
-      compressed = true;
-      await runCompressed(ctx);
+      compressed = await runCompressed(ctx);
     }
   } catch (e) {
     if (e instanceof TraceFallback) return finalOnly(e.message);
@@ -131,7 +130,13 @@ export async function traceStatement(
     return finalOnly(`Проба не удалась: ${e.db.message}`);
   }
   if (compressed) {
-    const ok = ctx.stages.at(-1)?.rowCount === reference.rows.length;
+    // Строк на стадиях нет, сверяем итог по тем же фрагментам, что и счётчики. С volatile-ключом порядок
+    // случаен и на стадиях не показан (с LIMIT это уже final-only): хватает мультимножества
+    const rows = compressed.rows.map((values, i) => ({ key: resultKey(i), lineage: {}, values }));
+    const orderKeys = !ctx.sel.sortClause || volatileSort(ctx.sel) ? null : 'rows';
+    const ok =
+      ctx.stages.at(-1)?.rowCount === reference.rows.length &&
+      sameResult({ columns: [], rows }, reference, orderKeys, stableCanon(await ctx.outputs()));
     return ok
       ? finish({ mode: 'full', stages: ctx.stages, result: reference, error: null })
       : finalOnly('Сверка с прямым выполнением не сошлась');
