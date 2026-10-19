@@ -61,13 +61,16 @@ test('урок отмечается пройденным после запуск
   await expect(link.getByLabel('пройден')).toBeVisible({ timeout: 5_000 });
 });
 
-test('select * from book фокусирует таблицу и подсвечивает колонки (критерий 1)', async ({ page }) => {
+test('select * из другой таблицы: камера у неё, колонки подсвечены, внизу результат (критерий 1)', async ({
+  page,
+}) => {
   await openLesson(page, 'how-to-use');
-  await typeQuery(page, 'select * from book;');
-  const node = page.getByTestId('table-node-public.book');
-  await expect(node).toHaveAttribute('data-focused', 'true', { timeout: 5_000 });
-  await expect(node.locator('[data-column="title"][data-highlighted="true"]')).toBeVisible();
-  await expect(page.getByTestId('result-count')).toHaveText('11 строк');
+  // стартовый запрос урока уже про book: берём author, чтобы фокус не достался от стартового кадра
+  await typeQuery(page, 'select * from author;');
+  // React Flow рисует только ноды в кадре: видимая подсвеченная колонка = камера у author
+  const node = page.getByTestId('table-node-public.author');
+  await expect(node.locator('[data-column="name"][data-highlighted="true"]')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId('result-count')).toHaveText('6 строк');
 });
 
 test('таблица, созданная учеником, встаёт на доску урока рядом с его таблицами', async ({ page }) => {
