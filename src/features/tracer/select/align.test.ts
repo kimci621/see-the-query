@@ -39,4 +39,19 @@ describe('alignWindow', () => {
   it('без ORDER BY все строки в одной серии', () => {
     expect(alignWindow(['a', 'b', 'c'], () => '', canonOf, ['c'], 0, 1)).toEqual(['c', 'a', 'b']);
   });
+  it('серия внутри окна идёт в порядке эталона', () => {
+    expect(alignWindow(['a', 'b', 'c', 'd', 'e'], tupleOf, canonOf, ['a', 'd', 'b', 'c', 'e'], 0, 5)).toEqual(
+      ['a', 'd', 'b', 'c', 'e'],
+    );
+  });
+  it('серия на границе окна: внутри окна тоже порядок эталона', () => {
+    // окно [0, 3): a и две из b/c/d; Postgres вернул a, d, c
+    expect(alignWindow(['a', 'b', 'c', 'd', 'e'], tupleOf, canonOf, ['a', 'd', 'c'], 0, 3)).toEqual([
+      'a',
+      'd',
+      'c',
+      'b',
+      'e',
+    ]);
+  });
 });

@@ -46,4 +46,20 @@ describe('стадия sort', () => {
         expect(column(stageOf(hidden, 'sort'), 'title')[0]).toBe('Изучаем Python');
       }),
     ));
+  it('ничьи стоят в порядке Postgres: итог стадии по порядку равен результату', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        for (const sql of [
+          'select title, price from book order by price desc',
+          'select name, position, salary from employee order by position, salary desc',
+        ]) {
+          const trace = await traceSql(db, sql);
+          expect(trace.mode, trace.fallbackReason).toBe('full');
+          expect(
+            stageOf(trace, 'sort').output.rows.map((r) => r.values),
+            sql,
+          ).toEqual(trace.result?.rows);
+        }
+      }),
+    ));
 });

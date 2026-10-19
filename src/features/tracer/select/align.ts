@@ -40,5 +40,24 @@ export function alignWindow(
     while (chosen.length < hi - lo) chosen.push(rest.shift() as RowKey);
     out.splice(a, b - a, ...rest.slice(0, lo - a), ...chosen, ...rest.slice(lo - a));
   }
+  // Внутри окна равные по ключам строки ставим в том порядке, в каком их вернул Postgres.
+  // Длины серий не менялись, поэтому границы runs ещё верны; полные дубли неразличимы.
+  for (const [a, b] of runs) {
+    const lo = Math.max(a, from);
+    const hi = Math.min(b, to);
+    if (hi - lo < 2) continue;
+    const slice = out.slice(lo, hi);
+    const byCanon = new Map<string, RowKey[]>();
+    for (const key of slice) {
+      const c = canonOf(key);
+      const list = byCanon.get(c);
+      if (list) list.push(key);
+      else byCanon.set(c, [key]);
+    }
+    const placed = slice.map((_, i) => byCanon.get(reference[lo + i - from])?.shift());
+    const used = new Set(placed);
+    const rest = slice.filter((k) => !used.has(k)).reverse();
+    for (let i = lo; i < hi; i++) out[i] = placed[i - lo] ?? (rest.pop() as RowKey);
+  }
   return out;
 }

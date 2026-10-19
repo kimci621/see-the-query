@@ -9,8 +9,11 @@ export const sortStep: SelectStep = {
   async run(ctx) {
     const ordered = await ctx.ordered();
     const present = new Set(ctx.rows.map((r) => r.key));
-    let order = ordered.order.filter((k) => present.has(k));
-    if (ctx.sel.limitCount || ctx.sel.limitOffset) order = await alignToReference(ctx, order);
+    // Равные по ключам строки ставим так же, как Postgres в эталоне (без LIMIT окно это все строки)
+    const order = await alignToReference(
+      ctx,
+      ordered.order.filter((k) => present.has(k)),
+    );
     const byKey = new Map(ctx.rows.map((r) => [r.key, r]));
     ctx.rows = order.flatMap((k) => byKey.get(k) ?? []);
     ctx.stages.push({
