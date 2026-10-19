@@ -14,6 +14,8 @@ export interface BoardStore {
   expandedTables: string[];
   dimmed: boolean;
   fitRequest: number;
+  // Камера к frameTarget (без него вся доска) без проверки набора: сцена ушла, а камера стоит на призраке
+  frameRequest: number;
   focusRequest: number;
   startRequest: number;
   setSchema(s: SchemaSnapshot | null): void;
@@ -26,6 +28,7 @@ export interface BoardStore {
   expandTables(tableIds: string[]): void;
   setDimmed(v: boolean): void;
   requestFit(): void;
+  requestFrame(): void;
 }
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -41,6 +44,7 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   expandedTables: [],
   dimmed: false,
   fitRequest: 0,
+  frameRequest: 0,
   focusRequest: 0,
   startRequest: 0,
   setSchema: (schema) => set({ schema }),
@@ -68,4 +72,5 @@ export const useBoardStore = create<BoardStore>()((set) => ({
     set((s) => (sameSet(s.expandedTables, tableIds) ? s : { expandedTables: tableIds })),
   setDimmed: (dimmed) => set({ dimmed }),
   requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
+  requestFrame: () => set((s) => ({ frameRequest: s.frameRequest + 1 })),
 }));

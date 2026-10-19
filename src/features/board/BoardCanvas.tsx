@@ -189,6 +189,7 @@ function useCamera(
   // без полёта. null - старт закончился
   const startFold = useRef<{ fold: string; keep: boolean } | null>(null);
   const fitRequest = useBoardStore((s) => s.fitRequest);
+  const frameRequest = useBoardStore((s) => s.frameRequest);
   const focusRequest = useBoardStore((s) => s.focusRequest);
   const startRequest = useBoardStore((s) => s.startRequest);
   const focusMode = useSettingsStore((s) => s.focusMode);
@@ -233,6 +234,14 @@ function useCamera(
     startFold.current = null;
     void flow.fitView(boardFrame(flow.getNodes()));
   }, [fitRequest, flow]);
+
+  useEffect(() => {
+    if (frameRequest === 0) return;
+    startFold.current = null;
+    const all = flow.getNodes();
+    const ids = useBoardStore.getState().frameTarget.filter((id) => all.some((n) => n.id === id));
+    void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(all));
+  }, [frameRequest, flow]);
 
   useEffect(() => {
     const ids = useBoardStore.getState().focused;

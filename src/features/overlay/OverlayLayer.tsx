@@ -77,6 +77,14 @@ export function OverlayLayer() {
     void rf.fitBounds(b, { padding: 0.2, duration: durationSec * 1000 });
   }, [phase, followCamera, rf, durationSec]);
 
+  // Сцена ушла (ошибка, итог без шагов, Esc), а камера стоит там, где был призрак: там пусто.
+  // Возвращаем её к таблицам запроса
+  useEffect(() => {
+    if (phase || !lastCamera.current) return;
+    lastCamera.current = '';
+    if (followCamera) useBoardStore.getState().requestFrame();
+  }, [phase, followCamera]);
+
   // Слой смонтирован всегда: без сцены список таблиц пуст, и AnimatePresence растворяет призраков
   return (
     <ViewportPortal>

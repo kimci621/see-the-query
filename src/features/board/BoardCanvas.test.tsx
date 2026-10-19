@@ -261,6 +261,26 @@ describe('BoardCanvas', () => {
     expect(flow().getViewport()).toEqual(saved);
   });
 
+  it('requestFrame летит к таблицам запроса и при том же наборе, без них вписывает доску', () => {
+    mockReducedMotion(false);
+    renderBoard();
+    act(() => useBoardStore.getState().focus(['public.book']));
+    vi.mocked(flow().fitView).mockClear();
+    // ошибка после сцены: набор таблиц тот же, focus камеру не двигает, requestFrame двигает
+    act(() => useBoardStore.getState().focus(['public.book']));
+    expect(flow().fitView).not.toHaveBeenCalled();
+    act(() => useBoardStore.getState().requestFrame());
+    expect(fitNodes()).toEqual(['public.book']);
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ padding: FOCUS_PAD, duration: 400 }),
+    );
+    act(() => {
+      useBoardStore.getState().retarget(['public.nope']);
+      useBoardStore.getState().requestFrame();
+    });
+    expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
+  });
+
   it('⌘0 после стартового кадра вписывает все таблицы, фокус анимируется', () => {
     mockReducedMotion(false);
     renderBoard();

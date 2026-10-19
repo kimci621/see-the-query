@@ -108,3 +108,14 @@ test('«На доску» и «Дальше» из урока проигрыва
   await expect(page.getByTestId('result-count')).toHaveText('3 строки', { timeout: 10_000 });
   await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
 });
+
+test('после запроса с ошибкой камера возвращается к таблице, доска не пустая', async ({ page }) => {
+  await openBoard(page);
+  await typeQuery(page, QUERY);
+  await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
+  // камера ушла к призраку: базовая book вне кадра
+  await expect(page.getByTestId('table-node-public.book')).not.toBeInViewport({ timeout: 5_000 });
+  await typeQuery(page, 'select title from book where price == 890');
+  await expect(page.getByTestId('final-only-note')).toContainText('ошибкой', { timeout: 5_000 });
+  await expect(page.getByTestId('table-node-public.book')).toBeInViewport({ timeout: 5_000 });
+});
