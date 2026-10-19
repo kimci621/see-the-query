@@ -2,6 +2,8 @@
 import { plural, rowsWord } from '@/lib/plural';
 
 const colsWord = (n: number) => `${n} ${plural(n, 'колонка', 'колонки', 'колонок')}`;
+// После «из» родительный падеж: «из 1 строки», «из 3 строк»
+const ofRows = (n: number) => `${n} ${plural(n, 'строки', 'строк', 'строк')}`;
 
 export const captions = {
   scan: (table: string, alias: string, n: number) =>
@@ -15,13 +17,13 @@ export const captions = {
   cross: (left: number, right: number) => `CROSS JOIN: ${left} × ${right} = ${rowsWord(left * right)}`,
   joinCompressed: (type: string, n: number) => `${type} JOIN: ${rowsWord(n)}`,
   filter: (before: number, after: number, unknown: number) =>
-    `WHERE: осталось ${after} из ${rowsWord(before)}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
+    `WHERE: осталось ${after} из ${ofRows(before)}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   project: (kept: number, from: number, computed: number) =>
     `SELECT: ${colsWord(kept)} из ${from}${computed ? `, вычислено ${computed}` : ''}`,
   group: (keys: string[], groups: number, rows: number) =>
     `GROUP BY ${keys.join(', ')}: ${rowsWord(rows)} → ${groups} ${plural(groups, 'группа', 'группы', 'групп')}`,
   having: (before: number, after: number, unknown: number) =>
-    `HAVING: осталось ${after} из ${before} ${plural(before, 'группа', 'группы', 'групп')}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
+    `HAVING: осталось ${after} из ${before} ${plural(before, 'группы', 'групп', 'групп')}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
@@ -29,8 +31,7 @@ export const captions = {
   distinctOn: (on: string[], before: number, after: number) =>
     `DISTINCT ON (${on.join(', ')}): ${rowsWord(before)} → ${after}, по одной на группу`,
   sort: (keys: string[], n: number) => `ORDER BY ${keys.join(', ')}: ${rowsWord(n)} по порядку`,
-  limit: (label: string, before: number, after: number) =>
-    `${label}: осталось ${after} из ${rowsWord(before)}`,
+  limit: (label: string, before: number, after: number) => `${label}: осталось ${after} из ${ofRows(before)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };
 
