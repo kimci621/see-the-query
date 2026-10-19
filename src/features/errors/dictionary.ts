@@ -149,12 +149,29 @@ export const DICTIONARY: Record<string, Entry> = {
   },
 
   '42803': (err, ctx) => {
+    // Тот же код без колонки в тексте: aggregate functions are not allowed in WHERE, вложенный агрегат и т.п.
+    if (!quoted(err.message))
+      return /not allowed in WHERE/.test(err.message)
+        ? {
+            title: 'Агрегат в WHERE',
+            body: 'WHERE решает, какие строки попадут в агрегат, поэтому выполняется раньше него. Посчитать max или count внутри WHERE нельзя.',
+            suggestion:
+              'Условие на агрегат пиши в HAVING, а строку с самым большим значением найди сортировкой или подзапросом.',
+            highlight: none,
+          }
+        : {
+            title: 'Агрегат здесь нельзя',
+            body: 'В этом месте запроса агрегатная функция не допускается.',
+            highlight: none,
+          };
     // column "book.title" must appear in the GROUP BY clause ...
     const [table, column] = quoted(err.message).split('.');
     const owner = ctx.schema?.tables.find((t) => t.name === table);
     return {
       title: 'Колонка вне GROUP BY',
-      body: `После GROUP BY от каждой группы остаётся одна строка. ${table}.${column} в группе может быть разным, и Postgres не знает, какое значение показать.`,
+      body: /\bgroup\s+by\b/i.test(ctx.sql)
+        ? `После GROUP BY от каждой группы остаётся одна строка. ${table}.${column} в группе может быть разным, и Postgres не знает, какое значение показать.`
+        : `Агрегат без GROUP BY сворачивает все строки в одну. ${table}.${column} у строк разный, и Postgres не знает, какое значение показать.`,
       suggestion: `Добавь ${table}.${column} в GROUP BY или оберни в агрегат, например max(${table}.${column}).`,
       highlight: { tableIds: owner ? [owner.id] : [], columns: owner ? [`${owner.id}.${column}`] : [] },
     };

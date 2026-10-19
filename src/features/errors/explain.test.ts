@@ -19,6 +19,9 @@ const CASES: Record<string, string> = {
   ambiguousCte: 'with author as (select * from author) select author_id from book join author on true',
   aliasedTable: 'select book.title from book b join author a on a.author_id = b.author_id',
   grouping: 'select author_id, title from book group by author_id',
+  groupingNoGroupBy: 'select title, max(price) from book',
+  aggregateInWhere: 'select title from book where price = max(price)',
+  nestedAggregate: 'select max(count(*)) from book',
   formTypo: 'select title form book',
   commaBeforeFrom: 'select title, from book',
   doubleEquals: 'select title from book where price == 350',
@@ -135,6 +138,23 @@ describe('explainError', () => {
 
   it('42803: колонка вне GROUP BY', () => {
     expect(explain('grouping').highlight.columns).toEqual(['public.book.title']);
+    expect(explain('grouping').body).toMatch(/^После GROUP BY/);
+    expect(explain('groupingNoGroupBy')).toMatchObject({
+      title: 'Колонка вне GROUP BY',
+      body: expect.stringMatching(/^Агрегат без GROUP BY сворачивает все строки в одну\. book\.title/),
+      highlight: { columns: ['public.book.title'] },
+    });
+  });
+
+  it('42803 без колонки в тексте: агрегат в WHERE и вложенный агрегат', () => {
+    expect(errors.get('aggregateInWhere')?.code).toBe('42803');
+    expect(explain('aggregateInWhere')).toMatchObject({
+      title: 'Агрегат в WHERE',
+      highlight: { columns: [] },
+    });
+    expect(errors.get('nestedAggregate')?.code).toBe('42803');
+    expect(explain('nestedAggregate').title).toBe('Агрегат здесь нельзя');
+    expect(explain('nestedAggregate').body).not.toContain('undefined');
   });
 
   it('42601 и 42883: частые опечатки', () => {
