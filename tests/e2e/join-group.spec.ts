@@ -77,6 +77,9 @@ test.describe('сцены JOIN и GROUP BY', () => {
   test('агрегат без GROUP BY: значение набегает, NULL в count(col) серый', async ({ page }) => {
     await openBoard(page);
     await typeQuery(page, 'select count(*), count(price) from book');
+    await expect(page.getByTestId('stage-chip')).toHaveText(['FROM', 'COUNT +1', 'SELECT'], {
+      timeout: 5_000,
+    });
     await waitSceneEnd(page, 1);
     // конец стадии агрегата и шаг назад со схлопывания: последняя строка стопки уже посчитана
     await page.getByTestId('stage-chip').nth(1).click();

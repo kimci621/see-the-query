@@ -9,8 +9,13 @@ export function stageLabel(stage: Stage): string {
       return stage.joinType === 'cross' ? 'CROSS JOIN' : `${stage.joinType.toUpperCase()} JOIN`;
     case 'filter':
       return stage.clause === 'where' ? 'WHERE' : 'HAVING';
-    case 'group':
-      return 'GROUP BY';
+    case 'group': {
+      // Агрегат без GROUP BY: имя первой агрегатной функции, остальные числом (COUNT +1)
+      const [first, ...rest] = stage.aggregates;
+      if (stage.keys.length || !first) return 'GROUP BY';
+      const name = first.slice(0, first.indexOf('(')).replace(/^.*\./, '').toUpperCase();
+      return rest.length ? `${name} +${rest.length}` : name;
+    }
     case 'window':
       return 'OVER';
     case 'project':
