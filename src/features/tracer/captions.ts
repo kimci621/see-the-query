@@ -6,8 +6,16 @@ const colsWord = (n: number) => `${n} ${plural(n, 'колонка', 'колон�
 const ofRows = (n: number) => `${n} ${plural(n, 'строки', 'строк', 'строк')}`;
 
 // Ключи для подписи: deparser берёт ключевые слова в кавычки ("position"), человеку они не нужны.
-// Имя с заглавными или пробелом ("Big Name") кавычки сохраняет
-export const keyList = (keys: string[]) => keys.join(', ').replace(/"([a-z_][a-z0-9_$]*)"/g, '$1');
+// Имя с заглавными, пробелом или "" ("Big Name") кавычки сохраняет. Литерал '…' берётся целиком и не меняется:
+// deparser удваивает кавычки внутри ('it''s', E'a\\b''c'), \' не пишет
+export const keyList = (keys: string[]) =>
+  keys
+    .map((k) =>
+      k.replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"/g, (t) =>
+        /^"[a-z_][a-z0-9_$]*"$/.test(t) ? t.slice(1, -1) : t,
+      ),
+    )
+    .join(', ');
 
 export const captions = {
   scan: (table: string, alias: string, n: number) =>
@@ -33,7 +41,7 @@ export const captions = {
   distinct: (before: number, after: number) =>
     `DISTINCT: ${rowsWord(before)} → ${after} ${plural(after, 'уникальная', 'уникальные', 'уникальных')}`,
   distinctOn: (on: string[], before: number, after: number) =>
-    `DISTINCT ON (${on.join(', ')}): ${rowsWord(before)} → ${after}, по одной на группу`,
+    `DISTINCT ON (${keyList(on)}): ${rowsWord(before)} → ${after}, по одной на группу`,
   sort: (keys: string[], n: number) => `ORDER BY ${keyList(keys)}: ${rowsWord(n)} по порядку`,
   limit: (label: string, before: number, after: number) => `${label}: осталось ${after} из ${ofRows(before)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,

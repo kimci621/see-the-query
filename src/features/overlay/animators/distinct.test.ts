@@ -50,7 +50,7 @@ describe('distinctAnimator', () => {
   });
 
   it('DISTINCT ON упоминает ключи в подписи', () => {
-    const p = distinctAnimator(afterProject(), { ...stage, on: ['price'] }, 2, testCtx());
-    expect(p[0].caption).toContain('DISTINCT ON (price)');
+    const p = distinctAnimator(afterProject(), { ...stage, on: ['"position"', 'price'] }, 2, testCtx());
+    expect(p[0].caption).toContain('DISTINCT ON (position, price)');
   });
 });

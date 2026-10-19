@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { captions, limitLabel } from './captions';
+import { captions, keyList, limitLabel } from './captions';
 
 describe('captions', () => {
   it('подписи стадий', () => {
@@ -10,6 +10,16 @@ describe('captions', () => {
     expect(limitLabel(1, 0, true)).toBe('FETCH FIRST 1 WITH TIES');
     expect(limitLabel(null, 0, false)).toBe('LIMIT ALL');
     expect(limitLabel(null, 9, false)).toBe('OFFSET 9');
+  });
+
+  it('ключи без кавычек у простых имён, литералы и сложные имена как есть', () => {
+    expect(keyList(['"position"', 'b."select" DESC'])).toBe('position, b.select DESC');
+    expect(keyList([`COALESCE(x, '"y"')`, `'it''s "q"'`])).toBe(`COALESCE(x, '"y"'), 'it''s "q"'`);
+    expect(keyList([`E'a\\b''c'`, 'lower("order")'])).toBe(`E'a\\b''c', lower(order)`);
+    expect(keyList(['"Big Name"', '"a""b"'])).toBe('"Big Name", "a""b"');
+    expect(captions.distinctOn(['"position"'], 8, 6)).toBe(
+      'DISTINCT ON (position): 8 строк → 6, по одной на группу',
+    );
   });
 
   it('после «из» число в родительном падеже', () => {

@@ -1,3 +1,4 @@
+import { keyList } from '@/features/tracer/captions';
 import type { RowKey } from '@/features/tracer/types';
 import { clearMarks, currentTable, rebuildTable, stageRows, withTable } from '../frame';
 import type { Animator, GhostRow, StageOf } from '../types';
@@ -48,7 +49,7 @@ export const distinctAnimator: Animator<StageOf<'distinct'>> = (prev, stage, sta
     }),
   };
 
-  const head = stage.on ? `DISTINCT ON (${stage.on.join(', ')})` : 'DISTINCT';
+  const head = stage.on ? `DISTINCT ON (${keyList(stage.on)})` : 'DISTINCT';
   const collapsePhase = {
     id: `${stageIndex}:collapse`,
     stageIndex,

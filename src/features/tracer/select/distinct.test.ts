@@ -37,6 +37,19 @@ describe('стадия distinct', () => {
         ]);
       }),
     ));
+  it('DISTINCT ON по ключу-ключевому слову: подпись без кавычек, в обычном и сжатом режиме', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const sql = 'select distinct on (position) name, position from employee order by position';
+        for (const maxRows of [undefined, 5]) {
+          const trace = await traceSql(db, sql, maxRows ? { maxRows } : {});
+          expect(trace.mode, trace.fallbackReason).toBe('full');
+          expect(stageOf(trace, 'distinct').caption).toBe(
+            'DISTINCT ON (position): 8 строк → 6, по одной на группу',
+          );
+        }
+      }),
+    ));
   it('DISTINCT ON без полного порядка: победитель тот, что вернул Postgres', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
