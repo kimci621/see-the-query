@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { introspect, type SchemaSnapshot } from '@/features/db/introspect';
 import { type DbError, type DbException, SANDBOX_TIMEOUT } from '@/features/db/types';
+import { initParser } from '@/features/sql/parser';
 import { inPreview, withDataset } from '../../../tests/helpers/db';
 import { explainError } from './explain';
 
@@ -14,6 +15,8 @@ const CASES: Record<string, string> = {
   doubleQuoted: 'select * from author where name = "Жюль Верн"',
   ambiguous: 'select name from author join customer on true',
   ambiguousAliased: 'select author_id from book b join author as a on b.author_id = a.author_id',
+  ambiguousComment: '-- book list\nselect author_id from book join author on true',
+  ambiguousCte: 'with author as (select * from author) select author_id from book join author on true',
   aliasedTable: 'select book.title from book b join author a on a.author_id = b.author_id',
   grouping: 'select author_id, title from book group by author_id',
   formTypo: 'select title form book',
@@ -34,6 +37,7 @@ const CASES: Record<string, string> = {
 };
 
 beforeAll(async () => {
+  await initParser();
   await withDataset('bookstore', async (db) => {
     schema = await introspect(db);
     for (const [name, sql] of Object.entries(CASES)) {
@@ -111,6 +115,13 @@ describe('explainError', () => {
 
   it('42702: при алиасах подсказка через алиасы', () => {
     expect(explain('ambiguousAliased').suggestion).toBe('Укажи таблицу: a.author_id или b.author_id.');
+  });
+
+  it('42702: алиас берётся из разбора, а не из комментария или CTE', () => {
+    expect(explain('ambiguousComment').suggestion).toBe(
+      'Укажи таблицу: author.author_id или book.author_id.',
+    );
+    expect(explain('ambiguousCte').suggestion).toBe('Укажи таблицу: author.author_id или book.author_id.');
   });
 
   it('42P01: таблица под алиасом не называется «нет такой таблицы»', () => {

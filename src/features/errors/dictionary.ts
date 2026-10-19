@@ -1,5 +1,7 @@
 import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { type DbError, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from '@/features/db/types';
+import { isParserReady, parseSql } from '@/features/sql/parser';
+import { relationsOf } from '@/features/sql/relations';
 
 export interface ErrorExplanation {
   title: string;
@@ -53,19 +55,12 @@ function tablesInSql(ctx: ErrorContext): TableInfo[] {
   return ctx.schema?.tables.filter((t) => words.has(t.name.toLowerCase())) ?? [];
 }
 
-// Слова, которые после имени таблицы стоят вместо алиаса
-const NOT_ALIAS = new Set(
-  'on join inner left right full cross natural where group order limit offset having using union except intersect window fetch for lateral tablesample returning set values'.split(
-    ' ',
-  ),
-);
-
-// Алиас таблицы из текста запроса: «book b», «author as a». Без алиаса undefined.
-// ponytail: регэксп по тексту, не по дереву разбора; таблица дважды в FROM даст первый алиас
-function aliasOf(sql: string, table: string): string | undefined {
-  const m = new RegExp(`\\b${table}\\s+(?:as\\s+)?([a-z_][a-z0-9_]*)`, 'i').exec(sql);
-  const alias = m?.[1];
-  return alias && !NOT_ALIAS.has(alias.toLowerCase()) ? alias : undefined;
+// Алиасы таблиц из разбора запроса: book → b. Парсер не готов или запрос не разобрался: пусто
+function aliasesOf(sql: string): Map<string, string> {
+  const parsed = isParserReady() ? parseSql(sql) : null;
+  if (!parsed?.ok) return new Map();
+  const refs = parsed.statements.flatMap((stmt) => relationsOf(stmt).tables);
+  return new Map(refs.flatMap((r) => (r.alias ? [[r.name, r.alias] as const] : [])));
 }
 
 const columnId = (t: { schema?: string; table?: string }, column: string) =>
@@ -139,6 +134,7 @@ export const DICTIONARY: Record<string, Entry> = {
   '42702': (err, ctx) => {
     const name = quoted(err.message);
     const owners = tablesInSql(ctx).filter((t) => t.columns.some((c) => c.name === name));
+    const aliases = aliasesOf(ctx.sql);
     return {
       title: `Непонятно, какая ${name}`,
       body:
@@ -146,7 +142,7 @@ export const DICTIONARY: Record<string, Entry> = {
           ? `Колонка ${name} есть и в ${owners.map((t) => t.name).join(', и в ')}. Postgres не угадывает, из какой таблицы её брать.`
           : `Колонка ${name} есть в нескольких таблицах запроса. Postgres не угадывает, из какой её брать.`,
       suggestion: owners.length
-        ? `Укажи таблицу: ${owners.map((t) => `${aliasOf(ctx.sql, t.name) ?? t.name}.${name}`).join(' или ')}.`
+        ? `Укажи таблицу: ${owners.map((t) => `${aliases.get(t.name) ?? t.name}.${name}`).join(' или ')}.`
         : 'Укажи таблицу или алиас перед именем колонки.',
       highlight: { tableIds: owners.map((t) => t.id), columns: owners.map((t) => `${t.id}.${name}`) },
     };
