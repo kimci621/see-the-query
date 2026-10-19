@@ -26,6 +26,14 @@ describe('sortAnimator', () => {
     expect(t.columns.filter((c) => c.state === 'key').map((c) => c.name)).toEqual(['price']);
   });
 
+  it('имя в кавычках тоже ключ: deparser пишет «"position"», «"price" DESC»', () => {
+    const quoted = { ...stage, sortKeys: ['"price" DESC'] };
+    const p = sortAnimator(runUpTo(trace, 3, testCtx()), quoted, 3, testCtx());
+    expect(p[0].frame.tables[0].columns.filter((c) => c.state === 'key').map((c) => c.name)).toEqual([
+      'price',
+    ]);
+  });
+
   it('сжатый режим Ф5: одна фаза, строки по rowCount', () => {
     const big = compressedTrace(5000);
     const s = {
