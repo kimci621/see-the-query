@@ -50,6 +50,9 @@ describe('стадия sort', () => {
           ['select title, price as cost from book order by price', [1]],
           ['select name, position, salary from employee order by position, salary desc', [1, 2]],
           ['select title from book order by price', []],
+          // USING: слитая колонка принадлежит левой стороне, ключ правой стороны ведёт к ней
+          ['select * from book b join author a using (author_id) order by a.author_id', [0]],
+          ['select * from author a join book b using (author_id) order by b.author_id', [0]],
         ];
         for (const [sql, keys] of cases) {
           for (const maxRows of [undefined, 5]) {

@@ -238,10 +238,15 @@ export function refColumns(ctx: SelectCtx, node: unknown, columns: Column[]): nu
     const names = ((value as ColumnRef).fields ?? []).map((f) => ('String' in f ? f.String.sval : undefined));
     const column = names.at(-1);
     if (!column) return;
-    const alias = ctx.aliasOrder[sourceOf(ctx, names.at(-2) ?? null, column)];
-    columns.forEach((c, i) => {
-      if (c.source?.alias === alias && c.source.column === column && !found.includes(i)) found.push(i);
-    });
+    const owner = sourceOf(ctx, names.at(-2) ?? null, column);
+    const of = (alias: string | undefined) =>
+      columns.flatMap((c, i) => (c.source?.alias === alias && c.source?.column === column ? [i] : []));
+    let hits = of(ctx.aliasOrder[owner]);
+    // Слитая USING-колонка принадлежит левой стороне: a.author_id после b JOIN a USING (author_id) это колонка b,
+    // то есть первого источника с таким именем
+    if (!hits.length && ctx.joins.some((j, m) => m + 1 === owner && j.using?.includes(column)))
+      hits = of(ctx.aliasOrder[ctx.sourceColumns.findIndex((cols) => cols.some((c) => c.name === column))]);
+    for (const i of hits) if (!found.includes(i)) found.push(i);
   });
   return found;
 }

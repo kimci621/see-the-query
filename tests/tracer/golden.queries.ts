@@ -238,4 +238,13 @@ export const GOLDEN_F7: Array<{ sql: string; stages: string }> = [
     sql: 'select a.name, count(*) as all_rows, count(b.book_id) as books from author a left join book b on a.author_id = b.author_id group by a.author_id, a.name',
     stages: 'scan:6 > scan:11 > join:10 > group:6 > project:6',
   },
+  // P8.53: ключ правой стороны USING ведёт к слитой колонке левой
+  {
+    sql: 'select * from book b join author a using (author_id) order by a.author_id',
+    stages: 'scan:11 > scan:6 > join:9 > project:9 > sort:9',
+  },
+  {
+    sql: 'select a.author_id, count(*) from book b join author a using (author_id) group by a.author_id',
+    stages: 'scan:11 > scan:6 > join:9 > group:5 > project:5',
+  },
 ];

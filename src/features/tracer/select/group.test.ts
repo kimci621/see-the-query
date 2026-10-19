@@ -50,6 +50,11 @@ describe('стадия group', () => {
             'select a.author_id, a.name, count(b.book_id) from author a left join book b on a.author_id = b.author_id group by a.author_id, a.name',
             ['a.author_id', 'a.name'],
           ],
+          // USING: слитая колонка author_id принадлежит левой стороне b
+          [
+            'select a.author_id, count(*) from book b join author a using (author_id) group by a.author_id',
+            ['b.author_id'],
+          ],
         ];
         for (const [sql, keys] of cases) {
           for (const maxRows of [undefined, 5]) {
