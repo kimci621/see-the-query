@@ -20,6 +20,7 @@ const GUIDE_LESSONS: string[] = [
   'select-basics',
   'logical-order',
   'where-boolean',
+  'null-logic',
 ];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts

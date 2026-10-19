@@ -1,0 +1,189 @@
+---
+id: null-logic
+title: "NULL: не ноль, а «не знаю»"
+chapter: select
+number: "4.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+  layout:
+    book: { x: 0, y: 0 }
+    customer: { x: 0, y: 380 }
+initialQuery: |
+  select title, price from book where price is null;
+docs:
+  - https://www.postgresql.org/docs/current/functions-comparison.html
+  - https://www.postgresql.org/docs/current/functions-conditional.html
+  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+course: ["11.19"]
+tags: ["null", is null, is not null, coalesce, nullif, unknown, трёхзначная логика]
+mvp: true
+---
+
+<TlDr>NULL значит «не знаю». Сравнение с ним тоже даёт «не знаю», и строка молча выпадает из WHERE. Ищи NULL через IS NULL, подставляй значение через COALESCE.</TlDr>
+
+## Что есть в данных
+
+На доске две таблицы. В <T id="public.book">book</T> 11 книг, у «Острова погибших кораблей» нет цены: в <C id="public.book.price">price</C> стоит NULL. В <T id="public.customer">customer</T> 6 покупателей, у Марии Ивановой нет города: NULL в <C id="public.customer.city">city</C>. Ещё понадобится <C id="public.customer.bonus">bonus</C>: у трёх покупателей бонус 0.
+
+## NULL это «не знаю»
+
+В уроке 1.1 NULL был серой плашкой в пустой ячейке. В уроке 4.3 ты видел серые строки с плашкой UNKNOWN. Это одно и то же: значения нет, значит, нет и ответа на вопрос про него.
+
+NULL не ноль и не пустая строка. Это отметка «значение неизвестно». Книги без цены находит `IS NULL`:
+
+```sql run expect=rows:1
+select title, price from book where price is null;
+```
+
+Одна строка: «Остров погибших кораблей». В колонке цены у него серая плашка. `IS NULL` всегда отвечает TRUE или FALSE, поэтому серых строк на шаге `WHERE` нет: 10 красных, одна зелёная.
+
+## Сравнение с NULL даёт «не знаю»
+
+Обычное сравнение (`=`, `<>`, `<`, `>`) с NULL даёт не TRUE и не FALSE, а NULL. Этот третий ответ ты знаешь по уроку 4.3: в условии он называется UNKNOWN. `WHERE` пропускает только TRUE.
+
+Частая ошибка новичка:
+
+```sql run expect=rows:0
+select title, price from book where price = null;
+```
+
+Ноль строк. Даже «Остров» не нашёлся, хотя цены у него нет. Посмотри на шаг `WHERE`: все 11 строк серые, подпись «WHERE: осталось 0 из 11 строк, UNKNOWN у 11». Справа от `=` стоит неизвестность, и про любую цену Postgres отвечает «не знаю».
+
+`NULL = NULL` тоже UNKNOWN. Два неизвестных значения могут совпасть, а могут и нет. Поэтому `= null` не пишут никогда, только `IS NULL` и `IS NOT NULL`.
+
+<Callout kind="analogy">
+Анкета, в которой человек пропустил графу «город». Спроси по ней «он из Казани?»: честный ответ «не знаю». На вход пускают только тех, про кого ответ «да», и этот человек не войдёт. В очередь «точно не из Казани» он тоже не попадёт.
+</Callout>
+
+## Строки выпадают молча
+
+Книги дешевле 1000:
+
+```sql run expect=rows:7
+select title, price from book where price < 1000;
+```
+
+7 строк. Книг 11, и кажется, что остальные 4 стоят от 1000. Проверим:
+
+```sql run expect=rows:3
+select title, price from book where price >= 1000;
+```
+
+3 строки. 7 плюс 3 это 10, а не 11. Одиннадцатая книга, «Остров», не попала ни туда, ни туда. На шаге `WHERE` в обоих запросах она серая, с плашкой UNKNOWN, а подпись говорит «UNKNOWN у 1». Ни ошибки, ни предупреждения: строка ушла молча.
+
+## С текстом то же самое
+
+Покупатели без города:
+
+```sql run expect=rows:1
+select name, city from customer where city is null;
+```
+
+Одна строка: Мария Иванова. Теперь все, кто не из Москвы:
+
+```sql run expect=rows:3
+select name, city from customer where city <> 'Москва';
+```
+
+Покупателей 6, из Москвы двое. Ждёшь 4, а вернулось 3: Казань, Санкт-Петербург и снова Казань. Марии нет. Про неё неизвестно, из Москвы она или нет, и `<>` дал UNKNOWN.
+
+## COALESCE: подставить значение вместо NULL
+
+**COALESCE** берёт несколько аргументов и возвращает первый, который не NULL. Если NULL все, вернёт NULL. Так подставляют значение по умолчанию:
+
+```sql run expect=rows:11
+select title, price, coalesce(price, 0) as price_or_zero from book;
+```
+
+11 строк. На шаге `SELECT` справа вырастает вычисляемая колонка `price_or_zero`. У десяти книг в ней та же цена, а у «Острова» рядом с серой плашкой в `price` стоит 0.
+
+Таблица <T id="public.book">book</T> при этом не изменилась. COALESCE меняет только выдачу этого запроса, в базе у «Острова» по-прежнему NULL.
+
+## NULLIF: превратить значение в NULL
+
+**NULLIF** делает обратное. `nullif(a, b)` вернёт NULL, если `a` равно `b`, иначе вернёт `a`. Нужен, когда какое-то обычное значение на самом деле значит «нет данных»:
+
+```sql run expect=rows:6
+select name, bonus, nullif(bonus, 0) as bonus_or_null from customer;
+```
+
+6 строк. У Анны, Марии и второго Ивана Петрова бонус остался числом. У первого Ивана Петрова, Олега и Елены бонус 0, и в `bonus_or_null` у них серая плашка.
+
+Частое применение: защита от деления на ноль. Поделим 1000 на бонус:
+
+```sql run expectError=22012
+select name, 1000 / bonus as ratio from customer;
+```
+
+Карточка ошибки «Деление на ноль», код `22012`. Нулевой бонус у трёх строк, а падает весь запрос. Обернём делитель в `nullif`:
+
+```sql run expect=rows:6
+select name, 1000 / nullif(bonus, 0) as ratio from customer;
+```
+
+6 строк, ошибки нет. Деление на NULL даёт NULL: у тех, у кого бонус 0, в `ratio` серая плашка. Нужно число вместо плашки: оберни всё выражение в `coalesce(..., 0)`.
+
+Повтори главное одной сценой. Первый шаг отправь «На доску», дальше листай «Дальше»:
+
+<Scene>
+<Step caption="Без цены: 1 строка">
+
+```sql run expect=rows:1
+select title, price from book where price is null;
+```
+
+</Step>
+<Step caption="С ценой: 10 строк">
+
+```sql run expect=rows:10
+select title, price from book where price is not null;
+```
+
+</Step>
+<Step caption="COALESCE ставит 0 вместо NULL: 11 строк">
+
+```sql run expect=rows:11
+select title, price, coalesce(price, 0) as price_or_zero from book;
+```
+
+</Step>
+</Scene>
+
+## Чего нет в выдаче и почему
+
+- ❌ «Остров погибших кораблей» в `price = null`: сравнение с NULL дало UNKNOWN. Остальные 10 книг тоже.
+- ❌ «Остров» в `price < 1000` и в `price >= 1000`: цены нет, оба сравнения дали UNKNOWN.
+- ❌ Мария Иванова в `city <> 'Москва'`: города нет, «не равно» тоже дало UNKNOWN.
+
+## Ловушки
+
+<Callout kind="trap">
+NULL прячется не только от сравнений. `count(*)` считает строки, а `count(price)` считает только непустые цены:
+
+```sql run expect=rows:1
+select count(*) as all_books, count(price) as with_price from book;
+```
+
+Одна строка: 11 и 10. «Остров» в `with_price` не посчитан. Агрегатные функции разберём в уроке 7.1.
+</Callout>
+
+<Callout kind="tip">
+Решай, где NULL допустим, когда создаёшь таблицу. В <T id="public.book">book</T> у <C id="public.book.title">title</C> стоит `NOT NULL`, а у <C id="public.book.price">price</C> нет. Книга без цены бывает, книга без названия нет. Чем меньше колонок может быть NULL, тем меньше сюрпризов в `WHERE`.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `select title, price from book where price is not null and price < 400`? Проверь на доске.
+2. Что вернёт `select name, city from customer where city = city`? Подумай про Марию, потом запусти.
+3. Напиши запрос с `coalesce(city, 'город не указан')` по <T id="public.customer">customer</T>. У скольких покупателей сработает замена?
+
+<Cheatsheet>
+- NULL: «не знаю». Не ноль и не `''`. На доске серая плашка.
+- Сравнение с NULL даёт UNKNOWN, даже `NULL = NULL`. `WHERE` такую строку отбрасывает молча.
+- Искать NULL: `IS NULL` и `IS NOT NULL`. `= null` всегда пусто.
+- `coalesce(a, b, ...)`: первый аргумент, который не NULL.
+- `nullif(a, b)`: NULL, если `a = b`, иначе `a`. Спасает от деления на ноль: `x / nullif(y, 0)`.
+- `count(*)` считает строки, `count(col)` пропускает NULL.
+</Cheatsheet>
