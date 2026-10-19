@@ -278,7 +278,7 @@
 - ✅ (2026-10-19) **L4.5** 4.5 NULL, трёхзначная логика, COALESCE, NULLIF [MVP]
 - ✅ (2026-10-19) **L4.6** 4.6 ORDER BY [MVP]
 - ✅ (2026-10-19) **L4.7** 4.7 LIMIT, OFFSET, FETCH, пагинация [MVP]
-- ⬜ **L6.2** 6.2 INNER JOIN, ON vs USING [MVP]
+- 🔄 (2026-10-19) **L6.2** 6.2 INNER JOIN, ON vs USING [MVP]
 - ⬜ **L6.3** 6.3 LEFT и RIGHT JOIN [MVP]
 - ⬜ **L7.1** 7.1 Агрегатные функции, count(*) vs count(col) [MVP]
 - ⬜ **L7.2** 7.2 GROUP BY [MVP]
@@ -312,6 +312,7 @@
 - ⬜ **P8.34** Подсветка ключа сортировки на стадии ORDER BY не срабатывает для `order by 2` (ключ `'2'`), квалифицированного имени `order by b.price` и выражения `order by lower(title)`. `sortAnimator` сравнивает SQL-текст ключа с именем колонки. Вариант: отдавать в стадии индексы колонок выхода (как `outputIndex` трассировщика). Найдено на ревью L4.6.
 - ⬜ **P8.35** Дыра честности в `sameResult`: если ключа сортировки нет в выходе или это выражение (`select title from book order by price`), `orderKeys` равен `null`, и сверка порядок не проверяет, только мультимножество строк. P8.33 частично закрывает: серии ничьих выравниваются по эталону. Нужна сверка порядка и в этом случае (без volatile-ключей, `random()` не ронять). Найдено на ревью L4.6.
 - ✅ (2026-10-19) **P8.36** Подпись кадра ножниц LIMIT (`overlay/animators/limit.ts`) собиралась отдельно от подписи стадии: на `fetch first 5 rows with ties` писала «LIMIT 5: отрезаем лишнее», хотя оставалось 6, а на `limit 3 offset 3` ставила части в другом порядке («LIMIT 3 OFFSET 3» против «OFFSET 3, LIMIT 3»). Теперь в стадии `limit` есть `withTies`, кадр ножниц берёт ту же `limitLabel`, а при добранной ничьей пишет «FETCH FIRST 5 WITH TIES: оставляем 6, добрали ничью». Тесты в `animators/limit.test.ts` и `tracer/select/limit.test.ts`, golden зелёный. Найдено на L4.7.
+- ✅ (2026-10-19) **P8.37** Карточки ошибок не знали про алиасы таблиц. На `select book.title from book b join author a on ...` Postgres пишет `invalid reference to FROM-clause entry for table "book"` (42P01), а карточка писала «Таблицы book нет» и тут же перечисляла book среди существующих. На `select author_id from book b join author a ...` (42702) подсказка предлагала `author.author_id или book.author_id`, и такой запрос упал бы с тем же 42P01. Теперь 42P01 с этим текстом даёт «Таблица book здесь называется b» с алиасом из hint Postgres, а 42702 предлагает колонку через алиас, если он есть в запросе. Тесты в `errors/explain.test.ts`. Найдено на L6.2.
 
 ## Ф9 DML и DDL
 

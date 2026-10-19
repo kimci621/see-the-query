@@ -13,6 +13,8 @@ const CASES: Record<string, string> = {
   undefinedColumn: 'select nme from author',
   doubleQuoted: 'select * from author where name = "Жюль Верн"',
   ambiguous: 'select name from author join customer on true',
+  ambiguousAliased: 'select author_id from book b join author as a on b.author_id = a.author_id',
+  aliasedTable: 'select book.title from book b join author a on a.author_id = b.author_id',
   grouping: 'select author_id, title from book group by author_id',
   formTypo: 'select title form book',
   commaBeforeFrom: 'select title, from book',
@@ -105,6 +107,19 @@ describe('explainError', () => {
         columns: ['public.author.name', 'public.customer.name'],
       },
     });
+  });
+
+  it('42702: при алиасах подсказка через алиасы', () => {
+    expect(explain('ambiguousAliased').suggestion).toBe('Укажи таблицу: a.author_id или b.author_id.');
+  });
+
+  it('42P01: таблица под алиасом не называется «нет такой таблицы»', () => {
+    expect(explain('aliasedTable')).toMatchObject({
+      title: 'Таблица book здесь называется b',
+      suggestion: 'Пиши b.title вместо book.title.',
+      highlight: { tableIds: ['public.book'] },
+    });
+    expect(explain('aliasedTable').fix).toBeUndefined();
   });
 
   it('42803: колонка вне GROUP BY', () => {

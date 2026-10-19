@@ -53,6 +53,21 @@ function tablesInSql(ctx: ErrorContext): TableInfo[] {
   return ctx.schema?.tables.filter((t) => words.has(t.name.toLowerCase())) ?? [];
 }
 
+// Слова, которые после имени таблицы стоят вместо алиаса
+const NOT_ALIAS = new Set(
+  'on join inner left right full cross natural where group order limit offset having using union except intersect window fetch for lateral tablesample returning set values'.split(
+    ' ',
+  ),
+);
+
+// Алиас таблицы из текста запроса: «book b», «author as a». Без алиаса undefined.
+// ponytail: регэксп по тексту, не по дереву разбора; таблица дважды в FROM даст первый алиас
+function aliasOf(sql: string, table: string): string | undefined {
+  const m = new RegExp(`\\b${table}\\s+(?:as\\s+)?([a-z_][a-z0-9_]*)`, 'i').exec(sql);
+  const alias = m?.[1];
+  return alias && !NOT_ALIAS.has(alias.toLowerCase()) ? alias : undefined;
+}
+
 const columnId = (t: { schema?: string; table?: string }, column: string) =>
   `${t.schema ?? 'public'}.${t.table}.${column}`;
 const tableId = (err: DbError) => `${err.schema ?? 'public'}.${err.table}`;
@@ -66,6 +81,20 @@ function parseKey(detail = ''): { columns: string[]; values: string } | null {
 export const DICTIONARY: Record<string, Entry> = {
   '42P01': (err, ctx) => {
     const name = quoted(err.message);
+    // invalid reference to FROM-clause entry: таблица есть, но в запросе у неё алиас
+    if (err.message.startsWith('invalid reference to FROM-clause entry')) {
+      const alias = /alias "([^"]+)"/.exec(err.hint ?? '')?.[1];
+      const column = new RegExp(`\\b${name}\\.([a-z_][a-z0-9_]*)`, 'i').exec(ctx.sql)?.[1];
+      const owner = ctx.schema?.tables.find((t) => t.name === name);
+      return {
+        title: alias ? `Таблица ${name} здесь называется ${alias}` : `К таблице ${name} отсюда не обратиться`,
+        body: alias
+          ? `В этом запросе у таблицы ${name} алиас ${alias}. После алиаса старое имя таблицы в запросе не работает.`
+          : `Таблица ${name} есть в запросе, но в этом месте на неё ссылаться нельзя.`,
+        suggestion: alias && column ? `Пиши ${alias}.${column} вместо ${name}.${column}.` : undefined,
+        highlight: { tableIds: owner ? [owner.id] : [], columns: [] },
+      };
+    }
     const names = ctx.schema?.tables.map((t) => t.name) ?? [];
     const guess = closest(name, names);
     return {
@@ -117,7 +146,7 @@ export const DICTIONARY: Record<string, Entry> = {
           ? `Колонка ${name} есть и в ${owners.map((t) => t.name).join(', и в ')}. Postgres не угадывает, из какой таблицы её брать.`
           : `Колонка ${name} есть в нескольких таблицах запроса. Postgres не угадывает, из какой её брать.`,
       suggestion: owners.length
-        ? `Укажи таблицу: ${owners.map((t) => `${t.name}.${name}`).join(' или ')}.`
+        ? `Укажи таблицу: ${owners.map((t) => `${aliasOf(ctx.sql, t.name) ?? t.name}.${name}`).join(' или ')}.`
         : 'Укажи таблицу или алиас перед именем колонки.',
       highlight: { tableIds: owners.map((t) => t.id), columns: owners.map((t) => `${t.id}.${name}`) },
     };
