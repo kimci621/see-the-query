@@ -21,6 +21,7 @@ const GUIDE_LESSONS: string[] = [
   'logical-order',
   'where-boolean',
   'null-logic',
+  'order-by',
 ];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts
