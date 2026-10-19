@@ -63,6 +63,20 @@ describe('стадия group', () => {
         }
       }),
     ));
+  it('колонки агрегатов на стадии group под алиасами из SELECT, а не под именами Postgres', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const sql =
+          'select a.name, count(*) as all_rows, count(b.book_id) as books from author a left join book b on a.author_id = b.author_id group by a.author_id, a.name';
+        for (const maxRows of [undefined, 5]) {
+          const trace = await traceSql(db, sql, maxRows ? { maxRows } : {});
+          expect(trace.mode, `${trace.fallbackReason}, maxRows ${maxRows}`).toBe('full');
+          const group = stageOf(trace, 'group');
+          expect(group.output.columns.map((c) => c.name)).toEqual(['author_id', 'name', 'all_rows', 'books']);
+          expect(stageOf(trace, 'project').renamed).toEqual({});
+        }
+      }),
+    ));
   it('агрегат без GROUP BY: одна строка даже на пустом входе', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
@@ -120,9 +134,9 @@ describe('стадия group', () => {
         expect(group.aggregates).toEqual(['sum(price)', 'avg(price)']);
         const project = stageOf(trace, 'project');
         expect(project.computed).toEqual(['avg_price']);
-        expect(project.renamed).toEqual({ sum: 'total' });
+        expect(project.renamed).toEqual({}); // агрегат уже назван алиасом на стадии group
         const i = column(group, 'author_id').indexOf(1);
-        expect(column(group, 'sum')[i]).toBe('1240.00'); // 890 + 350;
+        expect(column(group, 'total')[i]).toBe('1240.00'); // 890 + 350;
       }),
     ));
   it('group после join: члены группы с составными ключами', () =>

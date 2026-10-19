@@ -233,4 +233,9 @@ export const GOLDEN_F7: Array<{ sql: string; stages: string }> = [
     sql: "select date_trunc('month', created_at) as m, count(*) from customer group by m",
     stages: 'scan:6 > group:5 > project:5',
   },
+  // P8.44: агрегаты под алиасами уже на стадии group
+  {
+    sql: 'select a.name, count(*) as all_rows, count(b.book_id) as books from author a left join book b on a.author_id = b.author_id group by a.author_id, a.name',
+    stages: 'scan:6 > scan:11 > join:10 > group:6 > project:6',
+  },
 ];

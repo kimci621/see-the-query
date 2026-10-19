@@ -43,7 +43,12 @@ export function groupParts(ctx: SelectCtx) {
   ctx.sql.group = keys.length ? ` GROUP BY ${keys.join(', ')}` : '';
   // Колонки входа под ключами считаются до setGroupColumns: потом ctx.columns это колонки групп
   const keyColumns = refColumns(ctx, nodes, ctx.columns);
-  return { keys, keyColumns, aggregates, select: [...keys, ...aggregates].join(', ') };
+  // Колонка агрегата называется алиасом из SELECT (count(*) AS all_rows), иначе две колонки count не различить
+  const named = aggregates.map((a) => {
+    const alias = targets.find((t) => t.name && t.val && sqlOf(t.val) === a)?.name;
+    return alias ? `${a} AS ${ident(alias)}` : a;
+  });
+  return { keys, keyColumns, aggregates, select: [...keys, ...named].join(', ') };
 }
 
 // Колонки группы и ключ строки над группами: номер группы ищется по тексту ROW(ключи)
