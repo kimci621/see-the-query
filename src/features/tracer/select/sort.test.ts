@@ -73,4 +73,22 @@ describe('стадия sort', () => {
         }
       }),
     ));
+  it('ключ вне выхода и выражение: порядок сверяется целиком, ничьи и random() не роняют', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        // order by price: price нет в выходе, у 610.00 и 350.00 по две книги
+        for (const sql of [
+          'select title from book order by price',
+          'select title from book order by price desc, lower(title)',
+          'select author_id from book group by author_id order by count(*) desc',
+          'select title from book order by price, random()',
+          'select title, random() as r from book order by price',
+        ]) {
+          const trace = await traceSql(db, sql);
+          expect(trace.mode, `${sql}: ${trace.fallbackReason}`).toBe('full');
+        }
+        const hidden = await traceSql(db, 'select title from book order by price');
+        expect(stageOf(hidden, 'sort').output.rows.map((r) => r.values)).toEqual(hidden.result?.rows);
+      }),
+    ));
 });

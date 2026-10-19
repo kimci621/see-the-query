@@ -13,7 +13,7 @@ import { runSelect } from './select/pipeline';
 import { scanStep } from './select/scan';
 import type { Stage, Trace, TraceOptions } from './types';
 import { sameResult } from './verify';
-import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason } from './whitelist';
+import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason, volatileSort } from './whitelist';
 
 // Вызывающий обязан обернуть вызов в sandbox.preview: транзакция уже открыта
 export async function traceStatement(
@@ -139,7 +139,12 @@ export async function traceStatement(
   // Принцип честности: финальная стадия обязана совпасть с прямым выполнением.
   // Volatile-колонки в сверку не входят: проба P и эталон считают их по-разному
   const last = ctx.stages[ctx.stages.length - 1];
-  const orderKeys = ctx.sel.sortClause ? (await ctx.ordered()).orderKeys : null;
+  // Без volatile-ключей порядок сверяется целиком: и по ключам вне выхода, и по выражениям
+  const orderKeys = !ctx.sel.sortClause
+    ? null
+    : volatileSort(ctx.sel)
+      ? (await ctx.ordered()).orderKeys
+      : 'rows';
   const ok = sameResult(last.output, reference, orderKeys, stableCanon(await ctx.outputs()));
   if (!ok) {
     if (import.meta.env?.DEV) console.warn('[tracer] сверка не сошлась', stmt.text);

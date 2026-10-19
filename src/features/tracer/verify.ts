@@ -14,11 +14,13 @@ export function rowCanon(values: unknown[]): string {
   return values.map(canon).join('\u0001');
 }
 
-// Финальная стадия против прямого выполнения: мультимножество строк, при ORDER BY ещё порядок ключей
+// Финальная стадия против прямого выполнения: мультимножество строк, при ORDER BY ещё порядок.
+// 'rows': порядок строк целиком (ничьи стадия sort уже поставила как в эталоне);
+// номера колонок: только порядок этих ключей, ничьи свободны (сортировка с volatile-ключом)
 export function sameResult(
   stageOutput: Relation,
   reference: QueryResult,
-  orderKeys: number[] | null,
+  orderKeys: number[] | 'rows' | null,
   canonOf: (values: unknown[]) => string = rowCanon,
 ): boolean {
   const ours = stageOutput.rows.map((r) => canonOf(r.values));
@@ -27,6 +29,7 @@ export function sameResult(
   const a = [...ours].sort();
   const b = [...theirs].sort();
   if (a.some((x, i) => x !== b[i])) return false;
+  if (orderKeys === 'rows') return ours.every((x, i) => x === theirs[i]);
   if (!orderKeys?.length) return true;
   const keyOf = (values: unknown[]) => orderKeys.map((i) => canon(values[i])).join('\u0002');
   return stageOutput.rows.every((r, i) => keyOf(r.values) === keyOf(reference.rows[i]));

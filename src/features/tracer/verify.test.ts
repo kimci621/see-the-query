@@ -53,4 +53,10 @@ describe('verify', () => {
       ),
     ).toBe(false);
   });
+  it('ключ сортировки вне выхода: строки сверяются по порядку целиком', () => {
+    // select title from book order by price: price нет в выходе, неверный порядок не проходит
+    expect(sameResult(rel([['b'], ['a']]), ref([['a'], ['b']]), 'rows')).toBe(false);
+    expect(sameResult(rel([['a'], ['b']]), ref([['a'], ['b']]), 'rows')).toBe(true);
+    expect(sameResult(rel([['a'], ['b']]), ref([['a'], ['c']]), 'rows')).toBe(false);
+  });
 });

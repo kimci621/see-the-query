@@ -237,7 +237,7 @@ function joinFeatures(node: Node, f: Set<Feature>): void {
 }
 
 // Ключ ORDER BY volatile сам или ссылается на volatile-колонку выхода по имени или номеру
-function volatileSort(sel: SelectStmt): boolean {
+export function volatileSort(sel: SelectStmt): boolean {
   const targets = (sel.targetList ?? []).map((n) => ('ResTarget' in n ? n.ResTarget : {}));
   return (sel.sortClause ?? []).some((n) => {
     const key = 'SortBy' in n ? n.SortBy.node : undefined;
