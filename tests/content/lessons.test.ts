@@ -23,6 +23,7 @@ const GUIDE_LESSONS: string[] = [
   'null-logic',
   'order-by',
   'limit-offset',
+  'inner-join',
 ];
 
 // Держать в синхроне с src/features/lessons/mdx/components.ts
