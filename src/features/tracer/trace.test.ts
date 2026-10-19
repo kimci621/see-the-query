@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { introspect } from '@/features/db/introspect';
+import type { DbClient } from '@/features/db/types';
 import { inPreview, withDataset } from '../../../tests/helpers/db';
 import { column, stageOf, summary, traceSql } from '../../../tests/helpers/trace';
+
+// Ошибка трассировщика под видом БД: строки выбранных проб переставлены, остальное как есть
+function tampered(db: DbClient, pick: (sql: string) => boolean): DbClient {
+  return {
+    query: async (sql, params) => {
+      const r = await db.query(sql, params);
+      return pick(sql) ? { ...r, rows: [...r.rows].reverse() } : r;
+    },
+    exec: (sql) => db.exec(sql),
+    dump: () => db.dump(),
+    version: () => db.version(),
+    close: () => db.close(),
+  };
+}
 
 describe('traceStatement', () => {
   it('ошибка Postgres → стадия error с фокусом на таблице', () =>
@@ -77,6 +92,24 @@ describe('traceStatement', () => {
         const trace = await traceSql(db, 'select title, random() from book order by price limit 4 offset 1');
         expect(trace.mode).toBe('full');
         expect(column(stageOf(trace, 'limit'), 'title')).toEqual((trace.result?.rows ?? []).map((r) => r[0]));
+      }),
+    ));
+  it('volatile-ключ после скрытого: неверный порядок серий ведущего ключа → final-only', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        // price нет в выходе, random() разбивает ничьи: сверяется порядок серий price
+        const sql = 'select title from book order by price, random()';
+        expect((await traceSql(db, sql)).mode).toBe('full');
+        expect((await traceSql(db, 'select title from book order by lower(title) desc, random()')).mode).toBe(
+          'full',
+        );
+        // Проба P отдала строки задом наперёд: стадия sort идёт по убыванию price
+        const broken = await traceSql(
+          tampered(db, (q) => q.includes('__vs_k0')),
+          sql,
+        );
+        expect(broken.mode).toBe('final-only');
+        expect(broken.fallbackReason).toBe('Сверка с прямым выполнением не сошлась');
       }),
     ));
   it('ошибка пробы в сжатом режиме → final-only, а не исключение', () =>

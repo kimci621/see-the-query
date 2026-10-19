@@ -27,7 +27,10 @@ export interface Ordered {
   values: Map<RowKey, unknown[]>;
   tuple: Map<RowKey, string>; // канон ключей сортировки строки
   sortKeys: string[];
-  orderKeys: number[] | null; // выходные колонки-ключи (ведущие) для сверки порядка
+  // Ведущие стабильные ключи для сверки порядка: номер выходной колонки или n + i для hidden[i]
+  orderKeys: number[] | null;
+  hidden: Node[]; // ведущие ключи вне выхода (price в order by price, random())
+  hiddenValues: Map<RowKey, unknown[]>;
 }
 
 export interface LimitParams {
@@ -233,6 +236,8 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
   const orderParts: string[] = [];
   const tupleIdx: number[] = [];
   const orderKeys: number[] = [];
+  const hidden: Node[] = [];
+  const hiddenIdx: number[] = [];
   let leading = true;
   for (const [i, node] of (ctx.sel.sortClause ?? []).entries()) {
     const sb: SortBy = 'SortBy' in node ? node.SortBy : {};
@@ -254,7 +259,11 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
       extra.push(`(${sb.node ? sqlOf(sb.node) : 'NULL'}) AS __vs_k${i}`);
       orderParts.push(`__vs_k${i}${dir}${nulls}`);
       tupleIdx.push(n + extra.length); // после колонок SELECT идёт ключ строки, затем выражения
-      leading = false;
+      if (leading && sb.node && !hasVolatile(sb.node)) {
+        orderKeys.push(n + hidden.length);
+        hidden.push(sb.node);
+        hiddenIdx.push(n + extra.length);
+      } else leading = false;
     }
   }
   // ctid (у групп ключи группы) последним ключом: порядок равных строк детерминирован
@@ -267,6 +276,7 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
   const order: RowKey[] = [];
   const values = new Map<RowKey, unknown[]>();
   const tuple = new Map<RowKey, string>();
+  const hiddenValues = new Map<RowKey, unknown[]>();
   for (const row of r.rows) {
     const key = row[n] as RowKey;
     // Повтор ctid: функция в SELECT размножила строку, lineage неоднозначен
@@ -275,6 +285,10 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
     order.push(key);
     values.set(key, row.slice(0, n));
     tuple.set(key, tupleIdx.map((i) => canon(row[i])).join('\u0002'));
+    hiddenValues.set(
+      key,
+      hiddenIdx.map((i) => row[i]),
+    );
   }
   return {
     order,
@@ -282,6 +296,8 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
     tuple,
     sortKeys: (ctx.sel.sortClause ?? []).map(sqlOf),
     orderKeys: orderKeys.length ? orderKeys : null,
+    hidden,
+    hiddenValues,
   };
 }
 

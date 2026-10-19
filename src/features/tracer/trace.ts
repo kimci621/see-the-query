@@ -1,18 +1,19 @@
+import type { Node } from '@pgsql/types';
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
 import type { Prober } from './probe';
-import { createProber, ProbeOverflow, TraceFallback, typeNames } from './probe';
+import { createProber, ProbeOverflow, sqlOf, TraceFallback, typeNames } from './probe';
 import { resultKey } from './rowkey';
 import { runCompressed } from './select/compressed';
-import { createSelectCtx, rangeOf, stableCanon } from './select/context';
+import { createSelectCtx, type Ordered, rangeOf, type SelectCtx, stableCanon } from './select/context';
 import { filterStep } from './select/filter';
 import { groupStep } from './select/group';
 import { flattenFrom, joinStep } from './select/join';
 import { runSelect } from './select/pipeline';
 import { scanStep } from './select/scan';
-import type { Stage, Trace, TraceOptions } from './types';
-import { sameResult } from './verify';
+import type { Relation, Stage, Trace, TraceOptions } from './types';
+import { rowCanon, sameResult } from './verify';
 import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason, volatileSort } from './whitelist';
 
 // Вызывающий обязан обернуть вызов в sandbox.preview: транзакция уже открыта
@@ -140,17 +141,47 @@ export async function traceStatement(
   // Volatile-колонки в сверку не входят: проба P и эталон считают их по-разному
   const last = ctx.stages[ctx.stages.length - 1];
   // Без volatile-ключей порядок сверяется целиком: и по ключам вне выхода, и по выражениям
-  const orderKeys = !ctx.sel.sortClause
-    ? null
-    : volatileSort(ctx.sel)
-      ? (await ctx.ordered()).orderKeys
-      : 'rows';
-  const ok = sameResult(last.output, reference, orderKeys, stableCanon(await ctx.outputs()));
+  const ordered = ctx.sel.sortClause && volatileSort(ctx.sel) ? await ctx.ordered() : null;
+  const orderKeys = !ctx.sel.sortClause ? null : ordered ? ordered.orderKeys : 'rows';
+  const canonOf = stableCanon(await ctx.outputs());
+  const hidden = Boolean(ordered?.hidden.length);
+  let ok = sameResult(last.output, reference, hidden ? null : orderKeys, canonOf);
+  if (ok && ordered && hidden) ok = await sameSeries(ctx, last.output, ordered, canonOf);
   if (!ok) {
     if (import.meta.env?.DEV) console.warn('[tracer] сверка не сошлась', stmt.text);
     return finalOnly('Сверка с прямым выполнением не сошлась');
   }
   return finish({ mode: 'full', stages: ctx.stages, result: reference, error: null });
+}
+
+// Volatile-ключ после ключа вне выхода (order by price, random()): эталон ещё раз, с этими ключами
+// скрытыми колонками в конце, и серии сверяются по ним. Целый SelectStmt здесь депарсить можно:
+// volatile в ORDER BY с LIMIT уже final-only, терять WITH TIES нечего
+async function sameSeries(
+  ctx: SelectCtx,
+  output: Relation,
+  ordered: Ordered,
+  canonOf: (values: unknown[]) => string,
+): Promise<boolean> {
+  const n = (await ctx.outputs()).columns.length;
+  const targetList = [
+    ...(ctx.sel.targetList ?? []),
+    ...ordered.hidden.map((val): Node => ({ ResTarget: { val } })),
+  ];
+  let keyed: QueryResult;
+  try {
+    keyed = await ctx.prober.run(sqlOf({ SelectStmt: { ...ctx.sel, targetList } }));
+  } catch (e) {
+    if (e instanceof DbException) return false;
+    throw e;
+  }
+  const rows = output.rows.map((r) => ({
+    ...r,
+    values: [...r.values, ...(ordered.hiddenValues.get(r.key) ?? [])],
+  }));
+  const withHidden = (values: unknown[]) =>
+    `${canonOf(values.slice(0, n))}\u0003${rowCanon(values.slice(n))}`;
+  return sameResult({ ...output, rows }, keyed, ordered.orderKeys, withHidden);
 }
 
 // 42803 «must appear»: стадии до GROUP BY настоящими пробами и состав групп, чтобы показать колонку в стопке.
