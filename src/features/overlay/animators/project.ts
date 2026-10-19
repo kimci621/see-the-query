@@ -46,8 +46,9 @@ export const projectAnimator: Animator<StageOf<'project'>> = (prev, stage, stage
     state: stage.computed.includes(c.name) ? 'computed' : 'normal',
   }));
 
-  // Подпись в плеере обрезается по ширине: короткие части раньше длинного списка «убираем»
-  const parts: string[] = [`оставляем ${stage.output.columns.length}`];
+  // Подпись в плеере обрезается по ширине: короткие части раньше длинного списка «убираем».
+  // «Оставляем» без вычисленных: тот же счёт, что в подписи трассировщика на кадре collapse
+  const parts: string[] = [`оставляем ${stage.output.columns.length - stage.computed.length}`];
   const renames = Object.entries(stage.renamed).map(([from, to]) => `${from} → ${to}`);
   if (renames.length) parts.push(`переименовываем ${renames.join(', ')}`);
   if (stage.computed.length) parts.push(`вычисляем ${stage.computed.join(', ')}`);

@@ -45,6 +45,11 @@ describe('projectAnimator', () => {
     expect(phases[1].caption).toBe(stage.caption);
   });
 
+  it('«оставляем» считает как подпись трассировщика: без вычисленных колонок', () => {
+    // выдача title, price, sale: две колонки входа и одна вычисленная
+    expect(phases[0].caption).toBe('SELECT: оставляем 2, вычисляем sale, убираем book_id');
+  });
+
   it('переименование подсвечивает исходную колонку', () => {
     const renamed = { ...stage, renamed: { title: 'name' } };
     const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
@@ -55,14 +60,14 @@ describe('projectAnimator', () => {
   it('переименованная колонка тоже остаётся в выдаче', () => {
     const renamed = { ...stage, kept: ['price'], renamed: { title: 'name' } };
     const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
-    expect(p[0].caption).toMatch(/^SELECT: оставляем 3,/);
+    expect(p[0].caption).toMatch(/^SELECT: оставляем 2,/);
   });
 
   it('переименования и вычисления в подписи раньше «убираем»: длинный список не прячет их', () => {
     const renamed = { ...stage, kept: ['price'], renamed: { title: 'name' } };
     const p = projectAnimator(afterWhere(), renamed, 2, testCtx());
     expect(p[0].caption).toBe(
-      'SELECT: оставляем 3, переименовываем title → name, вычисляем sale, убираем book_id',
+      'SELECT: оставляем 2, переименовываем title → name, вычисляем sale, убираем book_id',
     );
   });
 
