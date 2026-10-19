@@ -47,11 +47,11 @@ describe('groupAnimator', () => {
     expect(phases[2].caption).toBe(stage.caption);
   });
   it('колонка внутри агрегата не перечёркнута', () => {
-    const { phases: p } = run(groupTrace(['count(*)', 'max(title)']));
+    const { phases: p } = run(groupTrace(['count(*)', 'max(title)'], [1], [1]));
     expect(p[1].frame.tables[0].columns.find((c) => c.name === 'title')?.state).toBe('highlight');
   });
   it('count(col): строки с NULL в колонке получают бейдж', () => {
-    const { phases: p } = run(groupTrace(['count(author_id)']));
+    const { phases: p } = run(groupTrace(['count(author_id)'], [2], [2]));
     const rows = p[1].frame.tables[0].rows;
     expect(rows.find((r) => r.key === 'b=(0,10)')?.badge).toBe('NULL не считается');
     expect(rows.find((r) => r.key === 'b=(0,1)')?.badge).toBeUndefined();
@@ -80,6 +80,8 @@ describe('groupAnimator', () => {
       keys: ['a.author_id'],
       keyColumns: [3],
       aggregates: ['count(*)'],
+      aggregateColumns: [],
+      nullSkipColumns: [],
       groups: [{ key: 'g:0', members: rows.map((r) => r.key) }],
       caption: 'GROUP BY a.author_id',
       output: { columns: [], rows: [] },
@@ -154,6 +156,8 @@ describe('groupAnimator: агрегат набегает по строкам', (
   const stage = {
     ...trace.stages[1],
     aggregates: ['count(*)', 'count(author_id)'],
+    aggregateColumns: [2],
+    nullSkipColumns: [2],
     running: [
       [1, 1],
       [2, 2],

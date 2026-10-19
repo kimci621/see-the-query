@@ -77,6 +77,37 @@ describe('стадия group', () => {
         }
       }),
     ));
+  it('aggregateColumns и nullSkipColumns: колонки входа внутри агрегатов по AST', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const cases: Array<[string, string[], string[]]> = [
+          ['select count(*) from book', [], []],
+          [
+            'select count(price), max(title) from book',
+            ['book.price', 'book.title'],
+            ['book.price', 'book.title'],
+          ],
+          ["select country, string_agg(name, ', ') from author group by country", ['author.name'], []],
+          [
+            'select a.name, count(*) as all_rows, count(b.book_id) as books from author a left join book b on a.author_id = b.author_id group by a.author_id, a.name',
+            ['b.book_id'],
+            ['b.book_id'],
+          ],
+        ];
+        for (const [sql, inside, skip] of cases) {
+          // Сжатый агрегат без GROUP BY пока уходит в final-only (P8.55), сжатый режим только с GROUP BY
+          for (const maxRows of sql.includes('group by') ? [undefined, 5] : [undefined]) {
+            const trace = await traceSql(db, sql, maxRows ? { maxRows } : {});
+            expect(trace.mode, `${sql}: ${trace.fallbackReason}`).toBe('full');
+            const group = stageOf(trace, 'group');
+            const input = trace.stages[trace.stages.indexOf(group) - 1].output.columns;
+            const named = (cols: number[]) => cols.map((i) => `${input[i].source?.alias}.${input[i].name}`);
+            expect(named(group.aggregateColumns), `${sql}, maxRows ${maxRows}`).toEqual(inside);
+            expect(named(group.nullSkipColumns), `${sql}, maxRows ${maxRows}`).toEqual(skip);
+          }
+        }
+      }),
+    ));
   it('агрегат без GROUP BY: одна строка даже на пустом входе', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

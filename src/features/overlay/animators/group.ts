@@ -15,9 +15,6 @@ import {
 import type { Animator, Decoration, GhostRow, Phase, StageOf } from '../types';
 import { genericAnimator } from './generic';
 
-// Агрегаты, которые пропускают NULL: count(col), sum(col) и т. п. над одной колонкой
-const NULL_SKIPPING = /^(?:count|sum|avg|min|max)\(([\w.]+)\)$/;
-
 // GROUP BY: строки окрашиваются по группам, съезжаются в стопки и схлопываются в строки-группы.
 // Агрегат без GROUP BY: та же сцена с одной группой из всех строк
 export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageIndex, ctx) => {
@@ -51,11 +48,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   const colored = { ...clean, rows: clean.rows.map((r) => ({ ...r, group: groupOf.get(r.key) })) };
 
   // Стопки: члены групп подряд, скобка на каждую группу. NULL в колонке count(col) не засчитывается
-  const nullCols = stage.aggregates.flatMap((a) => {
-    const col = a.match(NULL_SKIPPING)?.[1]?.split('.').at(-1);
-    const i = col ? clean.columns.findIndex((c) => c.name === col) : -1;
-    return i >= 0 ? [i] : [];
-  });
+  const nullCols = stage.nullSkipColumns;
   const byKey = new Map(colored.rows.map((r) => [r.key, r]));
   const rows: GhostRow[] = [];
   const brackets: Decoration[] = [];
@@ -75,10 +68,12 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   rows.push(...colored.rows.filter((r) => !groupOf.has(r.key)));
 
   // Колонки: ключ GROUP BY подсвечен, колонка внутри агрегата видна, остальные перечёркнуты (ошибка 42803)
-  const inAggregate = (name: string) =>
-    stage.aggregates.some((a) => a.split(/[^\p{L}\p{N}_$]+/u).includes(name));
-  const stacked = mapColumns({ ...colored, rows }, (c, i) => ({
-    state: stage.keyColumns.includes(i) ? 'key' : inAggregate(c.name) ? 'highlight' : 'removed',
+  const stacked = mapColumns({ ...colored, rows }, (_, i) => ({
+    state: stage.keyColumns.includes(i)
+      ? 'key'
+      : stage.aggregateColumns.includes(i)
+        ? 'highlight'
+        : 'removed',
   }));
 
   const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';

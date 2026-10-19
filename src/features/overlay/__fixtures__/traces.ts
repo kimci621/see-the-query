@@ -369,7 +369,12 @@ export function crossJoinTrace(n = 3, m = 2): Trace {
 }
 
 // select author_id, count(*) from book group by author_id: 4 книги (авторы 1, 1, 3, NULL) → 3 группы
-export function groupTrace(aggregates = ['count(*)']): Trace {
+// aggregateColumns и nullSkipColumns: номера колонок book_id, title, author_id, как их отдаёт трассировщик
+export function groupTrace(
+  aggregates = ['count(*)'],
+  aggregateColumns: number[] = [],
+  nullSkipColumns: number[] = [],
+): Trace {
   const groupCols = [bCols[2], { name: 'count', type: 'int8' }];
   const groupRows: Row[] = [
     { key: 'g:0', lineage: {}, values: [1, 2] },
@@ -391,6 +396,8 @@ export function groupTrace(aggregates = ['count(*)']): Trace {
       keys: ['author_id'],
       keyColumns: [2],
       aggregates,
+      aggregateColumns,
+      nullSkipColumns,
       groups: [
         { key: 'g:0', members: ['b=(0,1)', 'b=(0,3)'] },
         { key: 'g:1', members: ['b=(0,4)'] },
@@ -425,6 +432,8 @@ export function aggregateTrace(): Trace {
       keys: [],
       keyColumns: [],
       aggregates: ['count(*)'],
+      aggregateColumns: [],
+      nullSkipColumns: [],
       groups: [{ key: 'g:0', members: JOIN_BOOKS.map((r) => r.key) }],
       caption: 'Агрегат без GROUP BY: 4 строки → 1 строка',
       output: { columns: countCols, rows },

@@ -56,6 +56,8 @@ export type Stage = StageBase &
         keyColumns: number[]; // номера колонок входа стадии под ключами: их оверлей подсвечивает
         groups: Array<{ key: RowKey; members: RowKey[] }>;
         aggregates: string[];
+        aggregateColumns: number[]; // номера колонок входа внутри агрегатов: их оверлей не перечёркивает
+        nullSkipColumns: number[]; // колонки входа count(col), sum(col) и т. п.: NULL в них не засчитывается
         running?: unknown[][]; // без GROUP BY: значения агрегатов после каждого члена стопки
       }
     | { kind: 'window'; partitions: Array<{ members: RowKey[] }>; computed: string[]; frame?: string }

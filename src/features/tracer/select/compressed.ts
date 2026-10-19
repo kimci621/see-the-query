@@ -91,6 +91,8 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       keyColumns: parts.keyColumns,
       groups: [],
       aggregates: parts.aggregates,
+      aggregateColumns: parts.aggregateColumns,
+      nullSkipColumns: parts.nullSkipColumns,
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, parts.keys.length ? 'group' : 'select'),
       caption: groupCaption(parts.keys, n, before),

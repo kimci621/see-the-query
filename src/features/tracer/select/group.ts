@@ -8,18 +8,25 @@ import { AGGREGATES, funcName, walk } from '../whitelist';
 import { rangeOf, refColumns, type SelectCtx, stageId } from './context';
 import type { SelectStep } from './pipeline';
 
-// Уникальные агрегатные выражения из SELECT и HAVING в порядке появления
-export function aggregateExprs(sel: SelectStmt): string[] {
-  const out: string[] = [];
+// Уникальные агрегатные вызовы из SELECT и HAVING в порядке появления
+function aggregateCalls(sel: SelectStmt): FuncCall[] {
+  const out = new Map<string, FuncCall>();
   walk([sel.targetList, sel.havingClause], (key, value) => {
     if (key !== 'FuncCall') return;
     const fc = value as FuncCall;
     if (fc.over || !(fc.agg_star || AGGREGATES.has(funcName(fc)))) return;
     const text = sqlOf({ FuncCall: fc });
-    if (!out.includes(text)) out.push(text);
+    if (!out.has(text)) out.set(text, fc);
   });
-  return out;
+  return [...out.values()];
 }
+
+export function aggregateExprs(sel: SelectStmt): string[] {
+  return aggregateCalls(sel).map((fc) => sqlOf({ FuncCall: fc }));
+}
+
+// Агрегаты над одной колонкой, которые пропускают NULL: count(col), sum(col) и т. п.
+const NULL_SKIPPING = new Set(['count', 'sum', 'avg', 'min', 'max']);
 
 // Ключи GROUP BY выражениями и ' GROUP BY …' для всех проб над группами
 export function groupParts(ctx: SelectCtx) {
@@ -39,16 +46,30 @@ export function groupParts(ctx: SelectCtx) {
     return target?.val ?? node;
   });
   const keys = nodes.map(sqlOf);
-  const aggregates = aggregateExprs(ctx.sel);
+  const calls = aggregateCalls(ctx.sel);
+  const aggregates = calls.map((fc) => sqlOf({ FuncCall: fc }));
   ctx.sql.group = keys.length ? ` GROUP BY ${keys.join(', ')}` : '';
-  // Колонки входа под ключами считаются до setGroupColumns: потом ctx.columns это колонки групп
+  // Колонки входа под ключами и в агрегатах считаются до setGroupColumns: потом ctx.columns это колонки групп
   const keyColumns = refColumns(ctx, nodes, ctx.columns);
+  const aggregateColumns = refColumns(ctx, calls, ctx.columns);
+  const skipping = calls.flatMap((fc) => {
+    const arg = fc.args?.length === 1 && !fc.agg_star ? fc.args[0] : undefined;
+    return arg && 'ColumnRef' in arg && NULL_SKIPPING.has(funcName(fc)) ? [arg] : [];
+  });
+  const nullSkipColumns = refColumns(ctx, skipping, ctx.columns);
   // Колонка агрегата называется алиасом из SELECT (count(*) AS all_rows), иначе две колонки count не различить
   const named = aggregates.map((a) => {
     const alias = targets.find((t) => t.name && t.val && sqlOf(t.val) === a)?.name;
     return alias ? `${a} AS ${ident(alias)}` : a;
   });
-  return { keys, keyColumns, aggregates, select: [...keys, ...named].join(', ') };
+  return {
+    keys,
+    keyColumns,
+    aggregates,
+    aggregateColumns,
+    nullSkipColumns,
+    select: [...keys, ...named].join(', '),
+  };
 }
 
 // Колонки группы и ключ строки над группами: номер группы ищется по тексту ROW(ключи)
@@ -93,7 +114,7 @@ export const groupStep: SelectStep = {
   applies: (ctx) => Boolean(ctx.sel.groupClause) || aggregateExprs(ctx.sel).length > 0,
   async run(ctx) {
     const parts = groupParts(ctx);
-    const { keys, keyColumns, aggregates } = parts;
+    const { keys, keyColumns, aggregates, aggregateColumns, nullSkipColumns } = parts;
     const n = keys.length + aggregates.length;
     const ctids = ctx.aliasOrder.map((a) => `${ident(a)}.ctid`).join(', ');
     const order = keys.length ? ` ORDER BY ${keys.map((_, i) => i + 1).join(', ')}` : '';
@@ -121,6 +142,8 @@ export const groupStep: SelectStep = {
       keyColumns,
       groups,
       aggregates,
+      aggregateColumns,
+      nullSkipColumns,
       ...(running ? { running } : {}),
       sourceRange: rangeOf(ctx.stmt, keys.length ? 'group' : 'select'),
       caption: groupCaption(keys, groups.length, before),

@@ -58,6 +58,8 @@ function inStacks(
       keyColumns,
       groups,
       aggregates: [],
+      aggregateColumns: [],
+      nullSkipColumns: [],
       caption: '',
       output: { columns: [], rows: [] },
     },
