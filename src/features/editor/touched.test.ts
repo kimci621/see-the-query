@@ -95,6 +95,18 @@ describe('touchedOf', () => {
     ).toEqual(['public.book', 'public.author']);
   });
 
+  it('звёздочка подсвечивает все поля своих таблиц', () => {
+    const book = SCHEMA.tables.find((t) => t.id === 'public.book');
+    const all = book?.columns.map((c) => `public.book.${c.name}`) ?? [];
+    expect(all.length).toBeGreaterThan(0);
+    expect(touchedOf(stmtOf('select * from book'), SCHEMA).columns).toEqual(all);
+    const joined = touchedOf(
+      stmtOf('select b.*, a.name from book b join author a on b.author_id = a.author_id'),
+      SCHEMA,
+    );
+    expect(joined.columns).toEqual([...all, 'public.author.name', 'public.author.author_id']);
+  });
+
   it('t.* разворачивает только свою таблицу, по алиасу или имени', () => {
     const joined = 'from book b join author a on b.author_id = a.author_id';
     expect(touchedOf(stmtOf(`select b.* ${joined}`), SCHEMA).expanded).toEqual(['public.book']);

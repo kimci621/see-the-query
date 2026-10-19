@@ -252,8 +252,10 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     useLessonStore.getState().setLastQuery('unknown', 'select *, title from book;');
     render(<EditorPane />);
     await act(async () => undefined);
+    // звёздочка задействует все поля book
+    const book = SCHEMA.tables.find((t) => t.id === 'public.book');
     expect(useBoardStore.getState()).toMatchObject({
-      queryColumns: ['public.book.title'],
+      queryColumns: book?.columns.map((c) => `public.book.${c.name}`),
       expandedTables: ['public.book'],
     });
   });

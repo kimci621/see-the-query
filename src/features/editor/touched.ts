@@ -25,9 +25,15 @@ export function touchedOf(
     if (c.name === '*') {
       // по имени квалифицирует только таблица без алиаса: `select book.* from book b` - ошибка Postgres
       const own = tables.filter((t) => c.qualifier === null || (t.alias ?? t.name) === c.qualifier);
+      // звёздочка задействует все поля таблицы: подсвечиваем их все (спека 1)
       for (const t of own) {
         const info = resolveTable(t, schema);
-        if (info) expanded.add(info.id);
+        if (!info) continue;
+        expanded.add(info.id);
+        for (const col of info.columns) {
+          const id = `${info.id}.${col.name}`;
+          if (!columns.includes(id)) columns.push(id);
+        }
       }
       continue;
     }
