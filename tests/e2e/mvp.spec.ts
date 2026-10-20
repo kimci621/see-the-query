@@ -78,11 +78,8 @@ test('таблица, созданная учеником, встаёт на д�
   await typeQuery(page, 'create table mine (id int, note text);');
   await page.keyboard.press('ControlOrMeta+Enter');
   await expect(page.getByText('Записано в базу', { exact: true })).toBeVisible({ timeout: 10_000 });
-  // курсор во FROM запроса к новой таблице: камера летит к ней, как к любой таблице урока
-  // (из конца текста камера пока не следит, P8.12)
+  // запрос к новой таблице: камера летит к ней, как к любой таблице урока
   await typeQuery(page, 'select * from mine;');
-  await page.keyboard.press('ArrowLeft');
-  await page.keyboard.press('ArrowLeft');
   const node = page.getByTestId('table-node-public.mine');
   await expect(node).toHaveAttribute('data-focused', 'true', { timeout: 10_000 });
   await expect(node).toBeVisible();
