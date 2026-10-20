@@ -40,4 +40,10 @@ describe('parseSqlMeta', () => {
     expect(() => parseSqlMeta('expect=rows:1 expectError=42703')).toThrow('expect и expectError');
     expect(() => parseSqlMeta('noexec run')).toThrow('noexec');
   });
+
+  it('повтор ключа бросает ошибку, а не перезаписывает', () => {
+    expect(() => parseSqlMeta('run expect=rows:3 expect=rows:5')).toThrow('«expect» повторяется');
+    expect(() => parseSqlMeta('run run')).toThrow('«run» повторяется');
+    expect(() => parseSqlMeta('trace=full trace=final-only')).toThrow('«trace» повторяется');
+  });
 });

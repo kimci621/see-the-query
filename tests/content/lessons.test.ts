@@ -6,9 +6,16 @@ import { describe, expect, it } from 'vitest';
 import { normalizeTableId } from '@/features/board/model';
 import type { DbClient } from '@/features/db/types';
 import { CALLOUT_KINDS } from '@/features/lessons/mdx/Callouts';
+import { mdxComponents } from '@/features/lessons/mdx/components';
 import { collectLessonsMeta } from '../../plugins/lessons-meta';
 import { withDataset } from '../helpers/db';
-import { checkBlocks, checkFinalOnlyNotes, checkForeignSqlFences, extractSqlBlocks } from './blocks';
+import {
+  checkBlocks,
+  checkFinalOnlyNotes,
+  checkForeignSqlFences,
+  checkTermIds,
+  extractSqlBlocks,
+} from './blocks';
 
 const ROOT = process.cwd();
 const LESSONS = collectLessonsMeta(ROOT);
@@ -30,8 +37,8 @@ const GUIDE_LESSONS: string[] = [
   'having',
 ];
 
-// Держать в синхроне с src/features/lessons/mdx/components.ts
-const MDX_TAGS = new Set(['TlDr', 'Callout', 'DontDoThis', 'Cheatsheet', 'Scene', 'Step', 'T', 'C']);
+// Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
+const MDX_TAGS = new Set(Object.keys(mdxComponents).filter((name) => name !== 'pre'));
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const withoutCode = (mdx: string) => mdx.replace(/^ {0,3}```[\s\S]*?^ {0,3}```[ \t]*$/gm, '');
@@ -104,9 +111,7 @@ describe.each(LESSONS.map((meta) => [meta.id, meta] as const))('урок %s', (_
         ...(await checkBlocks(blocks, db)),
       ];
       const known = await knownObjects(db);
-      for (const [, tag, id] of withoutCode(source).matchAll(/<([TC]) id="([^"]+)"/g)) {
-        if (id && !known.has(id)) found.push(`<${tag} id="${id}">: такого объекта нет в датасете`);
-      }
+      found.push(...checkTermIds(withoutCode(source), known));
       // Имена в frontmatter можно писать без схемы: доска нормализует их так же
       const layout = meta.board?.layout;
       const layoutTables = layout && layout !== 'auto' ? Object.keys(layout) : [];

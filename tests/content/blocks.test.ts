@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { traceStatement } from '@/features/tracer/trace';
 import { withDataset } from '../helpers/db';
-import { checkBlocks, checkFinalOnlyNotes, checkForeignSqlFences, extractSqlBlocks } from './blocks';
+import {
+  checkBlocks,
+  checkFinalOnlyNotes,
+  checkForeignSqlFences,
+  checkTermIds,
+  extractSqlBlocks,
+} from './blocks';
 
 // Настоящий трассировщик по умолчанию, в одном тесте подменяем на падающий
 vi.mock('@/features/tracer/trace', async (importOriginal) => {
@@ -145,6 +151,36 @@ describe('checkBlocks', () => {
     expect(problems).toEqual(['строка 1: в run-блоке должен быть один оператор, а их 2']);
   });
 
+  it('два оператора в apply-блоке нельзя: кнопка урока применяет оператор под курсором', async () => {
+    const blocks = extractSqlBlocks(
+      mdx(
+        "~~~sql apply expect=rows:1\ninsert into book_category (name) values ('x'); insert into book_category (name) values ('y');\n~~~\n",
+      ),
+    );
+    const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db, { trace: false }));
+    expect(problems).toEqual(['строка 1: в apply-блоке должен быть один оператор, а их 2']);
+  });
+
+  it('COMMIT в блоке без apply ловится и не протекает в следующие блоки', async () => {
+    const blocks = extractSqlBlocks(
+      mdx(
+        [
+          '~~~sql expect=rows:0',
+          "insert into book_category (name) values ('x'); commit;",
+          '~~~',
+          '',
+          '~~~sql run expect=rows:0',
+          "select * from book_category where name = 'x';",
+          '~~~',
+        ].join('\n'),
+      ),
+    );
+    const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db, { trace: false }));
+    expect(problems).toEqual([
+      'строка 1: команда транзакции в блоке без apply: превью её не выполняет, а раннер закоммитил бы данные',
+    ]);
+  });
+
   it('синтаксическая ошибка с expectError=42601 не считается проблемой парсера', async () => {
     const blocks = extractSqlBlocks(mdx('~~~sql run expectError=42601\nselect from from book;\n~~~\n'));
     const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db));
@@ -205,5 +241,25 @@ describe('checkFinalOnlyNotes', () => {
       ),
     ).toEqual([]);
     expect(check('~~~sql run expect=rows:1\nselect 1;\n~~~')).toEqual([]);
+  });
+});
+
+describe('checkTermIds', () => {
+  const known = new Set(['public.book', 'public.book.title']);
+
+  it('id строкой в кавычках сверяется с базой', () => {
+    expect(checkTermIds('<T id="public.book">book</T> и <C id="public.book.titel">title</C>', known)).toEqual(
+      ['<C id="public.book.titel">: такого объекта нет в датасете'],
+    );
+  });
+
+  it('id выражением или без кавычек раннер не пропускает', () => {
+    expect(
+      checkTermIds('<T id={"public.nope"}>x</T>, <C id={`public.book.title`}>y</C>, <T>z</T>', known),
+    ).toEqual([
+      '<T id={"public.nope"}>: id пишем строкой в двойных кавычках, иначе раннер его не проверит',
+      '<C id={`public.book.title`}>: id пишем строкой в двойных кавычках, иначе раннер его не проверит',
+      '<T>: id пишем строкой в двойных кавычках, иначе раннер его не проверит',
+    ]);
   });
 });

@@ -86,8 +86,8 @@ export async function checkBlocks(
 ): Promise<string[]> {
   const problems: string[] = [];
   let schema: SchemaSnapshot | null = null;
-  // Парсер нужен всем run-блокам: правило «один оператор» не зависит от трассы
-  if (blocks.some((b) => b.meta.run && !b.meta.noexec)) await initParser();
+  // Разбор нужен каждому исполняемому блоку: команды транзакций и правило «один оператор»
+  if (blocks.some((b) => !b.meta.noexec)) await initParser();
 
   for (const { line, meta, sql } of blocks) {
     const at = `строка ${line}`;
@@ -97,9 +97,23 @@ export async function checkBlocks(
       continue;
     }
 
+    const parsed = parseSql(sql);
+    // Превью урока команды транзакций не выполняет, а здесь COMMIT закрыл бы транзакцию превью,
+    // и данные блока протекли бы в следующие
+    if (!meta.apply && parsed.ok && parsed.statements.some((s) => s.kind === 'tcl')) {
+      problems.push(
+        `${at}: команда транзакции в блоке без apply: превью её не выполняет, а раннер закоммитил бы данные`,
+      );
+      continue;
+    }
+    // Кнопка урока применяет один оператор под курсором: блок из нескольких разошёлся бы с раннером
+    if (meta.apply && parsed.ok && parsed.statements.length !== 1) {
+      problems.push(`${at}: в apply-блоке должен быть один оператор, а их ${parsed.statements.length}`);
+      continue;
+    }
+
     // Трасса до выполнения: apply-блок ещё не закоммичен, данные те же, что увидит пользователь
     if (meta.run) {
-      const parsed = parseSql(sql);
       if (!parsed.ok) {
         // Синтаксическая ошибка может быть ожидаемой (expectError=42601): её проверит выполнение ниже
         if (meta.expectError === undefined)
@@ -144,6 +158,22 @@ export async function checkBlocks(
     const rows = rowsOf(outcome.results);
     if (rows !== meta.expectRows)
       problems.push(`${at}: ожидалось ${meta.expectRows} строк, получено ${rows}`);
+  }
+  return problems;
+}
+
+const TERM = /<([TC])(?=[\s/>])([^>]*)>/g;
+const TERM_ID = /^\s+id="([^"]+)"\s*\/?$/;
+
+// <T id> и <C id> в тексте урока (mdx без кода): id есть в датасете. id выражением ({"x"}, {`x`})
+// или без id регэксп не сверил бы, поэтому такой тег сам по себе проблема
+export function checkTermIds(mdx: string, known: Set<string>): string[] {
+  const problems: string[] = [];
+  for (const [tag, name, attrs] of mdx.matchAll(TERM)) {
+    const id = TERM_ID.exec(attrs ?? '')?.[1];
+    if (id === undefined)
+      problems.push(`${tag}: id пишем строкой в двойных кавычках, иначе раннер его не проверит`);
+    else if (!known.has(id)) problems.push(`<${name} id="${id}">: такого объекта нет в датасете`);
   }
   return problems;
 }
