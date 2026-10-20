@@ -4,7 +4,9 @@ import { counterNear } from './frame';
 import {
   COL_WIDTH,
   COLHEAD_HEIGHT,
+  cellLeft,
   columnKeys,
+  columnWidth,
   frameBounds,
   ghostHeight,
   ghostWidth,
@@ -12,6 +14,7 @@ import {
   ROW_H,
   rowAnchor,
   rowTop,
+  stubLefts,
   TITLE_HEIGHT,
 } from './geometry';
 import type { GhostTable } from './types';
@@ -113,7 +116,18 @@ describe('место под значки строк', () => {
     expect(marksWidth(wide([{ key: 'r', values: [], state: 'normal', badge: '×2' }]))).toBeGreaterThan(20);
   });
   it('у свёрнутой таблицы значки встают в пустые ячейки заглушки', () => {
-    const t = { ...wide([{ key: 'r', values: [], state: 'kept' as const }]), foldedColumns: 4 };
+    const t = { ...wide([{ key: 'r', values: [], state: 'kept' as const }]), folds: [{ at: 3, count: 4 }] };
     expect(ghostWidth(t)).toBe(3 * COL_WIDTH + STUB_WIDTH);
+  });
+  it('заглушка в середине (JOIN): колонки правее неё сдвинуты, значки получают свою полосу', () => {
+    const t = { ...wide([{ key: 'r', values: [], state: 'kept' as const }]), folds: [{ at: 1, count: 4 }] };
+    expect(ghostWidth(t)).toBe(3 * COL_WIDTH + STUB_WIDTH + marksWidth(t));
+    expect([0, 1, 2].map((ci) => cellLeft(t, ci))).toEqual([
+      0,
+      COL_WIDTH + STUB_WIDTH,
+      2 * COL_WIDTH + STUB_WIDTH,
+    ]);
+    expect(stubLefts(t)).toEqual([COL_WIDTH]);
+    expect(columnWidth(t, 2)).toBe(COL_WIDTH);
   });
 });

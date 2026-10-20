@@ -42,6 +42,10 @@ test.describe('сцены JOIN и GROUP BY', () => {
     await expectBoardShot(page, 'inner-join-final.png');
     await page.getByTestId('stage-chip').nth(2).click();
     await expect(page.getByTestId('timeline-caption')).toContainText('INNER JOIN: 9 пар');
+    // P8.62: спрятаны колонки book, её заглушка стоит перед колонками author, а не в конце
+    const stub = await page.getByTestId('ghost-folded').boundingBox();
+    const name = await page.locator('.vs-ghost .vs-colhead', { hasText: /^name$/ }).boundingBox();
+    expect(stub?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(name?.x ?? 0);
   });
 
   test('LEFT JOIN: у книг без автора NULL в правой половине', async ({ page }) => {

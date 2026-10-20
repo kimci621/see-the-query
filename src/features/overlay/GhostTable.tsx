@@ -13,6 +13,7 @@ import {
   ROW_H,
   ROW_ICONS,
   rowTop,
+  stubLefts,
   TITLE_HEIGHT,
 } from './geometry';
 import type { GhostColumn, GhostRow, GhostTable } from './types';
@@ -26,12 +27,14 @@ const GhostRowView = memo(function GhostRowView({
   columns,
   keys,
   widths,
+  lefts,
 }: {
   row: GhostRow;
   index: number;
   columns: GhostColumn[];
   keys: string[];
   widths: number[];
+  lefts: number[];
 }) {
   const icon = ROW_ICONS[row.state];
   return (
@@ -59,7 +62,7 @@ const GhostRowView = memo(function GhostRowView({
             style={{
               width: widths[ci],
               lineHeight: `${ROW_H}px`,
-              transform: `translateX(${cellLeft(ci)}px)`,
+              transform: `translateX(${lefts[ci]}px)`,
             }}
             title={row.cellNotes?.[ci]}
           >
@@ -81,6 +84,8 @@ const GhostRowView = memo(function GhostRowView({
 export const GhostTableView = memo(function GhostTableView({ table }: { table: GhostTable }) {
   const keys = columnKeys(table.columns);
   const widths = table.columns.map((_, ci) => columnWidth(table, ci));
+  const lefts = table.columns.map((_, ci) => cellLeft(table, ci));
+  const stubs = stubLefts(table);
   return (
     <motion.div
       data-testid="ghost-table"
@@ -102,25 +107,26 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
             style={{
               width: widths[ci],
               lineHeight: `${COLHEAD_HEIGHT}px`,
-              transform: `translateX(${cellLeft(ci)}px)`,
+              transform: `translateX(${lefts[ci]}px)`,
             }}
           >
             {c.name}
           </div>
         ))}
-        {table.foldedColumns ? (
+        {table.folds?.map((f, i) => (
           <div
+            key={f.at}
             data-testid="ghost-folded"
             className="vs-colhead vs-folded"
             style={{
               width: STUB_WIDTH,
               lineHeight: `${COLHEAD_HEIGHT}px`,
-              transform: `translateX(${cellLeft(table.columns.length)}px)`,
+              transform: `translateX(${stubs[i]}px)`,
             }}
           >
-            +{table.foldedColumns} {plural(table.foldedColumns, 'колонка', 'колонки', 'колонок')}
+            +{f.count} {plural(f.count, 'колонка', 'колонки', 'колонок')}
           </div>
-        ) : null}
+        ))}
       </div>
       <AnimatePresence initial={false}>
         {table.rows.map((row, i) => (
@@ -131,6 +137,7 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
             columns={table.columns}
             keys={keys}
             widths={widths}
+            lefts={lefts}
           />
         ))}
       </AnimatePresence>

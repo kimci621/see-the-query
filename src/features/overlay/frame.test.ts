@@ -24,6 +24,34 @@ describe('frame', () => {
     expect(t.hiddenRows).toBe(0);
   });
 
+  // P8.62: спрятаны колонки левой book, заглушка сразу за её колонками, а не за колонками author
+  it('rebuildTable: заглушка свёртки стоит после колонок своей таблицы', () => {
+    const col = (alias: string, column: string) => ({
+      name: column,
+      type: 'text',
+      source: { alias, column },
+    });
+    const joined = {
+      columns: [
+        col('b', 'book_id'),
+        col('b', 'title'),
+        col('b', 'pages'),
+        col('a', 'author_id'),
+        col('a', 'name'),
+      ],
+      rows: [{ key: 'b=(0,1)+a=(0,1)', lineage: {}, values: [1, 'Дон', 300, 1, 'Шолохов'] }],
+    } as Parameters<typeof rebuildTable>[1];
+    const t = rebuildTable({ ...base, fold: ['b.pages'] }, joined);
+    expect(t.columns.map((c) => c.name)).toEqual(['book_id', 'title', 'author_id', 'name']);
+    expect(t.folds).toEqual([{ at: 2, count: 1 }]);
+    // свёрнуты обе таблицы (self join): по заглушке на каждую
+    const both = rebuildTable({ ...base, fold: ['b.pages', 'a.name'] }, joined);
+    expect(both.folds).toEqual([
+      { at: 2, count: 1 },
+      { at: 3, count: 1 },
+    ]);
+  });
+
   it('ghostRows сжимает больше 200 строк до 20', () => {
     const many = Array.from({ length: 250 }, (_, i) => ({ ...BOOKS[0], key: `k${i}` }));
     const { rows, hiddenRows } = ghostRows(many);

@@ -76,7 +76,7 @@ describe('errorAnimator', () => {
     );
     const t = p.frame.tables[0];
     expect(t.columns.map((c) => c.name)).toEqual(['book_id', 'title']);
-    expect(t.foldedColumns).toBe(1);
+    expect(t.folds).toEqual([{ at: t.columns.length, count: 1 }]);
   });
   it('другие ошибки сцены не дают', () => {
     const phases = errorAnimator(

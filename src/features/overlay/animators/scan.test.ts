@@ -37,12 +37,12 @@ describe('scanAnimator', () => {
     const t = appear.frame.tables[0];
     expect(t.columns.map((c) => c.name)).toEqual(['book_id', 'price']);
     expect(t.rows[0].values).toEqual([1, '890.00']);
-    expect(t).toMatchObject({ fold: ['b.title'], foldedColumns: 1 });
+    expect(t).toMatchObject({ fold: ['b.title'], folds: [{ at: 2, count: 1 }] });
     const node = { visible: [{}, {}], hidden: [{}] } as Parameters<typeof foldWidth>[0];
     expect(ghostWidth(t)).toBe(foldWidth(node));
     // следующая стадия пересобирает таблицу из своего выхода, свёртка остаётся
     const next = rebuildTable(t, bookScan().output);
     expect(next.columns.map((c) => c.name)).toEqual(['book_id', 'price']);
-    expect(next.foldedColumns).toBe(1);
+    expect(next.folds).toEqual([{ at: 2, count: 1 }]);
   });
 });

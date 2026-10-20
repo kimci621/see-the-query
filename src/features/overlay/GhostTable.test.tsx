@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { STUB_WIDTH } from '@/features/board/layout';
 import { GhostTableView } from './GhostTable';
-import { ghostWidth, marksWidth } from './geometry';
+import { COL_WIDTH, ghostWidth, marksWidth } from './geometry';
 import type { GhostTable } from './types';
 
 const table: GhostTable = {
@@ -78,8 +79,14 @@ describe('GhostTableView', () => {
   });
 
   it('свёрнутые колонки: заглушка «+N колонки» в шапке, как у ноды', () => {
-    render(<GhostTableView table={{ ...table, foldedColumns: 4 }} />);
+    render(<GhostTableView table={{ ...table, folds: [{ at: 2, count: 4 }] }} />);
     expect(screen.getByTestId('ghost-folded').textContent).toBe('+4 колонки');
+  });
+
+  it('JOIN: заглушка левой таблицы между её колонками и колонками правой', () => {
+    render(<GhostTableView table={{ ...table, folds: [{ at: 1, count: 4 }] }} />);
+    expect(screen.getByTestId('ghost-folded').style.transform).toBe(`translateX(${COL_WIDTH}px)`);
+    expect(screen.getByText('price').style.transform).toBe(`translateX(${COL_WIDTH + STUB_WIDTH}px)`);
   });
 
   it('одна колонка тянется на всю ширину призрака: справа нет пустой «второй колонки»', () => {

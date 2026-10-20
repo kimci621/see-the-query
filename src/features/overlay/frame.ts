@@ -48,6 +48,16 @@ export function rebuildTable(
     c.source && fold.has(`${c.source.alias}.${c.source.column}`) ? [] : [i],
   );
   const folded = rel.columns.length - shown.length;
+  // Заглушка встаёт после последней колонки своей таблицы: в слитой таблице JOIN спрятанные
+  // колонки левой таблицы не уезжают за колонки правой
+  const folds = new Map<string, { at: number; count: number }>();
+  rel.columns.forEach((c, i) => {
+    if (!c.source) return;
+    const f = folds.get(c.source.alias) ?? { at: 0, count: 0 };
+    f.at = shown.filter((j) => j <= i).length;
+    if (!shown.includes(i)) f.count++;
+    folds.set(c.source.alias, f);
+  });
   let rows = folded ? rel.rows.map((r) => ({ ...r, values: shown.map((i) => r.values[i]) })) : rel.rows;
   if (order) {
     const pos = new Map(order.map((k, i) => [k, i]));
@@ -72,7 +82,7 @@ export function rebuildTable(
     rows: g.rows,
     hiddenRows: Math.max(g.hiddenRows, total - g.rows.length),
     ...(base.fold?.length ? { fold: base.fold } : {}),
-    ...(folded ? { foldedColumns: folded, shown } : {}),
+    ...(folded ? { folds: [...folds.values()].filter((f) => f.count > 0), shown } : {}),
   };
 }
 

@@ -44,22 +44,27 @@ export function marksWidth(t: GhostTable): number {
   return lane;
 }
 
-// Полоса справа от колонок: заглушка «+N колонки» или значки строк.
+// Заглушка «+N колонки» в конце таблицы: последняя таблица-источник свёрнута
+const endStub = (t: GhostTable) => t.folds?.at(-1)?.at === t.columns.length;
+// Заглушки между колонками (слитая таблица JOIN): занимают место в ряду колонок
+const midStubs = (t: GhostTable) => (t.folds?.length ?? 0) - (endStub(t) ? 1 : 0);
+
+// Полоса справа от колонок: заглушка «+N колонки» в конце или значки строк.
 // Ячейки строк под заглушкой пустые, поэтому значки строк встают туда же
 function tailWidth(t: GhostTable): number {
-  return Math.max(t.foldedColumns ? STUB_WIDTH : 0, marksWidth(t));
+  return Math.max(endStub(t) ? STUB_WIDTH : 0, marksWidth(t));
 }
 
-// Как foldWidth у ноды: колонки и заглушка «+N колонки», если часть колонок свёрнута
+// Как foldWidth у ноды: колонки и заглушки «+N колонки», если часть колонок свёрнута
 export function ghostWidth(t: GhostTable): number {
-  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + tailWidth(t));
+  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + midStubs(t) * STUB_WIDTH + tailWidth(t));
 }
 
 // Ширина колонки призрака. Узкому призраку (одна колонка после агрегата) остаток до TABLE_WIDTH
 // отдаём последней колонке: иначе справа видна пустая «вторая колонка»
 export function columnWidth(t: GhostTable, colIndex: number): number {
   if (colIndex < t.columns.length - 1) return COL_WIDTH;
-  return ghostWidth(t) - tailWidth(t) - colIndex * COL_WIDTH;
+  return ghostWidth(t) - tailWidth(t) - cellLeft(t, colIndex);
 }
 
 export function ghostHeight(t: GhostTable): number {
@@ -72,8 +77,15 @@ export function rowTop(index: number): number {
   return TITLE_HEIGHT + COLHEAD_HEIGHT + index * ROW_H;
 }
 
-export function cellLeft(colIndex: number): number {
-  return colIndex * COL_WIDTH;
+// Левый край колонки: колонки правее заглушки сдвинуты на её ширину
+export function cellLeft(t: GhostTable, colIndex: number): number {
+  const stubs = t.folds?.filter((f) => f.at <= colIndex).length ?? 0;
+  return colIndex * COL_WIDTH + stubs * STUB_WIDTH;
+}
+
+// Левые края заглушек «+N колонки», в порядке folds
+export function stubLefts(t: GhostTable): number[] {
+  return (t.folds ?? []).map((f, i) => f.at * COL_WIDTH + i * STUB_WIDTH);
 }
 
 // Ширина плашки счётчика (12px, полужирный, поля по 8px) без замера DOM.

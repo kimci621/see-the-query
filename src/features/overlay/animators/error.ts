@@ -17,20 +17,21 @@ export const errorAnimator: Animator<StageOf<'error'>> = (prev, stage, stageInde
   const focus = new Set(stage.focus.columns);
   // Призрак ложится на ноду: колонки и заглушка «+N колонки» как у неё
   const folded = new Set(ctx.folded(table.id));
+  const columns = table.columns
+    .filter((c) => !folded.has(c.name))
+    .map((c) => ({
+      name: c.name,
+      type: c.type,
+      state: focus.has(`${table.id}.${c.name}`) ? ('error' as const) : ('normal' as const),
+    }));
   const ghost: GhostTable = {
     id: `t:${table.name}`,
     title: table.name,
     x: rect?.x ?? ctx.workArea.x,
     y: rect?.y ?? ctx.workArea.y,
-    columns: table.columns
-      .filter((c) => !folded.has(c.name))
-      .map((c) => ({
-        name: c.name,
-        type: c.type,
-        state: focus.has(`${table.id}.${c.name}`) ? 'error' : 'normal',
-      })),
+    columns,
     rows: [],
-    ...(folded.size ? { foldedColumns: folded.size } : {}),
+    ...(folded.size ? { folds: [{ at: columns.length, count: folded.size }] } : {}),
   };
   return [
     {
