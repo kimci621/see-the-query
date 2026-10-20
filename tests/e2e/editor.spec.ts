@@ -85,7 +85,9 @@ test('сторож в превью: карточка таймаута, без п
     });
   });
   await setEditorText(page, 'select pg_sleep(5)');
-  await expect(page.getByTestId('pg-explain-title')).toContainText('слишком долго', { timeout: 15_000 });
+  await expect(page.getByTestId('pg-explain-title')).toContainText('Запрос выполнялся дольше 3 секунд', {
+    timeout: 15_000,
+  });
   await expect(page.getByTestId('preview-status')).toContainText('Ошибка');
   await expect(page.getByText('Запрос выполнялся дольше 3 секунд.', { exact: false })).toBeVisible();
   await expect(

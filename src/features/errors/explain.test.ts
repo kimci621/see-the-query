@@ -208,9 +208,11 @@ describe('explainError', () => {
 
   it('у каждого кода есть заголовок и текст, неизвестный код показывает оригинал', () => {
     for (const name of Object.keys(CASES)) expect(explain(name).title, name).not.toMatch(/^Ошибка/);
-    expect(explainError({ code: SANDBOX_TIMEOUT, message: '' }, { sql: '', schema: null }).title).toBe(
-      'Запрос выполнялся слишком долго',
-    );
+    // один смысл с тостом сторожа (RESTART_MESSAGES.timeout) и спекой 5.4
+    expect(explainError({ code: SANDBOX_TIMEOUT, message: '' }, { sql: '', schema: null })).toMatchObject({
+      title: 'Запрос выполнялся дольше 3 секунд',
+      body: expect.stringContaining('песочница ждёт 3 секунды'),
+    });
     expect(
       explainError(
         { code: '2BP01', message: 'cannot drop table author', hint: 'Use DROP ... CASCADE' },
