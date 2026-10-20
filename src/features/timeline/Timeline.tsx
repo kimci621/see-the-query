@@ -1,4 +1,5 @@
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -17,6 +18,15 @@ export function Timeline() {
   const autoplay = useSceneStore((s) => s.autoplay);
   const followCamera = useSceneStore((s) => s.followCamera);
   const store = useSceneStore.getState;
+  const activeStage = playback ? stageOfPhase(playback, phaseIndex) : -1;
+  const chipsRef = useRef<HTMLOListElement>(null);
+
+  // Лента чипов прокручивается по горизонтали: держим активный чип в видимой части
+  useEffect(() => {
+    const list = chipsRef.current;
+    const chip = list?.children[activeStage] as HTMLElement | undefined;
+    if (list && chip) list.scrollLeft = chip.offsetLeft - (list.clientWidth - chip.offsetWidth) / 2;
+  }, [activeStage]);
 
   if (!trace) {
     return (
@@ -41,14 +51,18 @@ export function Timeline() {
 
   const phases = playback?.phases ?? [];
   const current = phases[phaseIndex];
-  const activeStage = playback ? stageOfPhase(playback, phaseIndex) : -1;
 
   return (
     <div data-testid="timeline" className="flex h-full flex-col gap-1 px-3 py-1">
       <div className="flex items-center gap-2">
-        <ol className="flex flex-1 flex-wrap items-center gap-1" aria-label="Шаги выполнения запроса">
+        {/* Одна строка при любом числе стадий: перенос выталкивал подпись под редактор (P8.38) */}
+        <ol
+          ref={chipsRef}
+          className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:thin]"
+          aria-label="Шаги выполнения запроса"
+        >
           {trace.stages.map((stage, i) => (
-            <li key={stage.id}>
+            <li key={stage.id} className="shrink-0">
               <button
                 type="button"
                 data-testid="stage-chip"
