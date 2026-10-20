@@ -44,11 +44,22 @@ export function marksWidth(t: GhostTable): number {
   return lane;
 }
 
-// Как foldWidth у ноды: колонки и заглушка «+N колонки», если часть колонок свёрнута.
+// Полоса справа от колонок: заглушка «+N колонки» или значки строк.
 // Ячейки строк под заглушкой пустые, поэтому значки строк встают туда же
+function tailWidth(t: GhostTable): number {
+  return Math.max(t.foldedColumns ? STUB_WIDTH : 0, marksWidth(t));
+}
+
+// Как foldWidth у ноды: колонки и заглушка «+N колонки», если часть колонок свёрнута
 export function ghostWidth(t: GhostTable): number {
-  const tail = Math.max(t.foldedColumns ? STUB_WIDTH : 0, marksWidth(t));
-  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + tail);
+  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + tailWidth(t));
+}
+
+// Ширина колонки призрака. Узкому призраку (одна колонка после агрегата) остаток до TABLE_WIDTH
+// отдаём последней колонке: иначе справа видна пустая «вторая колонка»
+export function columnWidth(t: GhostTable, colIndex: number): number {
+  if (colIndex < t.columns.length - 1) return COL_WIDTH;
+  return ghostWidth(t) - tailWidth(t) - colIndex * COL_WIDTH;
 }
 
 export function ghostHeight(t: GhostTable): number {

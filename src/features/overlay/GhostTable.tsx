@@ -4,10 +4,10 @@ import { formatCell } from '@/features/board/format';
 import { STUB_WIDTH } from '@/features/board/layout';
 import { plural } from '@/lib/plural';
 import {
-  COL_WIDTH,
   COLHEAD_HEIGHT,
   cellLeft,
   columnKeys,
+  columnWidth,
   ghostHeight,
   ghostWidth,
   ROW_H,
@@ -25,11 +25,13 @@ const GhostRowView = memo(function GhostRowView({
   index,
   columns,
   keys,
+  widths,
 }: {
   row: GhostRow;
   index: number;
   columns: GhostColumn[];
   keys: string[];
+  widths: number[];
 }) {
   const icon = ROW_ICONS[row.state];
   return (
@@ -54,7 +56,11 @@ const GhostRowView = memo(function GhostRowView({
           <div
             key={keys[ci]}
             className={`vs-cell vs-col--${c.state}${kind === 'null' ? ' vs-null' : ''}`}
-            style={{ width: COL_WIDTH, lineHeight: `${ROW_H}px`, transform: `translateX(${cellLeft(ci)}px)` }}
+            style={{
+              width: widths[ci],
+              lineHeight: `${ROW_H}px`,
+              transform: `translateX(${cellLeft(ci)}px)`,
+            }}
             title={row.cellNotes?.[ci]}
           >
             {text}
@@ -74,6 +80,7 @@ const GhostRowView = memo(function GhostRowView({
 // Призрачная таблица: двигается целиком, строки двигаются внутри неё
 export const GhostTableView = memo(function GhostTableView({ table }: { table: GhostTable }) {
   const keys = columnKeys(table.columns);
+  const widths = table.columns.map((_, ci) => columnWidth(table, ci));
   return (
     <motion.div
       data-testid="ghost-table"
@@ -93,7 +100,7 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
             key={keys[ci]}
             className={`vs-colhead vs-col--${c.state}`}
             style={{
-              width: COL_WIDTH,
+              width: widths[ci],
               lineHeight: `${COLHEAD_HEIGHT}px`,
               transform: `translateX(${cellLeft(ci)}px)`,
             }}
@@ -117,7 +124,14 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
       </div>
       <AnimatePresence initial={false}>
         {table.rows.map((row, i) => (
-          <GhostRowView key={row.key} row={row} index={i} columns={table.columns} keys={keys} />
+          <GhostRowView
+            key={row.key}
+            row={row}
+            index={i}
+            columns={table.columns}
+            keys={keys}
+            widths={widths}
+          />
         ))}
       </AnimatePresence>
       {table.hiddenRows ? (

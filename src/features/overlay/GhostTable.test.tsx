@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { GhostTableView } from './GhostTable';
+import { ghostWidth, marksWidth } from './geometry';
 import type { GhostTable } from './types';
 
 const table: GhostTable = {
@@ -79,5 +80,18 @@ describe('GhostTableView', () => {
   it('свёрнутые колонки: заглушка «+N колонки» в шапке, как у ноды', () => {
     render(<GhostTableView table={{ ...table, foldedColumns: 4 }} />);
     expect(screen.getByTestId('ghost-folded').textContent).toBe('+4 колонки');
+  });
+
+  it('одна колонка тянется на всю ширину призрака: справа нет пустой «второй колонки»', () => {
+    const one: GhostTable = {
+      ...table,
+      columns: [{ name: 'count', state: 'highlight' }],
+      rows: [{ key: 'g', values: [11], state: 'dropped' }],
+      hiddenRows: 0,
+    };
+    render(<GhostTableView table={one} />);
+    const width = `${ghostWidth(one) - marksWidth(one)}px`;
+    expect(screen.getByText('count').style.width).toBe(width);
+    expect(screen.getByText('11').style.width).toBe(width);
   });
 });
