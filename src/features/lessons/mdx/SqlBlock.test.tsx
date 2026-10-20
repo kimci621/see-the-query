@@ -1,17 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { initParser } from '@/features/sql/parser';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { SqlBlock } from './SqlBlock';
 
-const { apply, notifyApplied, notifyDbError } = vi.hoisted(() => ({
+const { apply, notifyApplied, notifyDbError, sandboxState } = vi.hoisted(() => ({
   apply: vi.fn(),
   notifyApplied: vi.fn(),
   notifyDbError: vi.fn(),
+  sandboxState: { ready: true },
 }));
 vi.mock('@/features/db/SandboxProvider', () => ({
-  useSandbox: () => ({ sandbox: { apply }, status: 'ready', version: null }),
+  useSandbox: () => ({ sandbox: sandboxState.ready ? { apply } : null, status: 'ready', version: null }),
 }));
 vi.mock('@/features/editor/notifyDbError', () => ({ notifyApplied, notifyDbError }));
 
@@ -31,14 +33,16 @@ function renderBlock(props: BlockProps) {
   render(<RouterProvider router={router} />);
 }
 
-beforeEach(() => {
-  useEditorStore.setState({ text: '', cursor: 0 });
+beforeEach(async () => {
+  sandboxState.ready = true;
+  useEditorStore.setState(useEditorStore.getInitialState(), true);
   useLessonStore.setState({ byId: {} });
   apply.mockReset().mockResolvedValue([]);
   notifyApplied.mockReset();
   notifyDbError.mockReset();
   writeText.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  await initParser();
 });
 
 describe('SqlBlock', () => {
@@ -64,9 +68,34 @@ describe('SqlBlock', () => {
     renderBlock({ 'data-lang': 'sql', 'data-meta': 'apply expect=rows:1', 'data-code': insert });
     expect(screen.queryByRole('button', { name: 'На доску' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
-    await waitFor(() => expect(apply).toHaveBeenCalledWith(insert));
+    // оператор из разбора, как у кнопки редактора: без завершающей точки с запятой
+    await waitFor(() => expect(apply).toHaveBeenCalledWith(insert.slice(0, -1)));
     await waitFor(() => expect(notifyApplied).toHaveBeenCalledWith(results));
     expect(useEditorStore.getState().text).toBe(insert);
+    // тот же путь, что у кнопки редактора: оператор применён, тулбар пишет «Применено», превью его не повторяет
+    expect(useEditorStore.getState().applied[0]?.result).toEqual(results[0]);
+  });
+
+  it('apply: двойной клик применяет один раз, пока база отвечает кнопка занята', async () => {
+    let resolve: (r: unknown[]) => void = () => undefined;
+    apply.mockReturnValue(new Promise((r) => (resolve = r)));
+    renderBlock({ 'data-lang': 'sql', 'data-meta': 'apply', 'data-code': 'delete from book;' });
+    const button = screen.getByRole('button', { name: 'Применить' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    resolve([{ command: 'DELETE', rowCount: 11 }]);
+    await waitFor(() => expect(button).not.toHaveAttribute('aria-busy'));
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('apply: пока песочница не готова, «Применить» выключена и запрос в редактор не кладёт', () => {
+    sandboxState.ready = false;
+    renderBlock({ 'data-lang': 'sql', 'data-meta': 'apply', 'data-code': 'delete from book;' });
+    const button = screen.getByRole('button', { name: 'Применить' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(useEditorStore.getState().text).toBe('');
   });
 
   it('apply: ошибка идёт в notifyDbError вместе с запросом', async () => {
@@ -74,7 +103,7 @@ describe('SqlBlock', () => {
     apply.mockRejectedValue(err);
     renderBlock({ 'data-lang': 'sql', 'data-meta': 'apply', 'data-code': 'delete from book;' });
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
-    await waitFor(() => expect(notifyDbError).toHaveBeenCalledWith(err, 'delete from book;'));
+    await waitFor(() => expect(notifyDbError).toHaveBeenCalledWith(err, 'delete from book'));
     expect(notifyApplied).not.toHaveBeenCalled();
   });
 

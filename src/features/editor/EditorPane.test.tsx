@@ -477,6 +477,21 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     expect(sandbox.apply).toHaveBeenCalledTimes(2);
   });
 
+  it('второй ⌘⏎, пока база отвечает на первый, ничего не применяет (P8.19)', async () => {
+    const sandbox = setup();
+    let resolve: (r: QueryResult[]) => void = () => undefined;
+    sandbox.apply.mockReturnValue(new Promise((r) => (resolve = r)));
+    const insert = "insert into author (name) values ('Ада')";
+    act(() => {
+      useEditorStore.getState().setText(insert);
+      useEditorStore.getState().setCursor(insert.length);
+    });
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => resolve([{ fields: [], rows: [], command: 'INSERT', rowCount: 1 }]));
+    expect(sandbox.apply).toHaveBeenCalledTimes(1);
+  });
+
   it('правка текста снимает пометки строк на доске (P8.16)', async () => {
     setup();
     act(() => useBoardStore.setState({ rowWrites: [{ since: 750, mark: 'new' }] }));

@@ -1,10 +1,10 @@
-import { Check, Copy, Play, Zap } from 'lucide-react';
+import { Check, Copy, LoaderCircle, Play, Zap } from 'lucide-react';
 import { type ComponentProps, useState } from 'react';
 import { useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useSandbox } from '@/features/db/SandboxProvider';
-import { notifyApplied, notifyDbError } from '@/features/editor/notifyDbError';
+import { applyCurrent } from '@/features/editor/applyCurrent';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { parseSqlMeta } from './sql-meta';
@@ -22,6 +22,7 @@ export function SqlBlock(props: PreProps) {
   const { lessonId } = useParams();
   const { sandbox } = useSandbox();
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   if (props['data-lang'] !== 'sql') return <pre {...props} />;
   const sql = props['data-code'] ?? '';
@@ -37,14 +38,16 @@ export function SqlBlock(props: PreProps) {
     );
   };
 
-  // Пример меняет данные: показываем запрос в редакторе и сразу применяем с COMMIT (тосты те же, что у кнопки редактора)
+  // Пример меняет данные: показываем запрос в редакторе и применяем тем же путём, что кнопка редактора
+  // (тосты, камера, «Применено» в тулбаре). Пока база отвечает, повторный клик ничего не делает
   const apply = async () => {
+    if (!sandbox || busy) return;
     sendToBoard(sql, lessonId);
-    if (!sandbox) return;
+    setBusy(true);
     try {
-      notifyApplied(await sandbox.apply(sql));
-    } catch (e) {
-      notifyDbError(e, sql);
+      await applyCurrent(sandbox);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -53,8 +56,16 @@ export function SqlBlock(props: PreProps) {
       <pre {...props} />
       <div className="not-prose mt-1 flex flex-wrap items-center gap-2">
         {meta.apply ? (
-          <Button size="sm" variant="secondary" onClick={() => void apply()}>
-            <Zap aria-hidden />
+          <Button
+            size="sm"
+            variant="secondary"
+            // без песочницы применять некуда; занятая кнопка не disabled, чтобы фокус клавиатуры остался на ней
+            disabled={!sandbox}
+            aria-disabled={busy || undefined}
+            aria-busy={busy || undefined}
+            onClick={() => void apply()}
+          >
+            {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <Zap aria-hidden />}
             Применить
           </Button>
         ) : meta.run ? (

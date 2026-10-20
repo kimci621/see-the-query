@@ -163,6 +163,19 @@ test('после «Применить» превью не повторяет о�
   await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
 });
 
+test('«Применить» из урока: один раз на двойной клик, тулбар пишет «Применено» (P8.19)', async ({ page }) => {
+  await page.goto('/l/how-to-use');
+  await expect(page.getByTestId('table-node-public.author')).toBeVisible({ timeout: 20_000 });
+  const block = page.getByTestId('sql-block').filter({ hasText: 'Лев Толстой' });
+  await block.getByRole('button', { name: 'Применить' }).dblclick();
+  await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 5000 });
+  await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
+  // дольше паузы превью: превью вставку не повторяет, второй строки нет
+  await page.waitForTimeout(1000);
+  await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
+  await expect(page.getByTestId('cell-0-0')).toHaveText('Лев Толстой');
+});
+
 test('страховка DML: без WHERE, ошибка превью, пометка строк, тост отмены', async ({ page }) => {
   await openLesson(page);
   await setEditorText(page, 'update book set price = 0');

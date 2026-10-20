@@ -7,55 +7,20 @@ import { isTypingTarget } from '@/features/shell/useGlobalHotkeys';
 import { clauseAt } from '@/features/sql/clauses';
 import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
-import type { ParsedStatement } from '@/features/sql/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
+import { applyCurrent, focusDmlTarget } from './applyCurrent';
 import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
-import { notifyApplied, notifyDbError, undoLast } from './notifyDbError';
-import { alteredTableOf, dmlTargetOf, touchedOf } from './touched';
-import { appliedTrace, useLiveTrace } from './useLiveTrace';
+import { notifyDbError, undoLast } from './notifyDbError';
+import { touchedOf } from './touched';
+import { useLiveTrace } from './useLiveTrace';
 import { useParserReady } from './useParsedText';
 
 // CodeMirror тяжёлый: грузим лениво, оболочка его не ждёт (спека 5.12)
 const SqlEditor = lazy(() => import('./SqlEditor').then((m) => ({ default: m.SqlEditor })));
-
-// Фокус на целевую таблицу DML-оператора из текста; для остальных операторов ничего не делает.
-// fly: камера летит к таблице, даже если фокус уже на ней (после «Применить» камера могла остаться на призраке сцены)
-function focusDmlTarget(sql: string, fly = false): void {
-  const parsed = parseSql(sql);
-  const stmt = parsed.ok ? parsed.statements[0] : undefined;
-  const target = stmt && dmlTargetOf(stmt, useBoardStore.getState().schema);
-  if (!target) return;
-  useBoardStore.getState().focus([target]);
-  if (fly) useBoardStore.getState().requestFrame();
-}
-
-// «Применить» DDL (спека 3.4): новой таблицы на доске ещё нет, камера ждёт схему после записи.
-// Появилась таблица (CREATE, RENAME TO) - летим к ней, ALTER - к изменённой, исчезла (DROP) - вся доска
-function frameAfterDdl(stmt: ParsedStatement): void {
-  const before = useBoardStore.getState().schema;
-  const unsubscribe = useBoardStore.subscribe(({ schema }) => {
-    if (schema === before) return;
-    unsubscribe();
-    // схема сброшена: урок пересобирается, кадр поставит старт урока
-    if (!schema || !before) return;
-    const board = useBoardStore.getState();
-    const had = new Set(before.tables.map((t) => t.id));
-    const added = schema.tables.filter((t) => !had.has(t.id)).map((t) => t.id);
-    const altered = alteredTableOf(stmt, schema);
-    const target = added.length > 0 ? added : altered ? [altered] : null;
-    if (target) {
-      board.focus(target);
-      board.requestFrame();
-    } else if (schema.tables.length < had.size) {
-      board.focus([]);
-      board.requestFit();
-    }
-  });
-}
 
 export function EditorPane() {
   const { lessonId } = useParams();
@@ -165,33 +130,11 @@ export function EditorPane() {
   }, [text, lessonId, meta]);
 
   // единый путь применения для кнопки, ⌘⏎ из keymap CodeMirror и ⌘⏎ вне редактора
-  const applyCurrent = () => {
-    if (!sandbox) return;
-    const editor = useEditorStore.getState();
-    const parsed = parseSql(editor.text);
-    if (!parsed.ok) return;
-    const stmt = statementAt(parsed.statements, editor.cursor);
-    // «Применено»: повтор ничего не пишет, пока текст не изменён (спека 3.9)
-    if (!stmt || editor.applied[stmt.index]) return;
-    const started = performance.now();
-    void sandbox
-      .apply(stmt.text)
-      .then((results) => {
-        // SELECT базу не меняет: его сцена превью остаётся. Текст правили во время применения - номер уже чужой
-        if (stmt.kind !== 'select' && useEditorStore.getState().text === editor.text) {
-          const trace = appliedTrace(stmt, results, Math.round(performance.now() - started));
-          useEditorStore.getState().markApplied(stmt.index, trace);
-          useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
-        }
-        notifyApplied(results);
-        if (stmt.kind === 'ddl') frameAfterDdl(stmt);
-        else focusDmlTarget(stmt.text, true);
-      })
-      .catch((e: unknown) => notifyDbError(e, stmt.text));
+  const apply = () => {
+    if (sandbox) void applyCurrent(sandbox);
   };
-
-  const applyRef = useRef(applyCurrent);
-  applyRef.current = applyCurrent;
+  const applyRef = useRef(apply);
+  applyRef.current = apply;
 
   // Глобальные горячие клавиши ⌘Z и ⌘⏎. В полях ввода (редактор, поиск) и в диалогах
   // клавиши принадлежат им: в редакторе ⌘Z отменяет набор, ⌘⏎ ловит keymap CodeMirror
@@ -217,10 +160,10 @@ export function EditorPane() {
     <div className="editor-pane flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-hidden">
         <Suspense fallback={<Skeleton className="m-2 h-32 w-[calc(100%-1rem)]" />}>
-          <SqlEditor onApply={applyCurrent} />
+          <SqlEditor onApply={apply} />
         </Suspense>
       </div>
-      <EditorToolbar sandbox={sandbox} onApplyCurrent={applyCurrent} />
+      <EditorToolbar sandbox={sandbox} onApplyCurrent={apply} />
     </div>
   );
 }
