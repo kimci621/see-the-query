@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { useBoardStore } from '@/stores/board';
@@ -92,6 +92,23 @@ describe('T и C', () => {
     fireEvent.mouseEnter(term);
     fireEvent.mouseLeave(term);
     expect(useBoardStore.getState().highlightedColumns).toEqual(['public.book.title']);
+  });
+
+  it('новая трасса во время наведения: уход не откатывает к устаревшей подсветке', () => {
+    render(<T id="public.book">book</T>);
+    const term = screen.getByRole('button', { name: 'book' });
+    fireEvent.mouseEnter(term);
+    // пока курсор на термине, превью принесло трассу с другими колонками
+    act(() => useBoardStore.getState().highlightColumns(['public.book.title']));
+    fireEvent.mouseLeave(term);
+    expect(useBoardStore.getState().highlightedColumns).toEqual(['public.book.title']);
+  });
+
+  it('термин ушёл со страницы во время наведения: подсветка возвращается', () => {
+    const { unmount } = render(<T id="public.book">book</T>);
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'book' }));
+    unmount();
+    expect(useBoardStore.getState().highlightedColumns).toEqual(['public.author.name']);
   });
 
   it('клик фокусирует таблицу', () => {

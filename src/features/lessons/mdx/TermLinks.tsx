@@ -1,4 +1,4 @@
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { useBoardStore } from '@/stores/board';
 
 // 'public.book.author_id' → 'public.book'
@@ -29,19 +29,34 @@ function Term({
   highlight: () => string[];
   children: ReactNode;
 }) {
-  // Подсветка до наведения: вернём её, когда курсор или фокус уйдут
-  const previous = useRef<string[] | null>(null);
+  // Наведение: подсветка до него (вернём, когда курсор или фокус уйдут) и отписка от стора
+  const hover = useRef<{ previous: string[]; stop: () => void } | null>(null);
 
   const enter = () => {
+    // повторный вход (фокус, потом мышь) не перезаписывает исходную подсветку
+    if (hover.current) return;
     const board = useBoardStore.getState();
-    if (previous.current === null) previous.current = board.highlightedColumns;
+    const previous = board.highlightedColumns;
     board.highlightColumns(highlight());
+    // Подсветку сменил кто-то другой (новая трасса): она свежее нашей, откатывать к старой нельзя
+    const stop = useBoardStore.subscribe((s, prev) => {
+      if (s.highlightedColumns === prev.highlightedColumns) return;
+      stop();
+      hover.current = null;
+    });
+    hover.current = { previous, stop };
   };
   const leave = () => {
-    if (previous.current === null) return;
-    useBoardStore.getState().highlightColumns(previous.current);
-    previous.current = null;
+    const h = hover.current;
+    if (!h) return;
+    hover.current = null;
+    h.stop();
+    useBoardStore.getState().highlightColumns(h.previous);
   };
+  // Термин ушёл со страницы под курсором (смена урока или шага сцены): подсветку возвращаем
+  const leaveRef = useRef(leave);
+  leaveRef.current = leave;
+  useEffect(() => () => leaveRef.current(), []);
 
   return (
     <button
