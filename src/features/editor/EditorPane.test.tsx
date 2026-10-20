@@ -188,6 +188,14 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().queryColumns).toEqual(['public.book.title', 'public.book.price']);
   });
 
+  it('открытие урока: запрос кнопки прошлого урока больше не считается запуском пользователя', () => {
+    // тот же текст, что стартовый запрос нового урока: без сброса оверлей решил бы, что сцену запустил ученик
+    useSceneStore.getState().setLessonQuery('select * from book;');
+    route.lessonId = 'with-initial';
+    render(<EditorPane />);
+    expect(useSceneStore.getState().lessonQuery).toBeNull();
+  });
+
   it('открытие урока: initialQuery, а при возврате lastQuery важнее initialQuery', () => {
     route.lessonId = 'with-initial';
     const { unmount } = render(<EditorPane />);

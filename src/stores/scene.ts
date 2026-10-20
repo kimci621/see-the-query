@@ -17,6 +17,9 @@ export interface SceneStore {
   speed: 0.5 | 1 | 2;
   autoplay: boolean;
   followCamera: boolean;
+  // Запрос, который кнопка урока («На доску», шаг сцены, «Применить») положила в редактор.
+  // Пока текст редактора тот же, сцену запустил пользователь, где бы ни был фокус. Открытие урока сбрасывает
+  lessonQuery: string | null;
   nextGeneration(): number;
   setTrace(trace: Trace, generation: number): void; // игнорирует устаревшее поколение
   setStatus(s: SceneStore['status']): void;
@@ -32,6 +35,7 @@ export interface SceneStore {
   setSpeed(s: 0.5 | 1 | 2): void;
   setAutoplay(v: boolean): void;
   setFollowCamera(v: boolean): void;
+  setLessonQuery(sql: string | null): void;
   close(): void;
 }
 
@@ -53,6 +57,7 @@ export const useSceneStore = create<SceneStore>()(
       speed: 1,
       autoplay: true,
       followCamera: true,
+      lessonQuery: null,
       nextGeneration: () => {
         const generation = get().generation + 1;
         set({ generation, status: 'tracing' });
@@ -116,6 +121,7 @@ export const useSceneStore = create<SceneStore>()(
       setSpeed: (speed) => set({ speed }),
       setAutoplay: (autoplay) => set({ autoplay }),
       setFollowCamera: (followCamera) => set({ followCamera }),
+      setLessonQuery: (lessonQuery) => set({ lessonQuery }),
       close: () =>
         set({
           trace: null,

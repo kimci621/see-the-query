@@ -175,6 +175,18 @@ test('вердикты WHERE: текст отсеянных строк зачё�
   await expect(cell).toHaveCSS('text-decoration-line', 'line-through');
 });
 
+test('«На доску» из урока проигрывает сцену, даже если фокус ушёл с кнопки до трассы (P8.19)', async ({
+  page,
+}) => {
+  await page.goto('/l/how-to-use');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+  const block = page.getByTestId('sql-block').filter({ hasText: 'select title, price from book;' });
+  await block.getByRole('button', { name: 'На доску' }).click();
+  // раньше паузы превью фокус уходит на заголовок урока, вне редактора и примера
+  await page.locator('#lesson-title').focus();
+  await expect(page.getByTestId('ghost-table').first()).toBeVisible({ timeout: 10_000 });
+});
+
 test('после запроса с ошибкой камера возвращается к таблице, доска не пустая', async ({ page }) => {
   await openBoard(page);
   await typeQuery(page, QUERY);

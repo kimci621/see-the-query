@@ -7,6 +7,7 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { applyCurrent } from '@/features/editor/applyCurrent';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
+import { useSceneStore } from '@/stores/scene';
 import { parseSqlMeta } from './sql-meta';
 
 type PreProps = ComponentProps<'pre'> & { 'data-lang'?: string; 'data-meta'?: string; 'data-code'?: string };
@@ -14,6 +15,7 @@ type PreProps = ComponentProps<'pre'> & { 'data-lang'?: string; 'data-meta'?: st
 // «▶ На доску»: запрос уходит в редактор, дальше живой превью сам строит трассу и проигрывает сцену
 export function sendToBoard(sql: string, lessonId: string | undefined): void {
   useEditorStore.getState().insertQuery(sql);
+  useSceneStore.getState().setLessonQuery(sql);
   if (lessonId) useLessonStore.getState().markRanExample(lessonId);
 }
 
