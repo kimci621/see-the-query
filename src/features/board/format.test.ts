@@ -16,6 +16,14 @@ describe('formatCell', () => {
     );
   });
 
+  it('date[] и timestamptz[] форматируют элементы как одиночные значения', () => {
+    const days = [new Date(Date.UTC(1940, 0, 1)), null];
+    expect(formatCell(days, 'date[]').text).toBe('{1940-01-01,NULL}');
+    expect(formatCell([new Date('2024-03-01T07:00:00.000Z')], 'timestamp with time zone[]').text).toBe(
+      '{2024-03-01 07:00:00Z}',
+    );
+  });
+
   it('массивы как литерал Postgres, jsonb как JSON, числа и булевы как есть', () => {
     expect(formatCell(['классика', 'роман'], 'text[]').text).toBe('{классика,роман}');
     expect(formatCell([1, null]).text).toBe('{1,NULL}');

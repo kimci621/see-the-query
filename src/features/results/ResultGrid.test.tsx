@@ -80,6 +80,17 @@ describe('ResultGrid', () => {
     expect(screen.getByTestId('cell-0-0')).toHaveTextContent(/^1940-01-01$/);
   });
 
+  it('date[] без времени', () => {
+    const dated: QueryResult = {
+      fields: [{ name: 'days', dataTypeID: 1182 }],
+      rows: [[[new Date('1940-01-01T00:00:00Z'), new Date('1958-01-01T00:00:00Z')]]],
+      command: 'SELECT',
+      rowCount: 1,
+    };
+    render(<ResultGrid result={dated} />);
+    expect(screen.getByTestId('cell-0-0')).toHaveTextContent(/^\{1940-01-01,1958-01-01\}$/);
+  });
+
   it('пустой результат показывает подсказку', () => {
     const empty: QueryResult = { fields: [{ name: 'x', dataTypeID: 25 }], rows: [] };
     render(<ResultGrid result={empty} emptyHint="0 строк: WHERE отсек всё" />);

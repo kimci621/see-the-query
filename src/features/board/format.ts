@@ -23,7 +23,11 @@ function toText(value: unknown, type?: string): string {
           .replace('T', ' ')
           .replace(/\.\d{3}Z$/, 'Z');
   }
-  if (Array.isArray(value)) return `{${value.map((v) => (v === null ? 'NULL' : String(v))).join(',')}}`;
+  if (Array.isArray(value)) {
+    // элементы как одиночные значения своего типа: date[] без времени
+    const item = type?.endsWith('[]') ? type.slice(0, -2) : type;
+    return `{${value.map((v) => (v === null ? 'NULL' : toText(v, item))).join(',')}}`;
+  }
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }

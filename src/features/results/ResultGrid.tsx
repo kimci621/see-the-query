@@ -6,8 +6,8 @@ import { useRef } from 'react';
 import { formatCell } from '@/features/board/format';
 import type { QueryResult } from '@/features/db/types';
 
-// OID встроенного типа date: PGlite отдаёт его как Date, без типа ячейка покажет время
-const DATE_OID = 1082;
+// OID встроенных date и date[]: PGlite отдаёт их как Date, без типа ячейка покажет время
+const DATE_TYPES: Record<number, string> = { 1082: 'date', 1182: 'date[]' };
 
 // Виртуализированная таблица результата: моно-шрифт, NULL-плашки как на доске
 export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHint?: string }) {
@@ -86,7 +86,7 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
                     row={item.index}
                     col={i}
                     value={cell}
-                    type={result.fields[i]?.dataTypeID === DATE_OID ? 'date' : undefined}
+                    type={DATE_TYPES[result.fields[i]?.dataTypeID ?? 0]}
                   />
                 ))}
               </div>
