@@ -109,6 +109,11 @@ describe('AppShell', () => {
     renderAt('/l/how-to-use');
     expect((await screen.findAllByRole('button', { name: 'На доску' })).length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Документация PostgreSQL' })).toBeInTheDocument();
+    // ссылка подписана по-русски, а не хвостом адреса
+    expect(screen.getByRole('link', { name: /Учебник: язык SQL/ })).toHaveAttribute(
+      'href',
+      'https://www.postgresql.org/docs/current/tutorial-sql.html',
+    );
   });
 
   it('открытый урок отмечается посещённым', async () => {

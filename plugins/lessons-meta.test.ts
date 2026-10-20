@@ -12,7 +12,8 @@ number: "6.2"
 order: 2
 dataset: bookstore
 docs:
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html
+    title: Табличные выражения
 tags: [join, "null"]
 mvp: true
 ---
@@ -30,7 +31,12 @@ describe('parseLessonFile', () => {
       number: '6.2',
       order: 2,
       dataset: 'bookstore',
-      docs: ['https://www.postgresql.org/docs/current/queries-table-expressions.html'],
+      docs: [
+        {
+          url: 'https://www.postgresql.org/docs/current/queries-table-expressions.html',
+          title: 'Табличные выражения',
+        },
+      ],
       tags: ['join', 'null'],
       mvp: true,
       path: '/content/lessons/06-joins/02-inner-join.mdx',
@@ -59,10 +65,17 @@ describe('parseLessonFile', () => {
   });
 
   it('tags и docs по умолчанию пустые', () => {
-    const src = VALID.replace(/docs:\n {2}- .*\n/, '').replace('tags: [join, "null"]\n', '');
+    const src = VALID.replace(/docs:\n {2}- .*\n {4}.*\n/, '').replace('tags: [join, "null"]\n', '');
     const meta = parseLessonFile(src, 'a.mdx');
     expect(meta.docs).toEqual([]);
     expect(meta.tags).toEqual([]);
+  });
+
+  it('ссылка docs без title или строкой → ошибка с именем поля', () => {
+    const noTitle = VALID.replace('    title: Табличные выражения\n', '');
+    expect(() => parseLessonFile(noTitle, 'a.mdx')).toThrow('a.mdx: поле docs');
+    const plain = VALID.replace(/ {2}- url: (.*)\n {4}title: .*\n/, '  - $1\n');
+    expect(() => parseLessonFile(plain, 'a.mdx')).toThrow('a.mdx: поле docs');
   });
 
   it('CRLF в файле не мешает', () => {

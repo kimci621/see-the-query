@@ -14,8 +14,10 @@ board:
 initialQuery: |
   select status, count(*) from orders group by status having count(*) > 1;
 docs:
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUPBY
-  - https://www.postgresql.org/docs/current/tutorial-agg.html
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY и HAVING
+  - url: https://www.postgresql.org/docs/current/tutorial-agg.html
+    title: "Учебник: агрегатные функции"
 course: ["11.55"]
 tags: [having, where, group by, фильтр групп, агрегат]
 mvp: true

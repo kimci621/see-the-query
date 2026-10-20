@@ -53,11 +53,9 @@ export function LessonView({ meta }: { meta: LessonMeta }) {
         <section aria-labelledby="lesson-docs" className="mt-10">
           <h2 id="lesson-docs">Документация PostgreSQL</h2>
           <ul>
-            {meta.docs.map((url) => (
+            {meta.docs.map(({ url, title }) => (
               <li key={url}>
-                <NewTabLink href={url}>
-                  {url.replace('https://www.postgresql.org/docs/current/', '')}
-                </NewTabLink>
+                <NewTabLink href={url}>{title}</NewTabLink>
               </li>
             ))}
           </ul>

@@ -13,9 +13,12 @@ board:
 initialQuery: |
   select title, price from book where price is null;
 docs:
-  - https://www.postgresql.org/docs/current/functions-comparison.html
-  - https://www.postgresql.org/docs/current/functions-conditional.html
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+  - url: https://www.postgresql.org/docs/current/functions-comparison.html
+    title: Функции и операторы сравнения
+  - url: https://www.postgresql.org/docs/current/functions-conditional.html
+    title: Условные выражения
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+    title: Условие WHERE
 course: ["11.19"]
 tags: ["null", is null, is not null, coalesce, nullif, unknown, трёхзначная логика]
 mvp: true

@@ -30,6 +30,23 @@ function optionalStringArray(data: Raw, key: string, file: string): string[] | u
   return value;
 }
 
+// Ссылки на документацию: у каждой адрес и русская подпись, её видит ученик под уроком
+function docLinks(data: Raw, file: string): LessonMeta['docs'] {
+  const value = data.docs;
+  if (value === undefined || value === null) return [];
+  const isLink = (v: unknown) =>
+    !!v &&
+    typeof v === 'object' &&
+    ['url', 'title'].every((k) => {
+      const field = (v as Raw)[k];
+      return typeof field === 'string' && field.trim() !== '';
+    });
+  if (!Array.isArray(value) || !value.every(isLink)) {
+    throw new Error(`${file}: поле docs должно быть списком { url, title } с непустыми строками`);
+  }
+  return value.map((v: Raw) => ({ url: v.url as string, title: v.title as string }));
+}
+
 // Разбирает frontmatter одного урока. relPath считается от корня проекта
 export function parseLessonFile(source: string, relPath: string): LessonMeta {
   const file = relPath.split(path.sep).join('/');
@@ -53,7 +70,7 @@ export function parseLessonFile(source: string, relPath: string): LessonMeta {
     number: requireString(raw, 'number', file),
     order,
     dataset: requireString(raw, 'dataset', file) as LessonMeta['dataset'],
-    docs: optionalStringArray(raw, 'docs', file) ?? [],
+    docs: docLinks(raw, file),
     tags: optionalStringArray(raw, 'tags', file) ?? [],
     path: `/${file}`,
   };

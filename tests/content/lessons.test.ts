@@ -90,7 +90,10 @@ describe.each(LESSONS.map((meta) => [meta.id, meta] as const))('урок %s', (_
       `нет датасета ${meta.dataset}`,
     ).toBe(true);
     expect(meta.docs.length, 'docs пуст').toBeGreaterThan(0);
-    for (const url of meta.docs) expect(url).toMatch(/^https:\/\//);
+    for (const { url, title } of meta.docs) {
+      expect(url).toMatch(/^https:\/\//);
+      expect(title.trim(), `нет title у ${url}`).not.toBe('');
+    }
   });
 
   it('только известные MDX-компоненты', () => {

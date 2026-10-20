@@ -9,7 +9,7 @@ export interface LessonMeta {
   dataset: DatasetId;
   board?: { tables?: string[]; layout?: 'auto' | Record<string, { x: number; y: number }> };
   initialQuery?: string;
-  docs: string[];
+  docs: { url: string; title: string }[];
   course?: string[];
   tags: string[];
   mvp?: boolean;

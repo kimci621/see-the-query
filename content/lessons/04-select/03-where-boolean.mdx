@@ -10,9 +10,12 @@ board:
 initialQuery: |
   select title, price from book where price > 500;
 docs:
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
-  - https://www.postgresql.org/docs/current/functions-logical.html
-  - https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+    title: Условие WHERE
+  - url: https://www.postgresql.org/docs/current/functions-logical.html
+    title: Логические операторы
+  - url: https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE
+    title: Приоритет операторов
 course: ["11.17", "11.18"]
 tags: [where, and, or, not, скобки, приоритет, фильтр]
 mvp: true

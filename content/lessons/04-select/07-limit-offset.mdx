@@ -10,9 +10,12 @@ board:
 initialQuery: |
   select title, price from book order by price desc nulls last limit 3;
 docs:
-  - https://www.postgresql.org/docs/current/queries-limit.html
-  - https://www.postgresql.org/docs/current/sql-select.html#SQL-LIMIT
-  - https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
+  - url: https://www.postgresql.org/docs/current/queries-limit.html
+    title: LIMIT и OFFSET
+  - url: https://www.postgresql.org/docs/current/sql-select.html#SQL-LIMIT
+    title: "Справка по SELECT: LIMIT"
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
+    title: Сравнение конструкторов строк
 course: ["11.21"]
 tags: [limit, offset, fetch first, with ties, пагинация, страницы, keyset]
 mvp: true
