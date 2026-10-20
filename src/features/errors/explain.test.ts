@@ -20,6 +20,17 @@ const CASES: Record<string, string> = {
   ambiguousComment: '-- book list\nselect author_id from book join author on true',
   ambiguousCte: 'with author as (select * from author) select author_id from book join author on true',
   aliasedTable: 'select book.title from book b join author a on a.author_id = b.author_id',
+  missingFrom: 'select x.title from book',
+  missingFromKnown: 'select book.title from author',
+  missingFromAliased: 'select b.title from book b join author a on a.author_id = c.author_id',
+  ambiguousSelfJoin: 'select title from book b1 join book b2 on b1.book_id = b2.book_id',
+  ambiguousSelfJoinBare: 'select author_id from book b join book on true',
+  groupingSubquery:
+    'select title, max(price) from book where author_id in (select author_id from book group by author_id)',
+  groupingCte: 'with g as (select author_id from book group by author_id) select title, count(*) from book',
+  groupingComment: '-- group by author_id\nselect title, count(*) from book',
+  groupingInSubquery:
+    'select title from book where author_id in (select author_id, title from book group by author_id)',
   aliasedSpecial: 'with "a(b" as (select 1 as x) select "a(b".x from "a(b" t',
   grouping: 'select author_id, title from book group by author_id',
   groupingNoGroupBy: 'select title, max(price) from book',
@@ -169,6 +180,38 @@ describe('explainError', () => {
       body: expect.stringMatching(/^Агрегат без GROUP BY сворачивает все строки в одну\. book\.title/),
       highlight: { columns: ['public.book.title'] },
     });
+  });
+
+  it('42P01 missing FROM-clause entry: не «таблицы нет», а нет в FROM', () => {
+    expect(explain('missingFrom')).toMatchObject({
+      title: 'x нет в FROM',
+      body: 'Перед точкой стоит x, но в FROM нет ни таблицы, ни алиаса с таким именем. Колонки берутся только из таблиц FROM и JOIN.',
+      suggestion: 'В FROM есть: book.',
+      highlight: { tableIds: ['public.book'], columns: [] },
+    });
+    expect(explain('missingFrom').fix).toBeUndefined();
+    expect(explain('missingFromKnown').suggestion).toBe(
+      'Таблица book есть в базе: добавь её в FROM или JOIN.',
+    );
+    expect(explain('missingFromAliased').suggestion).toBe('В FROM есть: b, a.');
+  });
+
+  it('42702 self join: подсказка называет оба алиаса', () => {
+    expect(explain('ambiguousSelfJoin')).toMatchObject({
+      body: 'Колонка title есть и в b1, и в b2: это одна таблица book, взятая дважды. Postgres не угадывает, из какой копии её брать.',
+      suggestion: 'Укажи таблицу: b1.title или b2.title.',
+      highlight: { tableIds: ['public.book'], columns: ['public.book.title'] },
+    });
+    expect(explain('ambiguousSelfJoinBare').suggestion).toBe(
+      'Укажи таблицу: b.author_id или book.author_id.',
+    );
+  });
+
+  it('42803: GROUP BY смотрим у того SELECT, где стоит колонка, а не регэкспом по тексту', () => {
+    for (const name of ['groupingSubquery', 'groupingCte', 'groupingComment']) {
+      expect(explain(name).body, name).toMatch(/^Агрегат без GROUP BY/);
+    }
+    expect(explain('groupingInSubquery').body).toMatch(/^После GROUP BY/);
   });
 
   it('42803 без колонки в тексте: агрегат в WHERE и вложенный агрегат', () => {

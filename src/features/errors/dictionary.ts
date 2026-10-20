@@ -1,5 +1,6 @@
 import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { type DbError, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from '@/features/db/types';
+import { charToByte } from '@/features/sql/offsets';
 import { isParserReady, parseSql } from '@/features/sql/parser';
 import { relationsOf } from '@/features/sql/relations';
 
@@ -64,12 +65,59 @@ function selectWithoutFrom(sql: string): boolean {
   return sel?.targetList != null && sel.fromClause == null;
 }
 
-// Алиасы таблиц из разбора запроса: book → b. Парсер не готов или запрос не разобрался: пусто
-function aliasesOf(sql: string): Map<string, string> {
+// Ссылки на таблицы из разбора запроса. Парсер не готов или запрос не разобрался: пусто
+function tableRefs(sql: string) {
   const parsed = isParserReady() ? parseSql(sql) : null;
-  if (!parsed?.ok) return new Map();
-  const refs = parsed.statements.flatMap((stmt) => relationsOf(stmt).tables);
-  return new Map(refs.flatMap((r) => (r.alias ? [[r.name, r.alias] as const] : [])));
+  return parsed?.ok ? parsed.statements.flatMap((stmt) => relationsOf(stmt).tables) : [];
+}
+
+// Как таблицы названы в запросе: book → [b], self join book → [b1, b2], без алиаса - имя
+function aliasesOf(sql: string): Map<string, string[]> {
+  const names = new Map<string, string[]>();
+  for (const r of tableRefs(sql)) {
+    const list = names.get(r.name) ?? [];
+    if (!list.includes(r.alias ?? r.name)) list.push(r.alias ?? r.name);
+    names.set(r.name, list);
+  }
+  return names;
+}
+
+// Есть ли GROUP BY у того SELECT, где стоит колонка ошибки (position Postgres, 1-based в кодовых
+// точках): group by в подзапросе, CTE или комментарии не в счёт. Позиция не нашлась - внешний SELECT
+function groupedAt(sql: string, position: number | undefined): boolean {
+  const parsed = isParserReady() ? parseSql(sql) : null;
+  if (!parsed?.ok || !parsed.statements.length) return false;
+  const at =
+    position == null
+      ? -1
+      : charToByte(
+          sql,
+          Array.from(sql)
+            .slice(0, position - 1)
+            .join('').length,
+        );
+  const grouped = (select: unknown) => Array.isArray((select as { groupClause?: unknown }).groupClause);
+  const visit = (node: unknown, inGrouped: boolean): boolean | null => {
+    if (node === null || typeof node !== 'object') return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = visit(item, inGrouped);
+        if (found !== null) return found;
+      }
+      return null;
+    }
+    const rec = node as Record<string, unknown>;
+    if (rec.location === at) return inGrouped;
+    for (const [key, value] of Object.entries(rec)) {
+      // SelectStmt в обёртке, ветки UNION (larg, rarg) без неё
+      const select = key === 'SelectStmt' || key === 'larg' || key === 'rarg';
+      const found = visit(value, select ? grouped(value) : inGrouped);
+      if (found !== null) return found;
+    }
+    return null;
+  };
+  const top = (parsed.statements[0].ast as { SelectStmt?: unknown }).SelectStmt;
+  return visit(parsed.statements[0].ast, false) ?? (top != null && grouped(top));
 }
 
 const columnId = (t: { schema?: string; table?: string }, column: string) =>
@@ -99,6 +147,23 @@ export const DICTIONARY: Record<string, Entry> = {
           : `Таблица ${name} есть в запросе, но в этом месте на неё ссылаться нельзя.`,
         suggestion: alias && column ? `Пиши ${alias}.${column} вместо ${name}.${column}.` : undefined,
         highlight: { tableIds: owner ? [owner.id] : [], columns: [] },
+      };
+    }
+    // missing FROM-clause entry: перед точкой имя, которого нет в FROM (алиас с опечаткой, таблица без JOIN)
+    if (err.message.startsWith('missing FROM-clause entry')) {
+      const refs = tableRefs(ctx.sql);
+      const visible = [...new Set(refs.map((r) => r.alias ?? r.name))];
+      const known = ctx.schema?.tables.some((t) => t.name === name);
+      const inFrom = ctx.schema?.tables.filter((t) => refs.some((r) => r.name === t.name)) ?? [];
+      return {
+        title: `${name} нет в FROM`,
+        body: `Перед точкой стоит ${name}, но в FROM нет ни таблицы, ни алиаса с таким именем. Колонки берутся только из таблиц FROM и JOIN.`,
+        suggestion: known
+          ? `Таблица ${name} есть в базе: добавь её в FROM или JOIN.`
+          : visible.length
+            ? `В FROM есть: ${visible.join(', ')}.`
+            : undefined,
+        highlight: { tableIds: inFrom.map((t) => t.id), columns: [] },
       };
     }
     const names = ctx.schema?.tables.map((t) => t.name) ?? [];
@@ -163,14 +228,17 @@ export const DICTIONARY: Record<string, Entry> = {
     const name = quoted(err.message);
     const owners = tablesInSql(ctx).filter((t) => t.columns.some((c) => c.name === name));
     const aliases = aliasesOf(ctx.sql);
+    const refs = owners.flatMap((t) => aliases.get(t.name) ?? [t.name]);
     return {
       title: `Непонятно, какая ${name}`,
       body:
         owners.length > 1
           ? `Колонка ${name} есть и в ${owners.map((t) => t.name).join(', и в ')}. Postgres не угадывает, из какой таблицы её брать.`
-          : `Колонка ${name} есть в нескольких таблицах запроса. Postgres не угадывает, из какой её брать.`,
-      suggestion: owners.length
-        ? `Укажи таблицу: ${owners.map((t) => `${aliases.get(t.name) ?? t.name}.${name}`).join(' или ')}.`
+          : refs.length > 1
+            ? `Колонка ${name} есть и в ${refs.join(', и в ')}: это одна таблица ${owners[0].name}, взятая ${refs.length === 2 ? 'дважды' : 'несколько раз'}. Postgres не угадывает, из какой копии её брать.`
+            : `Колонка ${name} есть в нескольких таблицах запроса. Postgres не угадывает, из какой её брать.`,
+      suggestion: refs.length
+        ? `Укажи таблицу: ${refs.map((r) => `${r}.${name}`).join(' или ')}.`
         : 'Укажи таблицу или алиас перед именем колонки.',
       highlight: { tableIds: owners.map((t) => t.id), columns: owners.map((t) => `${t.id}.${name}`) },
     };
@@ -197,7 +265,7 @@ export const DICTIONARY: Record<string, Entry> = {
     const owner = ctx.schema?.tables.find((t) => t.name === table);
     return {
       title: 'Колонка вне GROUP BY',
-      body: /\bgroup\s+by\b/i.test(ctx.sql)
+      body: groupedAt(ctx.sql, err.position)
         ? `После GROUP BY от каждой группы остаётся одна строка. ${table}.${column} в группе может быть разным, и Postgres не знает, какое значение показать.`
         : `Агрегат без GROUP BY сворачивает все строки в одну. ${table}.${column} у строк разный, и Postgres не знает, какое значение показать.`,
       suggestion: `Добавь ${table}.${column} в GROUP BY или оберни в агрегат, например max(${table}.${column}).`,
