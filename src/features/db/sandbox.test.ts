@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { introspect } from './introspect';
 import { createNodeClient } from './node-client';
 import { createSandbox, type SandboxEvent } from './sandbox';
 import { type DbClient, DbException, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from './types';
@@ -193,11 +194,29 @@ describe('sandbox: применить, отменить, сбросить', () =
       const { sandbox, events } = await bookstore();
       const [res] = await sandbox.apply(add);
       expect(res.rows).toEqual([[7]]);
-      expect(events.at(-1)).toEqual({ type: 'changed', apply: true });
+      expect(events.at(-1)).toEqual({
+        type: 'changed',
+        apply: { since: expect.any(Number), command: 'INSERT' },
+      });
       await expect(sandbox.apply('insert into author (name) values (null)')).rejects.toMatchObject({
         db: { code: '23502' },
       });
       expect(sandbox.journal()).toEqual([add]);
+    },
+    T,
+  );
+
+  it(
+    'apply сообщает границу: строки оператора и только они получают xmin не меньше since (P8.16)',
+    async () => {
+      const { sandbox, events } = await bookstore();
+      await sandbox.apply("update author set name = 'Икс' where author_id = 2");
+      const e = events.at(-1);
+      expect(e).toMatchObject({ type: 'changed', apply: { command: 'UPDATE' } });
+      const since = e?.type === 'changed' && e.apply ? e.apply.since : Number.NaN;
+      const author = (await introspect(sandbox.client())).tables.find((t) => t.id === 'public.author');
+      const fresh = author?.sampleRows.filter((_, i) => Number(author.sampleXmins?.[i]) >= since);
+      expect(fresh?.map((r) => r[0])).toEqual([2]);
     },
     T,
   );

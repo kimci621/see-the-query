@@ -13,7 +13,7 @@ import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
-import { notifyApplied, notifyDbError } from './notifyDbError';
+import { notifyApplied, notifyDbError, undoLast } from './notifyDbError';
 import { dmlTargetOf, touchedOf } from './touched';
 import { appliedTrace, useLiveTrace } from './useLiveTrace';
 import { useParserReady } from './useParsedText';
@@ -70,6 +70,12 @@ export function EditorPane() {
     if (trace.statementType === 'select') useBoardStore.getState().retarget(trace.touched.tableIds);
     else focusDmlTarget(trace.sql);
   }, [trace]);
+
+  // Пометки строк после «Применить» держатся до следующего запроса: любая правка текста их снимает
+  // biome-ignore lint/correctness/useExhaustiveDependencies: text is the trigger, not a dependency
+  useEffect(() => {
+    useBoardStore.getState().clearRowWrites();
+  }, [text]);
 
   // activeClause при изменении текста или курсора
   useEffect(() => {
@@ -169,7 +175,8 @@ export function EditorPane() {
         return;
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ') {
         e.preventDefault();
-        void sandbox?.undo().catch((err: unknown) => notifyDbError(err, useEditorStore.getState().text));
+        if (sandbox)
+          void undoLast(sandbox).catch((err: unknown) => notifyDbError(err, useEditorStore.getState().text));
       }
       if ((e.metaKey || e.ctrlKey) && e.code === 'Enter') {
         e.preventDefault();

@@ -69,4 +69,21 @@ describe('useSchemaSync', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(useBoardStore.getState().schema).toBeNull();
   });
+
+  it('после «Применить» пометки копятся, отмена и другие изменения их снимают (P8.16)', async () => {
+    introspect.mockResolvedValue(schemaA);
+    renderHook(() => useSchemaSync());
+    await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaA));
+    listener({ type: 'changed', apply: { since: 750, command: 'INSERT' } });
+    await waitFor(() => expect(useBoardStore.getState().rowWrites).toEqual([{ since: 750, mark: 'new' }]));
+    listener({ type: 'changed', apply: { since: 751, command: 'UPDATE' } });
+    await waitFor(() =>
+      expect(useBoardStore.getState().rowWrites).toEqual([
+        { since: 750, mark: 'new' },
+        { since: 751, mark: 'changed' },
+      ]),
+    );
+    listener({ type: 'changed' });
+    await waitFor(() => expect(useBoardStore.getState().rowWrites).toEqual([]));
+  });
 });

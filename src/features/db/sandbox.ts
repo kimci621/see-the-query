@@ -21,8 +21,9 @@ export type SandboxEvent =
   | { type: 'status'; status: Sandbox['status'] }
   | { type: 'restarted'; reason: 'timeout' | 'crash' }
   | { type: 'rebuilding' } // loadLesson пересобирает базу: схема на доске устарела, новая придёт с changed
-  // после apply/undo/reset/loadLesson: пора обновить доску. apply: изменение принёс «Применить»
-  | { type: 'changed'; apply?: true };
+  // после apply/undo/reset/loadLesson: пора обновить доску. apply: изменение принёс «Применить»;
+  // since - номер его транзакции или меньше: строки, которые он записал, получили xmin >= since
+  | { type: 'changed'; apply?: { since: number; command: string | undefined } };
 
 const isDeath = (e: unknown): e is DbException =>
   e instanceof DbException && (e.db.code === SANDBOX_TIMEOUT || e.db.code === SANDBOX_CRASHED);
@@ -252,9 +253,17 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
 
     apply: (sql) =>
       guarded(async () => {
-        const res = await applyOne(live(), sql);
+        const db = live();
+        // ponytail: xid8 сравнивается с 32-битным xmin как число; верно, пока эпоха xid 0 (учебная песочница)
+        const since = Number(
+          (await db.query('select pg_snapshot_xmax(pg_current_snapshot())::text')).rows[0][0],
+        );
+        const res = await applyOne(db, sql);
         journal = [...journal, sql];
-        emit({ type: 'changed', apply: true });
+        emit({
+          type: 'changed',
+          apply: { since, command: res.findLast((r) => r.command !== 'SELECT')?.command },
+        });
         return res;
       }),
 

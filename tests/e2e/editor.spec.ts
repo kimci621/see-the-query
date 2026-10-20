@@ -134,6 +134,33 @@ test('после «Применить» превью не повторяет о�
   await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
 });
 
+test('страховка DML: без WHERE, ошибка превью, пометка строк, тост отмены', async ({ page }) => {
+  await openLesson(page);
+  await setEditorText(page, 'update book set price = 0');
+  await expect(page.getByTestId('preview-status')).toContainText('изменятся все 11 строк', { timeout: 5000 });
+  await setEditorText(page, 'delete from author');
+  await expect(page.getByTestId('preview-status')).toContainText('Ошибка', { timeout: 5000 });
+  await expect(page.getByTestId('apply-button')).toHaveAttribute('data-variant', 'outline');
+
+  const author = page.getByTestId('table-node-public.author');
+  await setEditorText(page, "insert into author (name) values ('Аноним')");
+  await page.getByTestId('apply-button').click();
+  await expect(author.locator('[data-mark="new"]')).toHaveCount(1, { timeout: 5000 });
+  await expect(page.getByText('Записано в базу', { exact: true })).toBeVisible();
+  await setEditorText(page, "update author set name = 'Икс' where author_id = 2");
+  await page.getByTestId('apply-button').click();
+  await expect(author.locator('[data-mark="changed"]')).toHaveCount(1, { timeout: 5000 });
+  // пометка прошлого запроса снята правкой текста, тост записи один
+  await expect(author.locator('[data-mark="new"]')).toHaveCount(0);
+  await expect(page.getByText('Записано в базу', { exact: true })).toHaveCount(1);
+
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.getByText('Отменено: UPDATE', { exact: true })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText('Записано в базу', { exact: true })).toHaveCount(0);
+  await expect(author.locator('[data-mark]')).toHaveCount(0);
+});
+
 test('применить, отменить и применить всё', async ({ page }) => {
   await openLesson(page);
   await setEditorText(page, "insert into author (name) values ('Аноним') returning author_id");

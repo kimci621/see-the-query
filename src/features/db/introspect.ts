@@ -28,6 +28,7 @@ export interface TableInfo {
   rowCount: number;
   sampleRows: unknown[][]; // первые N строк, порядок по ctid
   sampleCtids: string[]; // ctid строк sampleRows; у view и matview 'row:<i>'
+  sampleXmins?: string[]; // xmin строк sampleRows (только таблицы): по нему доска находит строки «Применить»
   indexes: IndexInfo[];
   comment: string | null;
 }
@@ -147,16 +148,18 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
     const from = `${ident(schema)}.${ident(name)}`;
     let sampleRows: unknown[][] = [];
     let sampleCtids: string[] = [];
+    let sampleXmins: string[] | undefined;
     let rowCount = 0;
     if (populated) {
       rowCount = (await rows<[number]>(`select count(*)::int from ${from}`))[0][0];
       if (relkind === 'r' || relkind === 'p') {
         // алиас обязателен: без него order by ctid сортирует текстовый ctid, и (0,10) встаёт перед (0,2)
         const res = await rows<unknown[]>(
-          `select t.ctid::text as __ctid, t.* from ${from} t order by t.ctid limit ${limit}`,
+          `select t.ctid::text as __ctid, t.xmin::text as __xmin, t.* from ${from} t order by t.ctid limit ${limit}`,
         );
         sampleCtids = res.map((r) => r[0] as string);
-        sampleRows = res.map((r) => r.slice(1));
+        sampleXmins = res.map((r) => r[1] as string);
+        sampleRows = res.map((r) => r.slice(2));
       } else {
         sampleRows = await rows<unknown[]>(`select * from ${from} limit ${limit}`);
         sampleCtids = sampleRows.map((_, i) => `row:${i}`);
@@ -188,6 +191,7 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
       rowCount,
       sampleRows,
       sampleCtids,
+      sampleXmins,
       indexes: indexes
         .filter((i) => i[0] === oid)
         .map(([, n, definition, unique, primary]) => ({ name: n, definition, unique, primary })),

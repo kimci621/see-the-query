@@ -406,6 +406,14 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     expect(sandbox.apply).toHaveBeenCalledTimes(2);
   });
 
+  it('правка текста снимает пометки строк на доске (P8.16)', async () => {
+    setup();
+    act(() => useBoardStore.setState({ rowWrites: [{ since: 750, mark: 'new' }] }));
+    act(() => useEditorStore.getState().setText('select 1'));
+    await act(async () => undefined);
+    expect(useBoardStore.getState().rowWrites).toEqual([]);
+  });
+
   it('SELECT после ⌘⏎ не помечается применённым: сцена превью остаётся', async () => {
     const sandbox = setup();
     act(() => {

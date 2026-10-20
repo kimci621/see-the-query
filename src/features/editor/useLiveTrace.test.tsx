@@ -242,7 +242,7 @@ describe('useLiveTrace', () => {
     const outcome = { sql: create, result: null, error: null } as unknown as Trace;
     act(() => {
       useEditorStore.getState().markApplied(0, outcome);
-      emit({ type: 'changed', apply: true });
+      emit({ type: 'changed', apply: { since: 750, command: 'CREATE' } });
     });
     // новая схема после «Применить» тоже не перезапускает превью
     act(() => useBoardStore.getState().setSchema(SCHEMA));

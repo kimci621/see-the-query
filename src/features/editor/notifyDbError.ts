@@ -1,7 +1,9 @@
 import { toast } from 'sonner';
+import type { Sandbox } from '@/features/db/sandbox';
 import { DbException, hasRowCount, type QueryResult } from '@/features/db/types';
 import { DICTIONARY } from '@/features/errors/dictionary';
 import { explainError } from '@/features/errors/explain';
+import { parseSql } from '@/features/sql/parser';
 import { rowsWord } from '@/lib/plural';
 import { useBoardStore } from '@/stores/board';
 
@@ -20,6 +22,9 @@ export function notifyDbError(e: unknown, sql: string): void {
   });
 }
 
+// Тосты «Применить» и «Отменить» делят id: новый заменяет прежний, а не встаёт стопкой
+const APPLY_TOAST = 'apply';
+
 // Тост итога применения. Только SELECT (или пусто): «Выполнено», база не менялась.
 // Иначе «Записано в базу», описание по последнему не-SELECT результату.
 export function notifyApplied(results: QueryResult[]): void {
@@ -31,5 +36,24 @@ export function notifyApplied(results: QueryResult[]): void {
       ? `${last.command}: ${rowsWord(last.rowCount ?? 0)}`
       : last.command
     : undefined;
-  toast.success(wrote ? 'Записано в базу' : 'Выполнено', description ? { description } : undefined);
+  toast.success(wrote ? 'Записано в базу' : 'Выполнено', {
+    id: APPLY_TOAST,
+    ...(description && { description }),
+  });
+}
+
+// Тип оператора для тоста: INSERT, UPDATE, DELETE, MERGE, иначе первое слово (CREATE, DROP)
+function commandOf(sql: string): string {
+  const parsed = parseSql(sql);
+  const kind = parsed.ok ? parsed.statements[0]?.kind : undefined;
+  if (kind === 'insert' || kind === 'update' || kind === 'delete' || kind === 'merge')
+    return kind.toUpperCase();
+  return sql.trim().split(/\s+/)[0].toUpperCase();
+}
+
+// Отмена последнего применённого (кнопка и ⌘Z): тост «Отменено: INSERT» на месте тоста записи
+export async function undoLast(sandbox: Sandbox): Promise<void> {
+  const last = sandbox.journal().at(-1);
+  await sandbox.undo();
+  if (last !== undefined) toast.success(`Отменено: ${commandOf(last)}`, { id: APPLY_TOAST });
 }

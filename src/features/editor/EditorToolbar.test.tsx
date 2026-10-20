@@ -201,6 +201,73 @@ describe('EditorToolbar', () => {
     await waitFor(() => expect(Object.keys(useEditorStore.getState().applied)).toEqual(['0']));
   });
 
+  it('«Применить» вторичная, если превью закончилось ошибкой (P8.16)', () => {
+    const del = 'delete from author';
+    act(() => {
+      useEditorStore.getState().setText(del);
+      useEditorStore.getState().setCursor(del.length);
+    });
+    const trace = {
+      sql: del,
+      statementType: 'delete',
+      mode: 'final-only',
+      touched: { tableIds: [], columns: [], expanded: [] },
+      stages: [],
+      result: null,
+      error: { code: '23503', message: 'fk' },
+      notices: [],
+      timingMs: 1,
+    } as unknown as Trace;
+    useSceneStore.setState({ status: 'ready', trace });
+    render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    expect(screen.getByTestId('apply-button')).toHaveAttribute('data-variant', 'outline');
+  });
+
+  it('UPDATE и DELETE без WHERE: плашка предупреждает, сколько строк затронет (P8.16)', () => {
+    const traceOf = (sql: string, rowCount: number, kind: string) =>
+      ({
+        sql,
+        statementType: kind,
+        mode: 'final-only',
+        touched: { tableIds: [], columns: [], expanded: [] },
+        stages: [],
+        result: { fields: [], rows: [], command: kind.toUpperCase(), rowCount },
+        error: null,
+        notices: [],
+        timingMs: 1,
+      }) as unknown as Trace;
+    const show = (sql: string, rowCount: number, kind: string) => {
+      act(() => {
+        useEditorStore.getState().setText(sql);
+        useEditorStore.getState().setCursor(sql.length);
+        useSceneStore.setState({ status: 'ready', trace: traceOf(sql, rowCount, kind) });
+      });
+      return screen.getByTestId('preview-status');
+    };
+    render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    expect(show('update book set price = 0', 11, 'update')).toHaveTextContent('изменятся все 11 строк');
+    expect(show('update book set price = 0', 3, 'update')).toHaveTextContent('изменятся все 3 строки');
+    expect(show('delete from author', 6, 'delete')).toHaveTextContent('удалятся все 6 строк');
+    expect(show('delete from author', 1, 'delete')).toHaveTextContent('удалится единственная строка');
+    expect(show('delete from author', 6, 'delete')).toHaveClass('text-changed');
+    // с WHERE, на пустой таблице и для чужой трассы предупреждения нет
+    expect(show('update book set price = 0 where book_id = 1', 1, 'update')).not.toHaveTextContent(
+      'изменится',
+    );
+    expect(show('delete from author', 0, 'delete')).not.toHaveTextContent('удал');
+    act(() => useEditorStore.getState().setText('delete from author '));
+    expect(screen.getByTestId('preview-status')).not.toHaveTextContent('удал');
+  });
+
+  it('«Отменить» показывает тост «Отменено: INSERT» на месте тоста записи (P8.16)', async () => {
+    const sandbox = fakeSandbox(["insert into author(name) values ('x')"]);
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={() => undefined} />);
+    await user.click(screen.getByTestId('undo-button'));
+    expect(sandbox.undo).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenLastCalledWith('Отменено: INSERT', { id: 'apply' });
+  });
+
   it('Сброс спрашивает подтверждение', async () => {
     const sandbox = fakeSandbox([]);
     const user = userEvent.setup();
@@ -237,7 +304,10 @@ describe('EditorToolbar', () => {
 
     await user.click(screen.getByTestId('apply-all-button'));
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('Записано в базу', { description: 'INSERT: 1 строка' }),
+      expect(toast.success).toHaveBeenCalledWith('Записано в базу', {
+        id: 'apply',
+        description: 'INSERT: 1 строка',
+      }),
     );
   });
 });

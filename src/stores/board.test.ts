@@ -82,4 +82,16 @@ describe('useBoardStore', () => {
       visibleTables: ['public.book'],
     });
   });
+
+  it('пометки строк «Применить» ставятся вместе со схемой, без них снимаются (P8.16)', () => {
+    const schema = { schemas: ['public'], tables: [], fks: [], sequences: [] };
+    const writes = [{ since: 750, mark: 'new' as const }];
+    useBoardStore.getState().setSchema(schema, [], writes);
+    expect(useBoardStore.getState().rowWrites).toBe(writes);
+    useBoardStore.getState().clearRowWrites();
+    expect(useBoardStore.getState().rowWrites).toEqual([]);
+    useBoardStore.getState().setSchema(schema, [], writes);
+    useBoardStore.getState().setSchema(schema);
+    expect(useBoardStore.getState().rowWrites).toEqual([]);
+  });
 });

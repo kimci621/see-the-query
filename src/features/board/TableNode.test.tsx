@@ -251,4 +251,23 @@ describe('columnTitle', () => {
       'author_id: bigint\nPRIMARY KEY\nNOT NULL\nGENERATED ALWAYS AS IDENTITY',
     );
   });
+
+  it('строки, записанные «Применить», помечены new или changed по xmin (P8.16)', () => {
+    const marked = { ...author, sampleXmins: author.sampleRows.map((_, i) => String(745 + i * 5)) };
+    // 745 старая; 750 записал INSERT; 755 записал UPDATE
+    act(() =>
+      useBoardStore.setState({
+        rowWrites: [
+          { since: 750, mark: 'new' },
+          { since: 755, mark: 'changed' },
+        ],
+      }),
+    );
+    render(<ReactFlowProvider>{node(marked)}</ReactFlowProvider>);
+    const rows = screen.getByTestId('table-node-public.author').querySelectorAll('.vs-rows[data-row]');
+    const marks = [...rows].map((r) => r.getAttribute('data-mark'));
+    expect(marks).toEqual([null, 'new', 'changed']);
+    act(() => useBoardStore.getState().clearRowWrites());
+    expect(screen.getByTestId('table-node-public.author').querySelectorAll('[data-mark]')).toHaveLength(0);
+  });
 });

@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 
+// Запись «Применить» (спека 3.9): строки с xmin >= since записал этот оператор, mark - как их пометить
+export interface AppliedWrite {
+  since: number;
+  mark: 'new' | 'changed';
+}
+
 export interface BoardStore {
   schema: SchemaSnapshot | null;
   visibleTables: string[] | null;
@@ -15,12 +21,15 @@ export interface BoardStore {
   // Таблицы, развёрнутые звёздочкой запроса (select *, t.*)
   expandedTables: string[];
   dimmed: boolean;
+  // Пометки строк после «Применить»: ставятся вместе со схемой, снимаются следующим запросом
+  rowWrites: AppliedWrite[];
   fitRequest: number;
   // Камера к frameTarget (без него вся доска) без проверки набора: сцена ушла, а камера стоит на призраке
   frameRequest: number;
   focusRequest: number;
   startRequest: number;
-  setSchema(s: SchemaSnapshot | null, userTables?: string[]): void;
+  setSchema(s: SchemaSnapshot | null, userTables?: string[], rowWrites?: AppliedWrite[]): void;
+  clearRowWrites(): void;
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
   retarget(tableIds: string[]): void;
@@ -46,12 +55,19 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   queryColumns: [],
   expandedTables: [],
   dimmed: false,
+  rowWrites: [],
   fitRequest: 0,
   frameRequest: 0,
   focusRequest: 0,
   startRequest: 0,
-  setSchema: (schema, userTables = []) =>
-    set((s) => ({ schema, userTables: sameList(s.userTables, userTables) ? s.userTables : userTables })),
+  // Одно обновление: новые данные и их пометки появляются на доске вместе, без анимации
+  setSchema: (schema, userTables = [], rowWrites = []) =>
+    set((s) => ({
+      schema,
+      userTables: sameList(s.userTables, userTables) ? s.userTables : userTables,
+      rowWrites: rowWrites.length === 0 && s.rowWrites.length === 0 ? s.rowWrites : rowWrites,
+    })),
+  clearRowWrites: () => set((s) => (s.rowWrites.length === 0 ? s : { rowWrites: [] })),
   setVisibleTables: (visibleTables) => set({ visibleTables }),
   // Камера летит только при смене набора: ввод в редакторе вызывает focus на каждый символ
   focus: (tableIds) =>

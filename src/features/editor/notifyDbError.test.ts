@@ -42,26 +42,35 @@ const res = (command: string | undefined, rowCount?: number): QueryResult => ({
 describe('notifyApplied', () => {
   it('INSERT: «Записано в базу» и число строк', () => {
     notifyApplied([res('INSERT', 1)]);
-    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { description: 'INSERT: 1 строка' });
+    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', {
+      id: 'apply',
+      description: 'INSERT: 1 строка',
+    });
   });
 
   it('только SELECT: «Выполнено»', () => {
     notifyApplied([res('SELECT', 3)]);
-    expect(toast.success).toHaveBeenLastCalledWith('Выполнено', { description: 'SELECT: 3 строки' });
+    expect(toast.success).toHaveBeenLastCalledWith('Выполнено', {
+      id: 'apply',
+      description: 'SELECT: 3 строки',
+    });
   });
 
   it('insert и select: описание по последнему не-SELECT', () => {
     notifyApplied([res('INSERT', 1), res('SELECT', 7)]);
-    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { description: 'INSERT: 1 строка' });
+    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', {
+      id: 'apply',
+      description: 'INSERT: 1 строка',
+    });
   });
 
   it('DDL: только команда, без «0 строк» (так PGlite отдаёт CREATE)', () => {
     notifyApplied([res('CREATE', 0)]);
-    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { description: 'CREATE' });
+    expect(toast.success).toHaveBeenLastCalledWith('Записано в базу', { id: 'apply', description: 'CREATE' });
   });
 
   it('пустой результат: «Выполнено» без описания', () => {
     notifyApplied([]);
-    expect(toast.success).toHaveBeenLastCalledWith('Выполнено', undefined);
+    expect(toast.success).toHaveBeenLastCalledWith('Выполнено', { id: 'apply' });
   });
 });

@@ -7,7 +7,7 @@ import type { ColumnInfo } from '@/features/db/introspect';
 import { plural } from '@/lib/plural';
 import { bumpRenderCount } from '@/lib/renderCount';
 import { cn } from '@/lib/utils';
-import { useBoardStore } from '@/stores/board';
+import { type AppliedWrite, useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';
 import {
   COLUMN_HEADER_HEIGHT,
@@ -41,6 +41,15 @@ function ownColumns(all: string[], tableId: string): string[] {
   const prefix = `${tableId}.`;
   return all.filter((c) => c.startsWith(prefix)).map((c) => c.slice(prefix.length));
 }
+
+// Пометка строки по последней записи «Применить», которая её коснулась
+function rowMark(xmin: string | undefined, writes: AppliedWrite[]): AppliedWrite['mark'] | undefined {
+  if (xmin === undefined || writes.length === 0) return undefined;
+  const x = Number(xmin);
+  return writes.findLast((w) => x >= w.since)?.mark;
+}
+
+const MARK_LABEL = { new: 'Новая строка', changed: 'Изменённая строка' } as const;
 
 // Флаг-сокращение с расшифровкой: title для мыши, abbr для скринридера
 function Flag({ title, children }: { title: string; children: ReactNode }) {
@@ -87,15 +96,18 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   const highlighted = useBoardStore(useShallow((s) => ownColumns(s.highlightedColumns, id)));
   const queried = useBoardStore(useShallow((s) => ownColumns(s.queryColumns, id)));
   const expanded = useBoardStore((s) => s.expandedTables.includes(id));
+  const writes = useBoardStore((s) => s.rowWrites);
   // Свёртка зависит от колонок запроса, поэтому ширину задаёт нода, а не модель
   const fold = foldColumns(table, queried, expanded);
   const shown = fold.visible.map((c) => ({ c, j: table.columns.indexOf(c) }));
   const stub = fold.hidden.length;
   // Подсвеченная колонка свёрнута: подсвечиваем заглушку, размер ноды не меняется
   const stubHighlighted = fold.hidden.some((c) => highlighted.includes(c.name));
-  const rows = table.sampleRows
-    .slice(0, MAX_VISIBLE_ROWS)
-    .map((values, i) => ({ key: table.sampleCtids[i] ?? String(i), values }));
+  const rows = table.sampleRows.slice(0, MAX_VISIBLE_ROWS).map((values, i) => ({
+    key: table.sampleCtids[i] ?? String(i),
+    values,
+    mark: rowMark(table.sampleXmins?.[i], writes),
+  }));
   const hiddenRows = table.rowCount - rows.length;
   const footer = { height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` };
 
@@ -156,7 +168,14 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       {rows.map((row) => (
         <div
           key={row.key}
-          className="vs-rows flex border-b border-border/50 font-mono text-xs"
+          data-row
+          data-mark={row.mark}
+          title={row.mark && MARK_LABEL[row.mark]}
+          className={cn(
+            'vs-rows flex border-b border-border/50 font-mono text-xs',
+            row.mark === 'new' && 'bg-new-bg',
+            row.mark === 'changed' && 'bg-changed-bg',
+          )}
           style={{ height: ROW_HEIGHT }}
         >
           {shown.map(({ c, j }) => (
