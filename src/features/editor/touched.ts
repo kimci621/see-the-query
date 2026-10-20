@@ -46,12 +46,22 @@ export function touchedOf(
 // Целевая таблица INSERT/UPDATE/DELETE (relation оператора, не USING/FROM/подзапросы) в текущей схеме.
 // Для остальных операторов и неизвестной таблицы null
 export function dmlTargetOf(stmt: ParsedStatement, schema: SchemaSnapshot | null): string | null {
+  return relationOf(stmt, schema, ['InsertStmt', 'UpdateStmt', 'DeleteStmt']);
+}
+
+// Таблица ALTER TABLE (и ALTER TABLE ... RENAME COLUMN) в текущей схеме, иначе null
+export function alteredTableOf(stmt: ParsedStatement, schema: SchemaSnapshot | null): string | null {
+  return relationOf(stmt, schema, ['AlterTableStmt', 'RenameStmt']);
+}
+
+function relationOf(stmt: ParsedStatement, schema: SchemaSnapshot | null, nodes: string[]): string | null {
   if (!schema) return null;
   const body = stmt.ast as unknown as Record<
     string,
-    { relation?: { relname?: string; schemaname?: string } }
+    { relation?: { relname?: string; schemaname?: string } } | undefined
   >;
-  const rel = (body.InsertStmt ?? body.UpdateStmt ?? body.DeleteStmt)?.relation;
+  const key = nodes.find((n) => n in body);
+  const rel = key ? body[key]?.relation : undefined;
   if (typeof rel?.relname !== 'string') return null;
   const ref = { schema: rel.schemaname ?? null, name: rel.relname, alias: null, from: 0, to: 0 };
   return resolveTable(ref, schema)?.id ?? null;

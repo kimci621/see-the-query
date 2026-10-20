@@ -1,5 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { col, table } from '@/features/board/__fixtures__/schema';
 import type { QueryResult } from '@/features/db/types';
 import { SCHEMA } from '@/features/editor/__fixtures__/schema';
 import { initParser } from '@/features/sql/parser';
@@ -381,6 +382,65 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     expect(sandbox.apply).toHaveBeenCalledTimes(1);
     expect(useBoardStore.getState().focused).toEqual(['public.author']);
     expect(useBoardStore.getState().frameRequest).toBe(frames + 1);
+  });
+
+  // DDL (P8.59, спека 3.4): камера ждёт новую схему, иначе созданной таблицы на доске ещё нет
+  const applyDdl = async (sql: string) => {
+    setup();
+    act(() => useBoardStore.getState().focus(['public.book']));
+    act(() => {
+      useEditorStore.getState().setText(sql);
+      useEditorStore.getState().setCursor(sql.length);
+    });
+    await act(async () => undefined);
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    // до новой схемы камера стоит
+    expect(useBoardStore.getState().focused).toEqual(['public.book']);
+    return useBoardStore.getState();
+  };
+
+  it('после «Применить» CREATE TABLE камера летит к новой таблице, когда она пришла в схеме', async () => {
+    const before = await applyDdl('create table mine (id int)');
+    act(() =>
+      useBoardStore
+        .getState()
+        .setSchema({ ...SCHEMA, tables: [...SCHEMA.tables, table('public.mine', [col('id', 'integer')])] }),
+    );
+    expect(useBoardStore.getState().focused).toEqual(['public.mine']);
+    expect(useBoardStore.getState().frameRequest).toBe(before.frameRequest + 1);
+  });
+
+  it('после «Применить» ALTER TABLE камера летит к изменённой таблице', async () => {
+    const before = await applyDdl('alter table author add column city text');
+    act(() => useBoardStore.getState().setSchema({ ...SCHEMA }));
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
+    expect(useBoardStore.getState().frameRequest).toBe(before.frameRequest + 1);
+  });
+
+  it('после «Применить» DROP TABLE вписывается вся доска', async () => {
+    const before = await applyDdl('drop table author cascade');
+    act(() =>
+      useBoardStore
+        .getState()
+        .setSchema({ ...SCHEMA, tables: SCHEMA.tables.filter((t) => t.id !== 'public.author') }),
+    );
+    expect(useBoardStore.getState().focused).toEqual([]);
+    expect(useBoardStore.getState().fitRequest).toBe(before.fitRequest + 1);
+  });
+
+  it('пересборка урока после «Применить» DDL кадр не трогает', async () => {
+    const before = await applyDdl('create table mine (id int)');
+    act(() => useBoardStore.getState().setSchema(null));
+    act(() =>
+      useBoardStore
+        .getState()
+        .setSchema({ ...SCHEMA, tables: [...SCHEMA.tables, table('public.mine', [col('id', 'integer')])] }),
+    );
+    expect(useBoardStore.getState()).toMatchObject({
+      focused: ['public.book'],
+      frameRequest: before.frameRequest,
+    });
   });
 
   it('повторный ⌘⏎ после применения ничего не применяет, пока текст не изменён (P8.50)', async () => {

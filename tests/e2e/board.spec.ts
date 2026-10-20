@@ -299,6 +299,33 @@ for (const sql of ['select name from author', 'select name from author where aut
   });
 }
 
+// «Применить» DDL (P8.59, спека 3.4): камера к созданной или изменённой таблице, после DROP вся доска
+test('после «Применить» CREATE, ALTER и DROP TABLE камера показывает, что изменилось', async ({ page }) => {
+  await openBookstore(page);
+  const apply = async (sql: string) => {
+    await setEditorText(page, sql);
+    await expect(page.getByTestId('preview-status')).toContainText('Превью', { timeout: 5000 });
+    await page.getByTestId('apply-button').click();
+  };
+  const framed = (ids: string[]) => expect.poll(async () => outsideBoard(page, ids), { timeout: 5000 });
+
+  await apply('create table mine (id int primary key, name text)');
+  await expect(page.getByTestId('table-node-public.mine')).toHaveAttribute('data-focused', 'true', {
+    timeout: 5000,
+  });
+  await framed(['public.mine']).not.toContain('public.mine');
+
+  await apply('alter table author add column city text');
+  const author = page.getByTestId('table-node-public.author');
+  await expect(author.locator('[data-column="city"]')).toBeVisible({ timeout: 5000 });
+  await expect(author).toHaveAttribute('data-focused', 'true');
+  await framed(['public.author']).not.toContain('public.author');
+
+  await apply('drop table mine');
+  await expect(page.getByTestId('table-node-public.mine')).toHaveCount(0, { timeout: 5000 });
+  await framed(['public.book', 'public.author']).toEqual([]);
+});
+
 // Ноды ловят указатель (иначе title у колонок, флагов и «+N колонки» не показываются),
 // а перетаскивание поверх ноды по-прежнему двигает доску
 test('подсказки на нодах доступны мыши, drag по ноде двигает вьюпорт', async ({ page }) => {

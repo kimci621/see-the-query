@@ -7,6 +7,7 @@ import { isTypingTarget } from '@/features/shell/useGlobalHotkeys';
 import { clauseAt } from '@/features/sql/clauses';
 import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
+import type { ParsedStatement } from '@/features/sql/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
@@ -14,7 +15,7 @@ import { useSceneStore } from '@/stores/scene';
 import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
 import { notifyApplied, notifyDbError, undoLast } from './notifyDbError';
-import { dmlTargetOf, touchedOf } from './touched';
+import { alteredTableOf, dmlTargetOf, touchedOf } from './touched';
 import { appliedTrace, useLiveTrace } from './useLiveTrace';
 import { useParserReady } from './useParsedText';
 
@@ -30,6 +31,30 @@ function focusDmlTarget(sql: string, fly = false): void {
   if (!target) return;
   useBoardStore.getState().focus([target]);
   if (fly) useBoardStore.getState().requestFrame();
+}
+
+// «Применить» DDL (спека 3.4): новой таблицы на доске ещё нет, камера ждёт схему после записи.
+// Появилась таблица (CREATE, RENAME TO) - летим к ней, ALTER - к изменённой, исчезла (DROP) - вся доска
+function frameAfterDdl(stmt: ParsedStatement): void {
+  const before = useBoardStore.getState().schema;
+  const unsubscribe = useBoardStore.subscribe(({ schema }) => {
+    if (schema === before) return;
+    unsubscribe();
+    // схема сброшена: урок пересобирается, кадр поставит старт урока
+    if (!schema || !before) return;
+    const board = useBoardStore.getState();
+    const had = new Set(before.tables.map((t) => t.id));
+    const added = schema.tables.filter((t) => !had.has(t.id)).map((t) => t.id);
+    const altered = alteredTableOf(stmt, schema);
+    const target = added.length > 0 ? added : altered ? [altered] : null;
+    if (target) {
+      board.focus(target);
+      board.requestFrame();
+    } else if (schema.tables.length < had.size) {
+      board.focus([]);
+      board.requestFit();
+    }
+  });
 }
 
 export function EditorPane() {
@@ -159,7 +184,8 @@ export function EditorPane() {
           useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
         }
         notifyApplied(results);
-        focusDmlTarget(stmt.text, true);
+        if (stmt.kind === 'ddl') frameAfterDdl(stmt);
+        else focusDmlTarget(stmt.text, true);
       })
       .catch((e: unknown) => notifyDbError(e, stmt.text));
   };
