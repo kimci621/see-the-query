@@ -156,6 +156,31 @@ describe('traceStatement', () => {
         expect(trace.result?.rows).toHaveLength(3);
       }),
     ));
+  it('сжатый режим: агрегат без GROUP BY даёт одну группу', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const opts = { maxRows: 5, schema: await introspect(db) };
+        const sql = 'select count(*) from book';
+        const trace = await traceSql(db, sql, opts);
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(summary(trace)).toBe('scan:11 > group:1 > project:1');
+        const having = await traceSql(db, 'select count(*) from book having count(*) > 100', opts);
+        expect(having.mode, having.fallbackReason).toBe('full');
+        expect(summary(having)).toBe('scan:11 > group:1 > filter:0 > project:0');
+        // Испорченное значение итога (счётчики проб целы) по-прежнему final-only
+        const wrong = await traceSql(
+          tampered(
+            db,
+            (q) => q !== sql && !q.includes('__vs_c'),
+            (rows) => rows.map(() => [-1]),
+          ),
+          sql,
+          opts,
+        );
+        expect(wrong.mode).toBe('final-only');
+        expect(wrong.fallbackReason).toBe('Сверка с прямым выполнением не сошлась');
+      }),
+    ));
   it('сжатый режим: значения и порядок итога сверяются с прямым выполнением', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

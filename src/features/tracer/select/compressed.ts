@@ -83,7 +83,8 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
     const head = await ctx.prober.run(`SELECT ${parts.select}${sql.from}${sql.group} LIMIT 0`);
     await setGroupColumns(ctx, parts, head.fields, []);
     const before = n;
-    n = await count(`SELECT 1${sql.from}${sql.where}${sql.group}`);
+    // Без GROUP BY агрегаты дают одну группу, даже на пустом входе: SELECT 1 без группировки считал бы строки
+    n = parts.keys.length ? await count(`SELECT 1${sql.from}${sql.where}${sql.group}`) : 1;
     ctx.stages.push({
       ...base('group', ctx.columns),
       kind: 'group',
