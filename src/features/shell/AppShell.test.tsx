@@ -1,12 +1,35 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryRouter, RouterProvider } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '@/app/router';
-import { neighbours } from '@/features/lessons/registry';
+import { LessonView } from '@/features/lessons/LessonView';
+import { getLesson, loadLessonContent, neighbours } from '@/features/lessons/registry';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 
+// Тело урока - React.lazy поверх import() MDX. Первый показ урока ждёт модуль и троттлинг Suspense
+// (React держит скелетон не меньше 300 мс), под нагрузкой это дольше секунды findBy, и тест, первым
+// ждущий тело урока, падал (P8.61). LessonView кэширует lazy на урок: прогреваем кэш заранее,
+// дальше тело рисуется сразу, без Suspense
+beforeAll(async () => {
+  for (const id of ['how-to-use', 'select-basics']) {
+    const meta = getLesson(id);
+    if (!meta) throw new Error(`нет урока ${id}`);
+    const { unmount } = render(
+      <MemoryRouter>
+        <LessonView meta={meta} />
+      </MemoryRouter>,
+    );
+    await loadLessonContent(meta);
+    // lazy получает модуль в своём then: ждём, пока отработают все микрозадачи
+    await new Promise((resolve) => setTimeout(resolve));
+    unmount();
+  }
+  // прогрев не должен оставить следов: урок отмечен посещённым
+  useLessonStore.setState(useLessonStore.getInitialState(), true);
+  localStorage.clear();
+});
 beforeEach(() => useSettingsStore.setState({ focusMode: false }));
 afterEach(() => vi.restoreAllMocks());
 
