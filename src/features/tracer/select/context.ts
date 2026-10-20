@@ -338,6 +338,8 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
 
 async function loadLimitParams(ctx: SelectCtx): Promise<LimitParams> {
   const { limitCount, limitOffset, limitOption } = ctx.sel;
+  // Без LIMIT и OFFSET окно - все строки: ORDER BY без LIMIT не платит за лишнюю пробу
+  if (!limitCount && !limitOffset) return { limit: null, offset: 0, withTies: false };
   // Выражения LIMIT/OFFSET вычисляет Postgres; LIMIT ALL и LIMIT NULL дают NULL
   const r = await ctx.prober.run(
     `SELECT (${limitCount ? sqlOf(limitCount) : 'NULL'})::int8, (${limitOffset ? sqlOf(limitOffset) : '0'})::int8`,

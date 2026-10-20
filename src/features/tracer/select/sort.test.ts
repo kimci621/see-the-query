@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DbClient } from '@/features/db/types';
 import { inPreview, withDataset } from '../../../../tests/helpers/db';
 import { column, stageOf, traceSql } from '../../../../tests/helpers/trace';
 
@@ -113,6 +114,29 @@ describe('стадия sort', () => {
         }
         const hidden = await traceSql(db, 'select title from book order by price');
         expect(stageOf(hidden, 'sort').output.rows.map((r) => r.values)).toEqual(hidden.result?.rows);
+      }),
+    ));
+  it('ORDER BY без LIMIT не пробует параметры LIMIT, с LIMIT пробует один раз', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const sent: string[] = [];
+        const spy: DbClient = {
+          ...db,
+          query: (sql, params) => {
+            sent.push(sql);
+            return db.query(sql, params);
+          },
+        };
+        const limitProbes = () => sent.filter((q) => /^SELECT \(.*\)::int8, \(.*\)::int8$/.test(q));
+        for (const maxRows of [undefined, 5]) {
+          sent.length = 0;
+          const trace = await traceSql(spy, 'select title, price from book order by price', { maxRows });
+          expect(trace.mode, trace.fallbackReason).toBe('full');
+          expect(limitProbes(), `maxRows ${maxRows}`).toEqual([]);
+        }
+        sent.length = 0;
+        await traceSql(spy, 'select title, price from book order by price limit 3');
+        expect(limitProbes()).toHaveLength(1);
       }),
     ));
 });
