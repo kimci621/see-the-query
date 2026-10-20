@@ -145,6 +145,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
   async function recover(e: DbException): Promise<void> {
     if (!datasetId) return;
     setStatus('restarting');
+    const before = journal;
     try {
       await rebuild(datasetId, journal);
     } catch (err) {
@@ -153,7 +154,9 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     }
     setStatus('ready');
     emit({ type: 'restarted', reason: e.db.code === SANDBOX_TIMEOUT ? 'timeout' : 'crash' });
-    emit({ type: 'changed' });
+    // База та же, что до смерти. changed перезапустил бы превью, и зависший запрос убивал бы песочницу по кругу.
+    // Шлём, только если журнал обрезался
+    if (journal.length !== before.length) emit({ type: 'changed' });
   }
 
   function guarded<T>(fn: () => Promise<T>): Promise<T> {
@@ -217,10 +220,24 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
         const sequences = await sequenceState(client);
         await client.query('begin');
         const started = await xactId(client);
-        const outcome = await fn(client).then(
+        // fn может перехватить смерть клиента (трассировщик делает из ошибки эталона стадию error):
+        // запоминаем первую, иначе причиной перезапуска стал бы ROLLBACK на мёртвом клиенте (VS002)
+        let death: DbException | null = null;
+        const spy = <R>(p: Promise<R>) =>
+          p.catch((e: unknown) => {
+            if (isDeath(e)) death ??= e;
+            throw e;
+          });
+        const watched: DbClient = {
+          ...client,
+          query: (sql, params) => spy(client.query(sql, params)),
+          exec: (sql) => spy(client.exec(sql)),
+        };
+        const outcome = await fn(watched).then(
           (value) => ({ ok: true as const, value }),
           (error: unknown) => ({ ok: false as const, error }),
         );
+        if (death) throw death;
         if (!outcome.ok && isDeath(outcome.error)) throw outcome.error;
         await client.query('rollback');
         // внутри превью выполнился COMMIT (даже если потом началась и упала новая транзакция):

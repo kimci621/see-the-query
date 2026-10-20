@@ -118,6 +118,19 @@ describe('sandbox: превью', () => {
   );
 
   it(
+    'превью INSERT после apply не сдвигает identity',
+    async () => {
+      const { sandbox } = await bookstore();
+      const add = "insert into author (name) values ('X') returning author_id";
+      expect((await sandbox.apply(add))[0].rows).toEqual([[7]]);
+      // после «Применить» превью выполняет тот же текст ещё раз и видит следующий номер
+      expect((await sandbox.preview((db) => db.query(add))).rows).toEqual([[8]]);
+      expect((await sandbox.apply(add))[0].rows).toEqual([[8]]);
+    },
+    T,
+  );
+
+  it(
     'изменения видны внутри и исчезают после',
     async () => {
       const { sandbox } = await bookstore();
@@ -226,14 +239,28 @@ describe('sandbox: восстановление', () => {
       await expect(sandbox.preview((db) => db.query('select pg_sleep(10)'))).rejects.toMatchObject({
         db: { code: SANDBOX_TIMEOUT },
       });
+      // без changed: база та же, а changed перезапустил бы превью того же зависшего запроса по кругу
       expect(events).toEqual([
         { type: 'status', status: 'restarting' },
         { type: 'status', status: 'ready' },
         { type: 'restarted', reason: 'timeout' },
-        { type: 'changed' },
       ]);
       expect(await count(sandbox.client(), 'review')).toBe(0);
       expect(sandbox.journal()).toEqual(['delete from review']);
+    },
+    T,
+  );
+
+  it(
+    'таймаут, который fn перехватила сама, всё равно таймаут, а не падение',
+    async () => {
+      const { sandbox, events } = await bookstore();
+      // так делает трассировщик: ошибку эталона превращает в стадию error и возвращает трассу
+      const swallow = (db: DbClient) => db.query('select pg_sleep(10)').catch(() => 'стадия error');
+      await expect(sandbox.preview(swallow)).rejects.toMatchObject({ db: { code: SANDBOX_TIMEOUT } });
+      expect(events).toContainEqual({ type: 'restarted', reason: 'timeout' });
+      expect(events).not.toContainEqual({ type: 'restarted', reason: 'crash' });
+      expect(sandbox.status).toBe('ready');
     },
     T,
   );

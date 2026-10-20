@@ -71,6 +71,32 @@ test('ошибка Postgres: подчёркнуто и объяснено', asyn
   await expect(page.getByTestId('result-count')).toHaveText('6 строк', { timeout: 5000 });
 });
 
+test('сторож в превью: карточка таймаута, без падения и без повторов', async ({ page }) => {
+  await openLesson(page);
+  // считаем перезапуски песочницы: зависший запрос не должен перезапускаться по кругу
+  await page.evaluate(() => {
+    const w = window as Window & {
+      __vsSandbox?: { subscribe(l: (e: { type: string }) => void): () => void };
+      __restarts?: number;
+    };
+    w.__restarts = 0;
+    w.__vsSandbox?.subscribe((e) => {
+      if (e.type === 'restarted') w.__restarts = (w.__restarts ?? 0) + 1;
+    });
+  });
+  await setEditorText(page, 'select pg_sleep(5)');
+  await expect(page.getByTestId('pg-explain-title')).toContainText('слишком долго', { timeout: 15_000 });
+  await expect(page.getByTestId('preview-status')).toContainText('Ошибка');
+  await expect(page.getByText('Запрос выполнялся дольше 3 секунд.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('Песочница перезапущена, твои изменения восстановлены.', { exact: true }),
+  ).toHaveCount(0);
+  // проверка отсутствия: ждём дольше сторожа (3 с), повторного перезапуска быть не должно
+  await page.waitForTimeout(4000);
+  expect(await page.evaluate(() => (window as Window & { __restarts?: number }).__restarts)).toBe(1);
+  await expect(page.getByTestId('preview-status')).toContainText('Ошибка');
+});
+
 test('Tab выводит фокус из редактора к тулбару', async ({ page }) => {
   await openLesson(page);
   await setEditorText(page, 'select 1');
