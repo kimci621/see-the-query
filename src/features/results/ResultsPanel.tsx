@@ -87,7 +87,7 @@ export function ResultsPanel() {
         <TabsContent value="result" tabIndex={-1} className="mt-0 min-h-0 flex-1">
           {parseDbError ? (
             <div className="h-full overflow-auto p-2">
-              <ErrorCard error={parseDbError} sql={text} />
+              <ErrorCard error={parseDbError} sql={text} parse />
             </div>
           ) : result ? (
             <ResultGrid

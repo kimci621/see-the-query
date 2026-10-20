@@ -11,6 +11,7 @@ export function MessagesList({
   parseError?: { error: DbError; sql: string } | null; // ошибка разбора недописанного запроса вместо ошибки трейса
 }) {
   const shown = parseError ?? (trace?.error ? { error: trace.error, sql: trace.sql } : null);
+  const parse = parseError != null;
   const notices = trace?.notices ?? [];
 
   if (!shown && notices.length === 0) {
@@ -26,7 +27,7 @@ export function MessagesList({
 
   return (
     <div className="h-full overflow-auto p-2">
-      {shown && <ErrorCard error={shown.error} sql={shown.sql} />}
+      {shown && <ErrorCard error={shown.error} sql={shown.sql} parse={parse} />}
       {notices.length > 0 && (
         <ul className={shown ? 'mt-2' : ''}>
           {notices.map((n, i) => (

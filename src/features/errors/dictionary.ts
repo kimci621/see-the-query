@@ -55,6 +55,15 @@ function tablesInSql(ctx: ErrorContext): TableInfo[] {
   return ctx.schema?.tables.filter((t) => words.has(t.name.toLowerCase())) ?? [];
 }
 
+// SELECT без FROM: `select title, pr` даёт 42703 на первую колонку, хотя не хватает FROM
+function selectWithoutFrom(sql: string): boolean {
+  const parsed = isParserReady() ? parseSql(sql) : null;
+  if (!parsed?.ok || parsed.statements.length !== 1) return false;
+  const sel = (parsed.statements[0].ast as { SelectStmt?: { fromClause?: unknown; targetList?: unknown } })
+    .SelectStmt;
+  return sel?.targetList != null && sel.fromClause == null;
+}
+
 // Алиасы таблиц из разбора запроса: book → b. Парсер не готов или запрос не разобрался: пусто
 function aliasesOf(sql: string): Map<string, string> {
   const parsed = isParserReady() ? parseSql(sql) : null;
@@ -109,6 +118,20 @@ export const DICTIONARY: Record<string, Entry> = {
     // column "nme" does not exist или column b.nme does not exist
     const raw = /column (?:"([^"]+)"|(\S+)) does not exist/.exec(err.message);
     const name = (raw?.[1] ?? raw?.[2] ?? '').replace(/^.*\./, '');
+    if (selectWithoutFrom(ctx.sql)) {
+      const owners = ctx.schema?.tables.filter((t) => t.columns.some((c) => c.name === name)) ?? [];
+      return {
+        title: 'Запрос без FROM',
+        body: `Колонку ${name} Postgres ищет в таблицах из FROM, а FROM в запросе нет.`,
+        suggestion: owners.length
+          ? `${name} есть в ${owners.map((t) => t.name).join(' и ')}: допиши from ${owners[0].name}.`
+          : 'Допиши FROM и таблицу, из которой брать колонки.',
+        highlight: {
+          tableIds: owners.map((t) => t.id),
+          columns: owners.map((t) => `${t.id}.${name}`),
+        },
+      };
+    }
     const tables = tablesInSql(ctx);
     const guess = closest(
       name,
@@ -117,9 +140,12 @@ export const DICTIONARY: Record<string, Entry> = {
     const asString = ctx.sql.includes(`"${name}"`);
     return {
       title: `Колонки ${name} нет`,
+      // заголовок уже сказал «Колонки X нет»: тело только добавляет, где искали
       body: asString
-        ? `В двойных кавычках Postgres видит имя колонки, а не строку. Колонки «${name}» нет${tables.length ? ` в ${tables.map((t) => t.name).join(', ')}` : ''}.`
-        : `Колонки ${name} нет${tables.length ? ` в ${tables.map((t) => t.name).join(', ')}` : ''}.`,
+        ? 'В двойных кавычках Postgres видит имя колонки, а не строку.'
+        : tables.length
+          ? `Postgres искал её в ${tables.map((t) => t.name).join(', ')}.`
+          : '',
       suggestion: asString
         ? `Строку пишут в одинарных кавычках: '${name}'.`
         : guess

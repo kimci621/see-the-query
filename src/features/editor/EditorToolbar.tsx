@@ -24,6 +24,7 @@ import { useSceneStore } from '@/stores/scene';
 import { notifyApplied, notifyDbError, undoLast } from './notifyDbError';
 import { appliedTrace } from './useLiveTrace';
 import { useParsedText } from './useParsedText';
+import { useTypingError } from './useTypingError';
 
 const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', string> = {
   idle: 'Превью: база не меняется',
@@ -94,7 +95,9 @@ export function EditorToolbar({
     }
   };
 
-  const shown = stale ? 'stale' : hasError ? 'error' : status;
+  // имя на полуслове (42703/42P01 до паузы набора) ещё не ошибка: «Недописан», как у разбора
+  const typing = useTypingError(trace?.error?.code);
+  const shown = stale || typing ? 'stale' : hasError ? 'error' : status;
   const caution = !stale && !applied && status === 'ready' ? noWhereCaution(current, trace) : null;
 
   const applyAll = () =>

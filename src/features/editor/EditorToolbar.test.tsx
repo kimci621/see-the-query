@@ -102,6 +102,41 @@ describe('EditorToolbar', () => {
     expect(badge).not.toHaveClass('text-destructive');
   });
 
+  it('42703/42P01 на полуслове: «Недописан» без красного до паузы набора (P8.15)', () => {
+    vi.useFakeTimers();
+    try {
+      const trace = {
+        sql: 'select ti',
+        statementType: 'select',
+        mode: 'final-only',
+        touched: { tableIds: [], columns: [], expanded: [] },
+        stages: [],
+        result: null,
+        error: { code: '42703', message: 'column "ti" does not exist' },
+        notices: [],
+        timingMs: 1,
+      } as unknown as Trace;
+      useEditorStore.getState().setText('select ti');
+      useEditorStore.getState().setCursor(9);
+      useSceneStore.setState({ status: 'ready', trace });
+      render(<EditorToolbar sandbox={null} onApplyCurrent={() => undefined} />);
+      const badge = screen.getByTestId('preview-status');
+      expect(badge).toHaveTextContent('Недописан');
+      expect(badge).not.toHaveClass('text-destructive');
+      act(() => vi.advanceTimersByTime(800));
+      expect(badge).toHaveTextContent('Ошибка');
+      expect(badge).toHaveClass('text-destructive');
+      // каретка после пробела: имя дописано, ошибка сразу красная
+      act(() => {
+        useEditorStore.getState().setText('select ti ');
+        useEditorStore.getState().setCursor(10);
+      });
+      expect(badge).toHaveTextContent('Ошибка');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('«Применить» вызывает onApplyCurrent (единый путь с ⌘⏎), «Сброс» и «Отменить» зовут песочницу', async () => {
     useEditorStore.getState().setText('select 1');
     const applied: string[] = [];

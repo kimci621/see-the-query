@@ -71,6 +71,33 @@ test('ошибка Postgres: подчёркнуто и объяснено', asyn
   await expect(page.getByTestId('result-count')).toHaveText('6 строк', { timeout: 5000 });
 });
 
+// Тихие ошибки при наборе (P8.15): имя на полуслове не краснеет до паузы, без FROM объяснение про FROM,
+// карточка разбора нейтральная, как плашка «Недописан»
+test('набор: на полуслове «Недописан», после паузы ошибка; без FROM и разбор', async ({ page }) => {
+  await openLesson(page);
+  const status = page.getByTestId('preview-status');
+  const card = page.getByTestId('pg-error');
+  await setEditorText(page, 'select ti');
+  await expect(card).toHaveAttribute('data-tone', 'neutral', { timeout: 5000 });
+  await expect(status).toContainText('Недописан');
+  await expect(page.locator('.cm-lintRange-error')).toHaveCount(0);
+  // пауза набора 800 мс: теперь это ошибка ученика
+  await expect(card).toHaveAttribute('data-tone', 'error', { timeout: 3000 });
+  await expect(status).toContainText('Ошибка');
+  await expect(page.locator('.cm-lintRange-error')).toBeVisible();
+
+  await setEditorText(page, 'select title, pr');
+  await expect(page.getByTestId('pg-explain-title')).toHaveText(/^Запрос без FROM/, { timeout: 5000 });
+  await expect(page.getByTestId('pg-explain-suggestion')).toHaveText('title есть в book: допиши from book.');
+  await expect(page.getByTestId('pg-original')).toContainText('column "title" does not exist');
+
+  await setEditorText(page, 'select title from book where');
+  await expect(status).toContainText('Недописан', { timeout: 5000 });
+  await expect(card).toHaveAttribute('data-tone', 'neutral');
+  await page.waitForTimeout(1000);
+  await expect(card).toHaveAttribute('data-tone', 'neutral');
+});
+
 test('сторож в превью: карточка таймаута, без падения и без повторов', async ({ page }) => {
   await openLesson(page);
   // считаем перезапуски песочницы: зависший запрос не должен перезапускаться по кругу

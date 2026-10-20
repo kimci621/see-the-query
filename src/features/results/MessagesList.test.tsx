@@ -51,6 +51,44 @@ describe('MessagesList', () => {
     expect(screen.getByTestId('pg-explain-body').textContent).toBeTruthy();
   });
 
+  it('карточка на полуслове нейтральная до паузы набора, потом красная (P8.15)', () => {
+    vi.useFakeTimers();
+    try {
+      useEditorStore.getState().setText('select nme');
+      useEditorStore.getState().setCursor(10);
+      const error = { code: '42703', message: 'column "nme" does not exist', position: 8 };
+      render(<MessagesList trace={traceWith(error)} />);
+      const card = screen.getByTestId('pg-error');
+      expect(card).toHaveAttribute('data-tone', 'neutral');
+      expect(screen.getByTestId('pg-explain-title')).not.toHaveClass('text-destructive');
+      act(() => vi.advanceTimersByTime(800));
+      expect(card).toHaveAttribute('data-tone', 'error');
+      expect(screen.getByTestId('pg-explain-title')).toHaveClass('text-destructive');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('карточка ошибки разбора нейтральная, как плашка «Недописан» (P8.15)', () => {
+    act(() => {
+      useEditorStore.getState().setText('select title from book where');
+      useEditorStore.getState().setParseError({ message: 'syntax error at end of input', position: 28 });
+      useSceneStore.getState().setStale(true);
+    });
+    render(<ResultsPanel />);
+    expect(screen.getByTestId('pg-error')).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it('пустое тело объяснения не рисуется (P8.15)', () => {
+    vi.spyOn(explain, 'explainError').mockReturnValue({
+      title: 'Колонки nme нет',
+      body: '',
+      highlight: { tableIds: [], columns: [] },
+    });
+    render(<MessagesList trace={traceWith({ code: '42703', message: 'x' })} />);
+    expect(screen.queryByTestId('pg-explain-body')).toBeNull();
+  });
+
   it('код ошибки в карточке один раз, и для кода вне словаря', () => {
     for (const error of [
       { code: '42703', message: 'column "nme" does not exist', position: 8 },

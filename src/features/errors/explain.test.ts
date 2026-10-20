@@ -12,6 +12,8 @@ const errors = new Map<string, DbError>();
 const CASES: Record<string, string> = {
   undefinedTable: 'select * from books',
   undefinedColumn: 'select nme from author',
+  noFrom: 'select title, pr',
+  subqueryColumn: 'select nme from (select 1 as x) t',
   doubleQuoted: 'select * from author where name = "Жюль Верн"',
   ambiguous: 'select name from author join customer on true',
   ambiguousAliased: 'select author_id from book b join author as a on b.author_id = a.author_id',
@@ -92,6 +94,24 @@ describe('explainError', () => {
       highlight: { tableIds: ['public.author'] },
     });
     expect(explain('doubleQuoted').suggestion).toBe(`Строку пишут в одинарных кавычках: 'Жюль Верн'.`);
+  });
+
+  it('42703 без FROM: объясняет отсутствующий FROM и называет таблицу с колонкой (P8.15)', () => {
+    expect(explain('noFrom')).toMatchObject({
+      title: 'Запрос без FROM',
+      body: 'Колонку title Postgres ищет в таблицах из FROM, а FROM в запросе нет.',
+      suggestion: 'title есть в book: допиши from book.',
+      highlight: { tableIds: ['public.book'], columns: ['public.book.title'] },
+    });
+  });
+
+  it('42703: текст карточки не повторяет заголовок (P8.15)', () => {
+    expect(explain('undefinedColumn')).toMatchObject({
+      title: 'Колонки nme нет',
+      body: 'Postgres искал её в author.',
+    });
+    expect(explain('subqueryColumn')).toMatchObject({ title: 'Колонки nme нет', body: '' });
+    expect(explain('doubleQuoted').body).toBe('В двойных кавычках Postgres видит имя колонки, а не строку.');
   });
 
   it('fix: только когда словарь нашёл ближайшее имя', () => {
@@ -207,7 +227,11 @@ describe('explainError', () => {
   });
 
   it('у каждого кода есть заголовок и текст, неизвестный код показывает оригинал', () => {
-    for (const name of Object.keys(CASES)) expect(explain(name).title, name).not.toMatch(/^Ошибка/);
+    for (const name of Object.keys(CASES)) {
+      const { title, body } = explain(name);
+      expect(title, name).not.toMatch(/^Ошибка/);
+      expect(body.replace(/\.$/, ''), name).not.toBe(title);
+    }
     // один смысл с тостом сторожа (RESTART_MESSAGES.timeout) и спекой 5.4
     expect(explainError({ code: SANDBOX_TIMEOUT, message: '' }, { sql: '', schema: null })).toMatchObject({
       title: 'Запрос выполнялся дольше 3 секунд',

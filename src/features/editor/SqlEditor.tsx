@@ -16,6 +16,7 @@ import { clauseHighlight, setActiveClauseRange } from './highlight';
 import { columnContextAt } from './hover';
 import { editorTheme } from './theme';
 import { resolveColumn } from './touched';
+import { useTypingError } from './useTypingError';
 
 export interface SqlEditorProps {
   onApply?: () => void;
@@ -32,6 +33,8 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
   const parseError = useEditorStore((s) => s.parseError);
   const traceError = useSceneStore((s) => s.trace?.error ?? null);
   const traceSql = useSceneStore((s) => s.trace?.sql ?? null);
+  // имя на полуслове: подчёркивание Postgres ждёт паузы набора, как и красный тон панели
+  const typing = useTypingError(traceError?.code);
   const activeClause = useEditorStore((s) => s.activeClause);
   const schema = useBoardStore((s) => s.schema);
   const viewRef = useRef<EditorView | null>(null);
@@ -106,12 +109,12 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
       const d = parseDiagnostic(view.state.doc.toString(), parseError);
       diags.push({ ...d, severity: 'error', source: 'SQL' });
     }
-    if (traceError && traceSql) {
+    if (traceError && traceSql && !typing) {
       const d = pgDiagnostic(view.state.doc.toString(), traceSql, traceError);
       if (d) diags.push({ ...d, severity: 'error', source: 'PostgreSQL' });
     }
     view.dispatch(setDiagnostics(view.state, diags));
-  }, [parseError, traceError, traceSql]);
+  }, [parseError, traceError, traceSql, typing]);
 
   // Подсветка активного клауза в редакторе
   useEffect(() => {
