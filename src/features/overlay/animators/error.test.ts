@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import { runUpTo } from '../__fixtures__/runUpTo';
-import { groupTrace, testCtx } from '../__fixtures__/traces';
+import { groupTrace, joinTrace, testCtx } from '../__fixtures__/traces';
+import { currentTable } from '../frame';
 import type { StageOf } from '../types';
 import { errorAnimator } from './error';
 
@@ -151,5 +152,34 @@ describe('errorAnimator: 42803 в стопке группы', () => {
       ['title', 'error'],
       ['author_id', 'key'],
     ]);
+  });
+  it('квалифицированный ключ на JOIN: group by b.author_id, красная a.author_id, одноимённые не путаются', () => {
+    const joined = joinTrace('left');
+    const author = {
+      ...schema.tables[0],
+      id: 'public.author',
+      name: 'author',
+      columns: ['author_id', 'name'].map(column),
+    };
+    const withAuthor = { ...ctx, schema: { ...schema, tables: [...schema.tables, author] } };
+    const qualified = {
+      ...errorStage(
+        '42803',
+        ['public.author.author_id'],
+        'column "a.author_id" must appear in the GROUP BY clause',
+      ),
+      focus: { tableIds: ['public.author'], columns: ['public.author.author_id'] },
+      group: {
+        keys: ['b.author_id'],
+        keyColumns: [2],
+        groups: [{ key: 'g:0', members: joined.stages[2].output.rows.map((r) => r.key) }],
+      },
+    };
+    const p = errorAnimator(runUpTo(joined, 3, withAuthor), qualified, 3, withAuthor);
+    const cols = currentTable(p[p.length - 1].frame)?.columns ?? [];
+    const byState = (state: string) =>
+      cols.filter((c) => c.state === state).map((c) => `${c.source?.alias}.${c.name}`);
+    expect(byState('key')).toEqual(['b.author_id']);
+    expect(byState('error')).toEqual(['a.author_id']);
   });
 });
