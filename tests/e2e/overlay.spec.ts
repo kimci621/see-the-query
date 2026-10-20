@@ -254,3 +254,63 @@ test('«+N колонки» во время сцены разворачивае�
   await expect(page.getByTestId('ghost-folded')).toHaveCount(0);
   await expect(page.getByTestId('ghost-table').first()).toBeVisible();
 });
+
+// P8.80: камера сцены вписывает и призраки, и базовые таблицы, от которых идёт сцена:
+// видно, откуда строки и куда они едут. fixme: на 1440×900 доска 719 px, а рабочая зона начинается
+// с x=1372 доски: на зуме 0.6 оба не влезают, ждём решения пользователя (P8.80, ⚠️)
+async function sceneKeepsSources(page: Page, sql: string, ids: string[], shot: string) {
+  await openBoard(page);
+  await typeQuery(page, sql);
+  // конец сцены: скраббер на последней фазе. «Играть» видно и до старта автоплея
+  const thumb = page.getByTestId('player-scrub').getByRole('slider');
+  await expect
+    .poll(
+      async () => (await thumb.getAttribute('aria-valuenow')) === (await thumb.getAttribute('aria-valuemax')),
+      {
+        timeout: 15_000,
+      },
+    )
+    .toBe(true);
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть');
+  // камера доезжает за долю секунды после последней фазы
+  await page.waitForTimeout(800);
+  if (process.env.P880_SHOTS) await page.screenshot({ path: `${process.env.P880_SHOTS}/${shot}.png` });
+  // «видно» = имя таблицы целиком на доске: полоска края не считается
+  const names = [
+    ...ids.map((id) => page.getByTestId(`table-node-${id}`).locator('.vs-table-name')),
+    page.getByTestId('ghost-table').last().locator('.vs-ghost-title'),
+  ];
+  const board = await page.locator('.react-flow').boundingBox();
+  if (!board) throw new Error('нет доски');
+  for (const name of names) {
+    // нода вне кадра не рисуется (onlyRenderVisibleElements): пустой список = вне доски
+    const [r] = await name.evaluateAll((els) =>
+      els.map((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const b = range.getBoundingClientRect();
+        return { text: el.textContent, left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+      }),
+    );
+    const inside =
+      !!r &&
+      r.left >= board.x &&
+      r.right <= board.x + board.width &&
+      r.top >= board.y &&
+      r.bottom <= board.y + board.height;
+    expect(inside, `${name} вне доски: ${JSON.stringify(r)}`).toBe(true);
+  }
+}
+
+test.fixme('камера сцены держит в кадре и book, и призрак после select *', async ({ page }) => {
+  await sceneKeepsSources(page, 'select * from book', ['public.book'], 'select-star');
+});
+
+test.fixme('камера сцены держит в кадре обе таблицы JOIN и призрак', async ({ page }) => {
+  await sceneKeepsSources(
+    page,
+    'select b.title, a.name from book b join author a on a.author_id = b.author_id',
+    ['public.book', 'public.author'],
+    'join',
+  );
+});
