@@ -52,9 +52,10 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
           className="sticky top-0 z-10 flex w-full border-b bg-muted font-mono text-xs"
           style={{ minWidth }}
         >
-          {result.fields.map((f) => (
+          {result.fields.map((f, i) => (
             <div
-              key={f.name}
+              // biome-ignore lint/suspicious/noArrayIndexKey: имена колонок повторяются (count, count), порядок колонок в выдаче не меняется
+              key={i}
               role="columnheader"
               data-testid={`field-${f.name}`}
               className="min-w-24 flex-1 truncate px-2 py-1 font-semibold"
@@ -80,7 +81,8 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
               >
                 {row.map((cell, i) => (
                   <Cell
-                    key={result.fields[i]?.name ?? i}
+                    // biome-ignore lint/suspicious/noArrayIndexKey: ключ по номеру колонки, как у шапки
+                    key={i}
                     row={item.index}
                     col={i}
                     value={cell}

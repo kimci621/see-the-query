@@ -50,6 +50,25 @@ describe('ResultGrid', () => {
     expect(screen.getByTestId('cell-2-0')).toHaveAttribute('data-kind', 'empty');
   });
 
+  it('колонки с одинаковым именем: обе на месте, без дублей ключа', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const twin: QueryResult = {
+      fields: [
+        { name: 'count', dataTypeID: 20 },
+        { name: 'count', dataTypeID: 20 },
+      ],
+      rows: [['11', '10']],
+      command: 'SELECT',
+      rowCount: 1,
+    };
+    render(<ResultGrid result={twin} />);
+    expect(screen.getAllByTestId('field-count')).toHaveLength(2);
+    expect(screen.getByTestId('cell-0-0')).toHaveTextContent('11');
+    expect(screen.getByTestId('cell-0-1')).toHaveTextContent('10');
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it('date без времени, как на доске', () => {
     const dated: QueryResult = {
       fields: [{ name: 'published_at', dataTypeID: 1082 }],
