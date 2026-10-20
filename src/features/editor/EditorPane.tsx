@@ -98,6 +98,7 @@ export function EditorPane() {
     useSceneStore.getState().setLessonQuery(null);
     const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.lastQuery : undefined;
     const initial = saved ?? meta?.initialQuery ?? '';
+    useSceneStore.getState().setStartQuery(initial);
     const editor = useEditorStore.getState();
     if (editor.text !== initial) {
       editor.setText(initial);

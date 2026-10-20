@@ -34,6 +34,13 @@ function userDrivesScene(): boolean {
   return document.activeElement?.closest(USER_SCENE) != null;
 }
 
+// Трасса стартового текста урока: её сцену прячем, где бы ни был фокус (спека 5.12)
+function lessonStart(): boolean {
+  const { startQuery, lessonQuery } = useSceneStore.getState();
+  const { text } = useEditorStore.getState();
+  return startQuery === text && lessonQuery !== text;
+}
+
 export function OverlayLayer() {
   const trace = useSceneStore((s) => s.trace);
   const playback = useSceneStore((s) => s.playback);
@@ -77,7 +84,7 @@ export function OverlayLayer() {
     scene.setPlayback(playback);
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
     // таймлайн и плеер её вернут
-    if (!userDrivesScene()) scene.hide();
+    if (lessonStart() || !userDrivesScene()) scene.hide();
   }, [trace, schema, rf, expanded, rootFont]);
 
   const active = !!playback && playback.phases.length > 0 && !hidden;

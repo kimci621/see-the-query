@@ -71,3 +71,30 @@ describe('OverlayLayer: возврат камеры после ухода сце
     expect(useBoardStore.getState().frameRequest).toBe(0);
   });
 });
+
+describe('OverlayLayer: сцена стартового запроса урока', () => {
+  afterEach(() => {
+    useSceneStore.setState({
+      trace: null,
+      playback: null,
+      hidden: false,
+      lessonQuery: null,
+      startQuery: null,
+    });
+    document.body.innerHTML = '';
+  });
+
+  it('фокус на доске раньше трассы: сцена спрятана (P8.111)', () => {
+    const board = document.createElement('div');
+    board.dataset.testid = 'board-area';
+    board.tabIndex = 0;
+    document.body.append(board);
+    board.focus();
+    useEditorStore.setState({ text: 'select 1' });
+    useSceneStore.setState({ startQuery: 'select 1', lessonQuery: null, hidden: false, autoplay: false });
+    useBoardStore.setState({ schema: {} as SchemaSnapshot });
+    render(<OverlayLayer />);
+    act(() => useSceneStore.setState({ trace: { touched: { columns: [] } } as unknown as Trace }));
+    expect(useSceneStore.getState().hidden).toBe(true);
+  });
+});
