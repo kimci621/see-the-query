@@ -23,6 +23,14 @@ describe('relationsOf', () => {
     expect(rel.tables.every((t) => stmt.text.slice(t.from, t.to).startsWith(t.name))).toBe(true);
   });
 
+  it('self join: обе ссылки на таблицу со своими алиасами', () => {
+    const rel = relationsOf(stmtOf('select b2.title from book b1 join book b2 on b1.book_id = b2.book_id'));
+    expect(rel.tables.map((t) => [t.name, t.alias])).toEqual([
+      ['book', 'b1'],
+      ['book', 'b2'],
+    ]);
+  });
+
   it('колонки с квалификатором и без, звёздочка тоже попадает', () => {
     const stmt = stmtOf('select b.title, price from book b');
     const rel = relationsOf(stmt);

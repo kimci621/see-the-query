@@ -12,11 +12,13 @@ export function relationsOf(stmt: ParsedStatement): Relations {
   walk(stmt.ast, (key, value) => {
     if (key === 'RangeVar') {
       const name = value.relname;
-      if (typeof name !== 'string' || seen.has(`t:${name}`)) return;
-      seen.add(`t:${name}`);
+      if (typeof name !== 'string') return;
       const schema = typeof value.schemaname === 'string' ? value.schemaname : null;
       const aliasObj = value.alias as { aliasname?: unknown } | undefined;
       const alias = typeof aliasObj?.aliasname === 'string' ? aliasObj.aliasname : null;
+      // self join: одна таблица под разными алиасами - разные ссылки, b2.title резолвится по b2
+      if (seen.has(`t:${name}:${alias}`)) return;
+      seen.add(`t:${name}:${alias}`);
       // location узлов абсолютны (байты полного текста): переводим в относительные оператора
       const from =
         typeof value.location === 'number' ? byteToChar(stmt.text, value.location - stmt.byteFrom) : 0;

@@ -69,6 +69,15 @@ describe('touchedOf', () => {
     expect(t.columns).toEqual(['public.book.title', 'public.book.author_id', 'public.author.author_id']);
   });
 
+  it('self join: колонка второго алиаса резолвится, таблица одна', () => {
+    const t = touchedOf(
+      stmtOf('select b2.title from book b1 join book b2 on b1.book_id = b2.book_id'),
+      SCHEMA,
+    );
+    expect(t.tableIds).toEqual(['public.book']);
+    expect(t.columns).toEqual(['public.book.title', 'public.book.book_id']);
+  });
+
   it('неоднозначная колонка без квалификатора не попадает в touched', () => {
     // author_id есть и в book, и в author
     const t = touchedOf(stmtOf('select author_id from book b join author a using (author_id)'), SCHEMA);
