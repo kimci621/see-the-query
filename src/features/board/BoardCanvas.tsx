@@ -20,11 +20,12 @@ import { useParams } from 'react-router';
 import { useResolvedTheme } from '@/app/ThemeProvider';
 import { getLesson } from '@/features/lessons/registry';
 import { OverlayLayer } from '@/features/overlay/OverlayLayer';
+import { useRootFont } from '@/hooks/use-root-font';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 import { FkEdge, FkMarkers } from './FkEdge';
-import { anchorFrame, chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM, readRootFont, rem, setRootFont } from './layout';
+import { anchorFrame, chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM, rem, setRootFont } from './layout';
 import { type BoardNode, buildEdges, buildNodes, normalizeTableId, resolvePositions } from './model';
 import { SchemaGroupNode } from './SchemaGroupNode';
 import { moveInTable, TableNode } from './TableNode';
@@ -59,23 +60,6 @@ const tablesOf = (nodes: { id: string; type?: string }[]) =>
   nodes.filter((n) => n.type === 'table').map((n) => ({ id: n.id }));
 
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
-// Живая смена шрифта браузера (спека 3.4): элемент шириной 1rem меняет размер вместе с корневым
-// шрифтом, ResizeObserver сообщает об этом без опроса. Размеры доски пересчитываются, стор
-// пересобирает ноды и призраки
-function useRootFont(probe: RefObject<HTMLDivElement | null>) {
-  useEffect(() => {
-    const el = probe.current;
-    if (!el) return;
-    const observer = new ResizeObserver(() => {
-      const px = readRootFont();
-      if (px !== rem(1)) setRootFont(px);
-      useBoardStore.getState().setRootFont(px);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [probe]);
-}
-
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
 
 // Кадры камеры. Фокус (и стартовый кадр урока): таблицы запроса крупно, не ближе зума 1.
@@ -155,7 +139,6 @@ function BoardFlow() {
   const [miniMap, setMiniMap] = useState(false);
   const resolved = useResolvedTheme();
   const boardRef = useRef<HTMLDivElement>(null);
-  const remProbe = useRef<HTMLDivElement>(null);
   const over = useRef(false);
   // Boolean-селектор: ре-рендер только при пересечении порога, а не на каждый кадр зума
   const far = useStore((s) => s.transform[2] < FAR_ZOOM);
@@ -167,7 +150,12 @@ function BoardFlow() {
     useBoardStore.getState().setVisibleTables(lesson ? [...lesson, ...userTables] : null);
   }, [meta, userTables]);
 
-  useRootFont(remProbe);
+  // Живая смена шрифта браузера (спека 3.4): размеры доски пересчитываются, стор пересобирает ноды и призраки
+  const font = useRootFont();
+  useEffect(() => {
+    if (font !== rem(1)) setRootFont(font);
+    useBoardStore.getState().setRootFont(font);
+  }, [font]);
   const rootFont = useBoardStore((s) => s.rootFont);
 
   // Ноды зависят только от схемы, фильтра, урока и размера шрифта; фокус и подсветка их не пересобирают
@@ -201,7 +189,6 @@ function BoardFlow() {
         over.current = false;
       }}
     >
-      <div ref={remProbe} aria-hidden className="pointer-events-none invisible absolute h-0 w-[1rem]" />
       <FkMarkers />
       <ReactFlow
         nodes={nodes}

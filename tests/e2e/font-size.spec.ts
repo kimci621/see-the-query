@@ -147,3 +147,28 @@ test('живая смена шрифта: доска, призрак и сетк
     .toEqual({ editor: 26, gutter: 26, row: 48, ghostRow: 48, ghostFont: 24 });
   await expect.poll(() => layoutProblems(page)).toEqual([]);
 });
+
+// Панели шелла при живой смене (P8.100): минимум поля редактора 9rem пересчитывается от нового корня
+const editorPanel = (page: Page) =>
+  page.locator('[data-panel]#editor').evaluate((el) => el.getBoundingClientRect().height);
+
+test('живая смена шрифта через style корня: поле редактора не меньше 9rem', async ({ page }) => {
+  await openLesson(page);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '32px';
+  });
+  await expect.poll(() => editorPanel(page)).toBeGreaterThanOrEqual(9 * 32 - 1);
+});
+
+// Настройка шрифта браузера (CDP): от неё зависят и rem, и em медиазапроса. Как после перезагрузки:
+// поле редактора не меньше 9rem, на 1440 порог 80em (2560px) совпадает и сайдбар уходит в Sheet
+test('живая смена шрифта браузера: поле редактора 9rem, сайдбар в Sheet', async ({ page }) => {
+  await openLesson(page);
+  await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect.poll(() => rootFont(page)).toBe(32);
+  await expect(page.getByRole('button', { name: 'Уроки', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toHaveCount(0);
+  await expect.poll(() => editorPanel(page)).toBeGreaterThanOrEqual(9 * 32 - 1);
+});

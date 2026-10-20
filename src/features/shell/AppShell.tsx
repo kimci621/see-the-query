@@ -8,6 +8,7 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { useLessonSandbox } from '@/features/db/useLessonSandbox';
 import { getLesson } from '@/features/lessons/registry';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { remToPx, useRootFont } from '@/hooks/use-root-font';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 import { BoardPane } from './BoardPane';
@@ -36,6 +37,7 @@ export function AppShell() {
   // шрифте браузера узкий режим включается раньше и теория не сжимается. Заглушка ниже 640px в px,
   // чтобы крупный шрифт на десктопе её не включал
   const narrow = useMediaQuery('(max-width: 80em)');
+  const rootFont = useRootFont();
   const phone = useMediaQuery('(max-width: 639px)');
   const [forceOpen, setForceOpen] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
@@ -96,7 +98,12 @@ export function AppShell() {
         {!narrow && !focusMode && (
           <>
             {/* Минимум в rem растёт с размером текста: при 200% «Поиск» и названия уроков не обрезаются */}
-            <ResizablePanel id="sidebar" defaultSize={`${mainLayout[0]}%`} minSize="12rem" maxSize="30%">
+            <ResizablePanel
+              id="sidebar"
+              defaultSize={`${mainLayout[0]}%`}
+              minSize={remToPx('12rem', rootFont)}
+              maxSize="30%"
+            >
               <PanelErrorBoundary name="Темы">
                 <LessonSidebar activeId={lessonId} onOpenSearch={() => setCommandOpen(true)} />
               </PanelErrorBoundary>
@@ -107,7 +114,11 @@ export function AppShell() {
         {!focusMode && (
           <>
             {/* Минимум в rem: при крупном тексте строка урока не короче ~30 знаков. Уступает доска */}
-            <ResizablePanel id="theory" defaultSize={`${mainLayout[1]}%`} minSize="20rem">
+            <ResizablePanel
+              id="theory"
+              defaultSize={`${mainLayout[1]}%`}
+              minSize={remToPx('20rem', rootFont)}
+            >
               <PanelErrorBoundary key={lessonId} name="Теория">
                 <TheoryPane meta={meta} onOpenLessons={narrow ? openLessons : undefined} />
               </PanelErrorBoundary>

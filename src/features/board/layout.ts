@@ -1,5 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import { readRootFont } from '@/hooks/use-root-font';
 
 // Длины доски и призраков в rem (спека 3.4, WCAG 1.4.4): растут вместе с настройкой шрифта браузера.
 // React Flow, dagre и оверлей считают в px, поэтому rem переводится в px только здесь, от текущего
@@ -37,12 +38,6 @@ export function setRootFont(px: number): void {
   TABLE_GAP = rem(5);
   WORK_AREA_GAP = rem(10);
 }
-
-// Корневой размер шрифта страницы, px; вне браузера (тесты в Node) 16
-export const readRootFont = () =>
-  (typeof document !== 'undefined' &&
-    Number.parseFloat(getComputedStyle(document.documentElement).fontSize)) ||
-  16;
 
 setRootFont(readRootFont());
 

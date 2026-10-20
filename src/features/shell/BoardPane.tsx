@@ -9,6 +9,7 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
 import { ResultsPanel } from '@/features/results/ResultsPanel';
 import { Timeline } from '@/features/timeline/Timeline';
+import { remToPx, useRootFont } from '@/hooks/use-root-font';
 import { modKey } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
@@ -114,9 +115,10 @@ function PanelSlot(props: {
   handle: string | null;
   children?: ReactNode;
 }) {
+  const rootFont = useRootFont();
   return (
     <>
-      <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={props.minSize}>
+      <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={remToPx(props.minSize, rootFont)}>
         <section
           aria-label={props.title}
           className={
