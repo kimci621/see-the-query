@@ -199,17 +199,27 @@ test('после запроса с ошибкой камера возвраща�
 });
 
 test('переход из урока со сценой не сдвигает сохранённую камеру другого урока', async ({ page }) => {
-  const viewport = () => page.locator('.react-flow__viewport').getAttribute('style');
-  // сохраняем камеру null-logic колесом над доской
+  // Камера доски из transform вьюпорта и камера урока из стора: сравниваем числа, а не строку стиля
+  const camera = async () => {
+    const style = (await page.locator('.react-flow__viewport').getAttribute('style')) ?? '';
+    const [, x, y, zoom] = /translate\(([-\d.e]+)px, ([-\d.e]+)px\) scale\(([-\d.e]+)\)/.exec(style) ?? [];
+    return [x, y, zoom].map((v) => Math.round(Number(v) * 100) / 100);
+  };
+  const saved = () =>
+    page.evaluate(() => {
+      const v = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['null-logic']?.viewport;
+      return v ? [v.x, v.y, v.zoom].map((n: number) => Math.round(n * 100) / 100) : null;
+    });
+  // сохраняем камеру null-logic колесом над доской, когда стартовый запрос урока уже оттрассирован
   await page.goto('/l/null-logic');
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
-  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('stage-chip').first()).toBeVisible({ timeout: 10_000 });
   const box = await page.getByTestId('board-canvas').boundingBox();
   if (!box) throw new Error('нет доски');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, -400);
-  await page.waitForTimeout(1000);
-  const saved = await viewport();
+  await expect.poll(saved, { timeout: 5_000 }).not.toBeNull();
+  const kept = await saved();
   // в другом уроке сцену запускает пользователь, камера следит за призраком
   await openBoard(page);
   await typeQuery(page, QUERY);
@@ -217,6 +227,9 @@ test('переход из урока со сценой не сдвигает с�
   // переход по сайдбару: фокус на ссылке, сцену стартового запроса запустил не пользователь
   await page.locator('a[href="/l/null-logic"]').click();
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(2500);
-  expect(await viewport()).toBe(saved);
+  await expect.poll(camera, { timeout: 5_000 }).toEqual(kept);
+  // Проверка «камера не сдвинулась»: ждать нечего, кроме паузы возврата (RETURN_DELAY_MS 800) и полёта.
+  // Часы Playwright тут не помогают: на открытый документ SPA не ставятся, а с первой загрузки стопорят motion
+  await page.waitForTimeout(2_000);
+  expect(await camera()).toEqual(kept);
 });
