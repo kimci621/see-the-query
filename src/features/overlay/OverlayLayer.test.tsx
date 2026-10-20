@@ -42,7 +42,7 @@ describe('OverlayLayer: возврат камеры после ухода сце
     useSceneStore.setState({ lessonQuery: 'select 1', followCamera: true, autoplay: false });
     useBoardStore.setState({ schema: {} as SchemaSnapshot, frameRequest: 0 });
     render(<OverlayLayer />);
-    act(() => useSceneStore.setState({ trace: {} as Trace }));
+    act(() => useSceneStore.setState({ trace: { touched: { columns: [] } } as unknown as Trace }));
     // сцена ушла (Esc): через паузу камера должна вернуться к таблицам
     act(() => useSceneStore.getState().hide());
   });

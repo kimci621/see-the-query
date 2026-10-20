@@ -2,7 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 
 // Камера сцены летит за призраком в рабочую зону справа от таблиц и уводит book из кадра.
 // Тесты рефита доски с ней гоняются: проверка ловит book в кадре, только если успела до полёта
-// (флейк на холодном старте). Выключаем «Камера следит»: движется только камера доски
+// (флейк на холодном старте, P8.90). Выключаем «Камера следит»: движется только камера доски; камеру сцены проверяет overlay.spec
 async function withoutSceneCamera(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -114,17 +114,6 @@ test('далёкий зум: строки скрыты, рёбра остают�
     expect(onHeader, `конец ребра ${JSON.stringify(end)} вне шапок ${JSON.stringify(cards)}`).toBe(true);
   }
 });
-
-// Камера сцены (спека 3.5) сама летит к призраку, пока фокус в редакторе: тест камеры базовой доски с ней гонится,
-// нода book уходит из кадра и размонтируется (P8.90). Камеру сцены проверяет overlay.spec
-async function withoutSceneCamera(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      'vs-scene',
-      JSON.stringify({ state: { speed: 1, autoplay: true, followCamera: false }, version: 0 }),
-    );
-  });
-}
 
 async function setEditorText(page: Page, text: string) {
   await page.locator('.cm-content').click({ position: { x: 8, y: 8 } });
