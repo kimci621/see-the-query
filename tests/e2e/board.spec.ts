@@ -508,6 +508,8 @@ test('клавиатура: → с ноды на шапку колонки по�
   page,
 }) => {
   await openBookstore(page);
+  // Ждём трассу стартового запроса: пришла бы после фокуса на доске, и её сцена увела бы камеру от book (P8.111)
+  await expect(page.getByTestId('stage-chip').first()).toBeVisible({ timeout: 10_000 });
   const node = page.locator('.react-flow__node[data-id="public.book"]');
   const hint = page.locator('[data-slot="tooltip-content"][data-state$="open"]');
   await node.focus();

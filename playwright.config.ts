@@ -25,6 +25,8 @@ export default defineConfig({
       ? `pnpm build && pnpm exec vite preview --port ${PORT} --strictPort`
       : `pnpm dev --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
+    // dev-сервер без HMR: правки в дереве не перезапускают модули посреди теста (vite.config.ts)
+    env: { E2E: '1' },
     reuseExistingServer: !process.env.CI,
     timeout: PERF ? 180_000 : 60_000,
   },

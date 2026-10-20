@@ -53,6 +53,9 @@ export default defineConfig({
       '@content': fileURLToPath(new URL('./content', import.meta.url)),
     },
   },
+  // e2e (Playwright ставит E2E=1): без HMR и слежения за файлами. Правка в дереве посреди прогона
+  // горячо пересоздавала сторы, и сцена теста пропадала (P8.81)
+  server: process.env.E2E ? { hmr: false, watch: null } : undefined,
   worker: { format: 'es' },
   // PGlite сам грузит свои .wasm и .data: пребандлинг Vite их ломает
   optimizeDeps: { exclude: ['@electric-sql/pglite'] },
