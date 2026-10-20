@@ -7,10 +7,11 @@ group by a.author_id, a.name order by books desc, a.name`;
 
 const CHIPS = ['FROM', 'FROM', 'LEFT JOIN', 'GROUP BY', 'SELECT', 'ORDER BY'];
 
-for (const viewport of [
-  { width: 1024, height: 768 },
-  { width: 1280, height: 800 },
-  { width: 1440, height: 900 },
+// P8.57: сколько чипов из 6 помещается в ленту целиком
+for (const { minChips, ...viewport } of [
+  { width: 1024, height: 768, minChips: 4 },
+  { width: 1280, height: 800, minChips: 4 },
+  { width: 1440, height: 900, minChips: 6 },
 ]) {
   test(`подпись плеера видна целиком при 6 чипах на ${viewport.width}×${viewport.height}`, async ({
     page,
@@ -24,6 +25,18 @@ for (const viewport of [
     await page.keyboard.press('Backspace');
     await page.keyboard.insertText(QUERY);
     await expect(page.getByTestId('stage-chip')).toHaveText(CHIPS, { timeout: 5_000 });
+
+    // лента чипов не отдаёт ширину настройкам плеера: видно не меньше minChips чипов целиком
+    const visibleChips = await page
+      .getByRole('list', { name: 'Шаги выполнения запроса' })
+      .evaluate((list) => {
+        const lr = list.getBoundingClientRect();
+        return Array.from(list.querySelectorAll('[data-testid="stage-chip"]')).filter((chip) => {
+          const r = chip.getBoundingClientRect();
+          return r.left >= lr.left - 0.5 && r.right <= lr.right + 0.5;
+        }).length;
+      });
+    expect(visibleChips).toBeGreaterThanOrEqual(minChips);
 
     // последний чип кликабелен и подпись про его шаг
     await page.getByTestId('stage-chip').last().click();

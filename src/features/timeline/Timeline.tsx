@@ -1,8 +1,17 @@
-import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { Pause, Play, SkipBack, SkipForward, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { stageLabel } from '@/features/overlay/labels';
 import { lastPhaseOfStage, stageOfPhase } from '@/features/overlay/playback';
 import { useSceneStore } from '@/stores/scene';
@@ -109,33 +118,43 @@ export function Timeline() {
         >
           <SkipForward />
         </Button>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          value={String(speed)}
-          onValueChange={(v) => v && store().setSpeed(Number(v) as 0.5 | 1 | 2)}
-          aria-label="Скорость"
-        >
-          <ToggleGroupItem value="0.5">0.5x</ToggleGroupItem>
-          <ToggleGroupItem value="1">1x</ToggleGroupItem>
-          <ToggleGroupItem value="2">2x</ToggleGroupItem>
-        </ToggleGroup>
-        <Button
-          size="sm"
-          variant={autoplay ? 'secondary' : 'ghost'}
-          aria-pressed={autoplay}
-          onClick={() => store().setAutoplay(!autoplay)}
-        >
-          Автоплей
-        </Button>
-        <Button
-          size="sm"
-          variant={followCamera ? 'secondary' : 'ghost'}
-          aria-pressed={followCamera}
-          onClick={() => store().setFollowCamera(!followCamera)}
-        >
-          Камера следит
-        </Button>
+        {/* Скорость и переключатели в меню: на 1024 кнопки съедали ширину ленты чипов (P8.57) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon" variant="ghost" aria-label="Настройки плеера">
+              <SlidersHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Скорость</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={String(speed)}
+              onValueChange={(v) => store().setSpeed(Number(v) as 0.5 | 1 | 2)}
+            >
+              {(['0.5', '1', '2'] as const).map((v) => (
+                // Меню не закрываем: ученик видит, что выбор применился
+                <DropdownMenuRadioItem key={v} value={v} onSelect={(e) => e.preventDefault()}>
+                  {v}x
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={autoplay}
+              onCheckedChange={(v) => store().setAutoplay(v)}
+              onSelect={(e) => e.preventDefault()}
+            >
+              Автоплей
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={followCamera}
+              onCheckedChange={(v) => store().setFollowCamera(v)}
+              onSelect={(e) => e.preventDefault()}
+            >
+              Камера следит
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {phases.length > 1 ? (
         <Slider

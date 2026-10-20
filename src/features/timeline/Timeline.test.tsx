@@ -52,6 +52,33 @@ describe('Timeline', () => {
     expect(useSceneStore.getState().playing).toBe(true);
   });
 
+  it('скорость, автоплей и камера в меню настроек, состояние видно в пунктах', () => {
+    load();
+    render(<Timeline />);
+    expect(screen.queryByRole('menuitemcheckbox')).toBeNull();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Настройки плеера' }), { key: 'Enter' });
+
+    expect(screen.getByRole('menuitemradio', { name: '1x' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '2x' }));
+    expect(useSceneStore.getState().speed).toBe(2);
+    // меню не закрывается после выбора: видно новое состояние
+    expect(screen.getByRole('menuitemradio', { name: '2x' }).getAttribute('aria-checked')).toBe('true');
+
+    const autoplay = screen.getByRole('menuitemcheckbox', { name: 'Автоплей' });
+    expect(autoplay.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(autoplay);
+    expect(useSceneStore.getState().autoplay).toBe(true);
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Автоплей' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+
+    const camera = screen.getByRole('menuitemcheckbox', { name: 'Камера следит' });
+    const followed = useSceneStore.getState().followCamera;
+    expect(camera.getAttribute('aria-checked')).toBe(String(followed));
+    fireEvent.click(camera);
+    expect(useSceneStore.getState().followCamera).toBe(!followed);
+  });
+
   it('final-only показывает причину', () => {
     const s = useSceneStore.getState();
     act(() =>
