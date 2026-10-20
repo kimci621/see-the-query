@@ -198,6 +198,23 @@ test('how-to-use: развёрнутая book в кадре, ⌘0 добавля
   await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
 });
 
+// P8.60: до первого замера обёртка ноды не должна держать ширину initialWidth (свёрнутая book).
+// Иначе после замера развёрнутая book растёт посреди обработки ResizeObserver и браузер пишет «loop completed»
+test('how-to-use: старт доски без «ResizeObserver loop»', async ({ page }) => {
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { roErrors: string[] }).roErrors = seen;
+    window.addEventListener('error', (e) => {
+      if (String(e.message).includes('ResizeObserver')) seen.push(e.message);
+    });
+  });
+  await page.goto('/l/how-to-use');
+  const book = page.getByTestId('table-node-public.book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
+  expect(await page.evaluate(() => (window as unknown as { roErrors: string[] }).roErrors)).toEqual([]);
+});
+
 // Первый трейс нового урока сворачивает book: рефит идёт в стартовый кадр нового урока, а не во всю доску
 test('переход how-to-use → select-basics заканчивается стартовым кадром select-basics', async ({ page }) => {
   await page.goto('/l/how-to-use');
