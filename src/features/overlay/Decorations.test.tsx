@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Decorations } from './Decorations';
+import { ghostWidth, ROW_H, rowTop } from './geometry';
 import type { Frame } from './types';
 
 const t = {
@@ -38,6 +39,38 @@ describe('Decorations', () => {
     expect(screen.getByTestId('deco-pair-line').getAttribute('d')).toMatch(/^M /);
     expect(screen.getByTestId('deco-bracket').textContent).toBe('Россия');
     expect(screen.getByTestId('deco-arrow')).toBeTruthy();
+  });
+
+  it('линия пары идёт между краями таблиц, а не через колонки: ключ первой колонкой слева', () => {
+    // author a left join book b: ключ author_id первый в author, справа от него name и country
+    const author = {
+      ...t,
+      id: 't:a',
+      columns: ['author_id', 'name', 'country'].map((name) => ({ name, state: 'normal' as const })),
+      rows: [{ key: 'a=(0,1)', values: [1, 'Шолохов', 'Россия'], state: 'normal' as const }],
+    };
+    const book = {
+      ...t,
+      id: 't:b',
+      x: 500,
+      rows: [{ key: 'b=(0,1)', values: [1], state: 'normal' as const }],
+    };
+    const frame: Frame = {
+      tables: [author, book],
+      decorations: [
+        {
+          kind: 'pair-line',
+          id: 'p',
+          from: { table: 't:a', row: 'a=(0,1)', col: 'author_id' },
+          to: { table: 't:b', row: 'b=(0,1)', col: 'author_id' },
+        },
+      ],
+    };
+    render(<Decorations frame={frame} />);
+    const y = rowTop(0) + ROW_H / 2;
+    const d = screen.getByTestId('deco-pair-line').getAttribute('d') ?? '';
+    expect(d.startsWith(`M ${ghostWidth(author)} ${y} `)).toBe(true);
+    expect(d.endsWith(`, 500 ${y}`)).toBe(true);
   });
 
   it('декорация на несуществующую таблицу пропускается', () => {

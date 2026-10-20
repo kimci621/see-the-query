@@ -94,12 +94,16 @@ export function frameBounds(frame: Frame): { x: number; y: number; width: number
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
-// Центр ячейки в координатах доски (для линий пар и стрелок)
-export function cellCenter(t: GhostTable, rowKey: string, colName: string): { x: number; y: number } | null {
+// Точка строки на краю таблицы (для линий пар): справа или слева, на середине высоты строки.
+// Линия от края, а не от ячейки ключа, не идёт поверх текста соседних колонок
+export function rowAnchor(
+  t: GhostTable,
+  rowKey: string,
+  side: 'left' | 'right',
+): { x: number; y: number } | null {
   const rowIndex = t.rows.findIndex((r) => r.key === rowKey);
-  const colIndex = t.columns.findIndex((c) => c.name === colName);
-  if (rowIndex === -1 || colIndex === -1) return null;
-  return { x: t.x + cellLeft(colIndex) + COL_WIDTH / 2, y: t.y + rowTop(rowIndex) + ROW_H / 2 };
+  if (rowIndex === -1) return null;
+  return { x: side === 'left' ? t.x : t.x + ghostWidth(t), y: t.y + rowTop(rowIndex) + ROW_H / 2 };
 }
 
 // Стабильные ключи колонок: одноимённые получают суффикс #2, #3

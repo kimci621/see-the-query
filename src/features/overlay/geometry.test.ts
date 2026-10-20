@@ -4,13 +4,13 @@ import { counterNear } from './frame';
 import {
   COL_WIDTH,
   COLHEAD_HEIGHT,
-  cellCenter,
   columnKeys,
   frameBounds,
   ghostHeight,
   ghostWidth,
   marksWidth,
   ROW_H,
+  rowAnchor,
   rowTop,
   TITLE_HEIGHT,
 } from './geometry';
@@ -82,12 +82,13 @@ describe('geometry', () => {
     expect(frameBounds({ tables: [table()], decorations: [], camera })).toEqual(camera);
   });
 
-  it('cellCenter находит ячейку по ключу строки и имени колонки', () => {
-    expect(cellCenter(table(), 'b=(0,2)', 'price')).toEqual({
-      x: 100 + COL_WIDTH + COL_WIDTH / 2,
+  it('rowAnchor: край таблицы на середине строки', () => {
+    expect(rowAnchor(table(), 'b=(0,2)', 'right')).toEqual({
+      x: 100 + ghostWidth(table()),
       y: 50 + rowTop(1) + ROW_H / 2,
     });
-    expect(cellCenter(table(), 'нет', 'price')).toBeNull();
+    expect(rowAnchor(table(), 'b=(0,2)', 'left')?.x).toBe(100);
+    expect(rowAnchor(table(), 'нет', 'left')).toBeNull();
   });
 
   it('columnKeys различает одноимённые колонки', () => {

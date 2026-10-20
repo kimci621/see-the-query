@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { cellCenter, ghostWidth, ROW_H, rowTop } from './geometry';
+import { ghostWidth, ROW_H, rowAnchor, rowTop } from './geometry';
 import type { Decoration, Frame, GhostTable } from './types';
 
 function findTable(frame: Frame, id: string): GhostTable | undefined {
@@ -75,8 +75,11 @@ function SvgLayer({ frame }: { frame: Frame }) {
     if (d.kind === 'pair-line') {
       const ft = findTable(frame, d.from.table);
       const tt = findTable(frame, d.to.table);
-      const a = ft && cellCenter(ft, d.from.row, d.from.col);
-      const b = tt && cellCenter(tt, d.to.row, d.to.col);
+      if (!ft || !tt) return [];
+      // Линия идёт между обращёнными друг к другу краями; ключи подсвечены колонкой 'key'
+      const forward = ft.x <= tt.x;
+      const a = rowAnchor(ft, d.from.row, forward ? 'right' : 'left');
+      const b = rowAnchor(tt, d.to.row, forward ? 'left' : 'right');
       if (!a || !b) return [];
       const mx = (a.x + b.x) / 2;
       return [
