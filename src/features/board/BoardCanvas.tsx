@@ -27,7 +27,7 @@ import { FkEdge, FkMarkers } from './FkEdge';
 import { anchorFrame, chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM } from './layout';
 import { type BoardNode, buildEdges, buildNodes, normalizeTableId, resolvePositions } from './model';
 import { SchemaGroupNode } from './SchemaGroupNode';
-import { TableNode } from './TableNode';
+import { moveInTable, TableNode } from './TableNode';
 
 // Типы нод и рёбер вне компонента: новый объект на рендер заставляет React Flow пересоздавать ноды
 const nodeTypes = { table: TableNode, schemaGroup: SchemaGroupNode };
@@ -35,7 +35,7 @@ const edgeTypes = { fk: FkEdge };
 
 // Подписи React Flow по-русски (ключи из AriaLabelConfig). Описание нод и рёбер заменено:
 // стандартное обещает выбор и перенос, а доска только для чтения
-const NODE_DESCRIPTION = 'Таблица на доске. Только для просмотра.';
+const NODE_DESCRIPTION = 'Таблица на доске. Только для просмотра. Стрелки влево и вправо ходят по колонкам.';
 const ariaLabelConfig = {
   'node.a11yDescription.default': NODE_DESCRIPTION,
   'node.a11yDescription.keyboardDisabled': NODE_DESCRIPTION,
@@ -157,6 +157,13 @@ function BoardFlow() {
   }, [schema, visible, meta]);
 
   useCamera(lessonId, nodes, boardRef, over);
+
+  // ←/→ внутри таблицы: по шапкам колонок. Плеер берёт стрелки только на самой доске (useBoardHotkeys)
+  useEffect(() => {
+    const el = boardRef.current;
+    el?.addEventListener('keydown', moveInTable);
+    return () => el?.removeEventListener('keydown', moveInTable);
+  }, []);
 
   return (
     <div

@@ -13,6 +13,7 @@ const HOTKEYS: Array<{ keys: string[]; action: string; soon?: true }> = [
   { keys: ['Space'], action: 'Пауза и продолжение сцены', soon: true },
   { keys: ['←', '→'], action: 'Шаг сцены назад и вперёд', soon: true },
   { keys: ['Esc'], action: 'Закрыть сцену', soon: true },
+  { keys: ['←', '→'], action: 'По колонкам таблицы на доске: подсказки и «+N колонки»' },
   { keys: ['?'], action: 'Эта шпаргалка' },
 ];
 

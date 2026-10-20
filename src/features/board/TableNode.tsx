@@ -56,6 +56,31 @@ function Flag({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+const TABLE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
+
+// Клавиатура внутри таблицы (спека 3.10): нода - одна остановка Tab, с неё и по шапкам колонок
+// и «+N колонки» ходят ←/→, Home/End. ← с первой шапки возвращает на ноду. Доска ловит keydown
+// одним слушателем (BoardCanvas), на сами шапки обработчики не вешаем
+export function moveInTable(e: KeyboardEvent): void {
+  if (!TABLE_KEYS.has(e.key) || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+  if (!(e.target instanceof HTMLElement)) return;
+  const node = e.target.closest<HTMLElement>('.react-flow__node-table');
+  if (!node) return;
+  const heads = [...node.querySelectorAll<HTMLElement>('.vs-col-head')];
+  const i = heads.indexOf(e.target);
+  if (i === -1 && e.target !== node) return;
+  const last = heads.length - 1;
+  const next = {
+    ArrowLeft: i <= 0 ? node : heads[i - 1],
+    ArrowRight: heads[Math.min(i + 1, last)],
+    Home: heads[0],
+    End: heads[last],
+  }[e.key as 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End'];
+  if (!next) return;
+  e.preventDefault();
+  next.focus();
+}
+
 // Подсказка доски (спека 3.4): мышь и фокус с клавиатуры. Только шапки колонок и заглушка, не ячейки
 function Hint({ text, children }: { text: string; children: ReactNode }) {
   return (
@@ -70,8 +95,8 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
   return (
     <Hint text={columnTitle(column)}>
       <div
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: шапка в порядке Tab ради подсказки с ограничениями
-        tabIndex={0}
+        // Вне порядка Tab: в таблицу Tab заходит один раз, по шапкам ходят стрелки (moveInTable)
+        tabIndex={-1}
         data-column={column.name}
         data-highlighted={highlighted || undefined}
         className={cn(
@@ -163,6 +188,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
           <Hint text={fold.hidden.map((c) => c.name).join(', ')}>
             <button
               type="button"
+              tabIndex={-1}
               data-testid="hidden-columns"
               data-highlighted={stubHighlighted || undefined}
               className={cn(

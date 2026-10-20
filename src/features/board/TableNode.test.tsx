@@ -7,7 +7,7 @@ import type { TableInfo } from '@/features/db/introspect';
 import { useBoardStore } from '@/stores/board';
 import { author, book, cart, category, col, wideBook } from './__fixtures__/schema';
 import type { TableFlowNode } from './model';
-import { columnTitle, TableNode } from './TableNode';
+import { columnTitle, moveInTable, TableNode } from './TableNode';
 
 function node(table: TableInfo, onRender: () => void = () => undefined) {
   const props = { id: table.id, data: { table }, type: 'table' } as unknown as NodeProps<TableFlowNode>;
@@ -40,11 +40,11 @@ describe('TableNode', () => {
     expect(title && within(title as HTMLElement).getByText('NN')).toBeInTheDocument();
   });
 
-  it('шапка колонки в порядке Tab, на фокусе подсказка с ограничениями вместо title', async () => {
+  it('шапка колонки вне порядка Tab (ходят стрелками), на фокусе подсказка с ограничениями вместо title', async () => {
     render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
     const el = screen.getByTestId('table-node-public.book');
     const head = el.querySelector<HTMLElement>('[data-column="published_at"]');
-    expect(head).toHaveAttribute('tabindex', '0');
+    expect(head).toHaveAttribute('tabindex', '-1');
     expect(head).not.toHaveAttribute('title');
     act(() => head?.focus());
     expect(await screen.findByRole('tooltip')).toHaveTextContent('DEFAULT CURRENT_DATE');
@@ -131,6 +131,7 @@ describe('TableNode: свёртка широкой таблицы', () => {
     const stub = within(el).getByRole('button', { name: '+4 колонки' });
     expect(stub).toHaveAttribute('data-testid', 'hidden-columns');
     expect(stub).not.toHaveAttribute('title');
+    expect(stub).toHaveAttribute('tabindex', '-1');
     act(() => stub.focus());
     expect(await screen.findByRole('tooltip')).toHaveTextContent('pages, published_at, tags, meta');
     fireEvent.click(stub);
@@ -196,6 +197,60 @@ describe('TableNode: свёртка широкой таблицы', () => {
     const before = renders.book;
     act(() => useBoardStore.getState().expandTables(['public.author']));
     expect(renders.book).toBe(before);
+  });
+});
+
+describe('TableNode: клавиатура внутри таблицы', () => {
+  beforeEach(() => useBoardStore.setState(useBoardStore.getInitialState(), true));
+
+  // Обёртка как у React Flow: она в порядке Tab, стрелки ловит доска (BoardCanvas)
+  function renderInWrapper(table: TableInfo) {
+    render(
+      <ReactFlowProvider>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: обёртка ноды React Flow в тесте */}
+        <div
+          data-testid="wrapper"
+          className="react-flow__node react-flow__node-table"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: обёртка ноды React Flow в тесте
+          tabIndex={0}
+          onKeyDown={(e) => moveInTable(e.nativeEvent)}
+        >
+          {node(table)}
+        </div>
+      </ReactFlowProvider>,
+    );
+    return screen.getByTestId('wrapper');
+  }
+  const focusedColumn = () =>
+    document.activeElement?.getAttribute('data-column') ??
+    document.activeElement?.getAttribute('data-testid');
+
+  it('→ с ноды на первую шапку, ←/→ по шапкам и заглушке, ← с первой шапки обратно на ноду', () => {
+    const wrapper = renderInWrapper(wideBook);
+    act(() => wrapper.focus());
+    fireEvent.keyDown(wrapper, { key: 'ArrowRight' });
+    expect(focusedColumn()).toBe('book_id');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+    expect(focusedColumn()).toBe('title');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'End' });
+    expect(focusedColumn()).toBe('hidden-columns');
+    // за последней остаёмся на месте
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+    expect(focusedColumn()).toBe('hidden-columns');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowLeft' });
+    expect(focusedColumn()).toBe('price');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Home' });
+    expect(focusedColumn()).toBe('book_id');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(wrapper);
+  });
+
+  it('стрелки с модификатором и другие клавиши не трогает', () => {
+    const wrapper = renderInWrapper(book);
+    act(() => wrapper.focus());
+    fireEvent.keyDown(wrapper, { key: 'ArrowRight', metaKey: true });
+    fireEvent.keyDown(wrapper, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(wrapper);
   });
 });
 
