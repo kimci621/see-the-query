@@ -239,3 +239,23 @@
   --shiki-token-punctuation: var(--sql-operator);
   --shiki-token-parameter: var(--sql-identifier);
 }
+
+/* Код урока шире колонки прокручивается вбок. Полоса видна всегда: macOS прячет системные полосы,
+   и обрезанная строка SQL выглядела бы целой. Стиль ::-webkit-scrollbar делает полосу постоянной в Chrome и Safari */
+.prose pre::-webkit-scrollbar {
+  height: 0.5rem;
+}
+.prose pre::-webkit-scrollbar-thumb {
+  border: 2px solid var(--muted);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+}
+.prose pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .prose pre {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent) transparent;
+  }
+}
