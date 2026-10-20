@@ -8,7 +8,7 @@ export const CellValue = memo(function CellValue({ value, type }: { value: unkno
     return (
       <span
         data-kind="null"
-        className="rounded border border-dashed border-null bg-null-bg px-1 text-[11px] leading-4 text-null italic"
+        className="rounded border border-dashed border-null bg-null-bg px-1 text-[0.6875rem] leading-4 text-null italic"
       >
         NULL
       </span>

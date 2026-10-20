@@ -58,11 +58,11 @@
 }
 
 .vs-board[data-far] .vs-col-name {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .vs-board[data-far] .vs-table-name {
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 
 /* Фокус с клавиатуры на таблице доски: тот же акцент, что у «затронуто», контраст ≥ 3:1 */
@@ -80,7 +80,7 @@
 /* Атрибуция React Flow остаётся (лицензия), но не спорит с доской */
 .vs-board .react-flow__attribution {
   background: transparent;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .vs-board .react-flow__attribution a {

@@ -111,7 +111,7 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
           {column.fk && <Link2 aria-label="Внешний ключ" className="size-3 shrink-0" />}
           <span className="vs-col-name truncate font-mono">{column.name}</span>
         </div>
-        <div className="vs-col-meta flex items-center gap-1 text-[11px] text-muted-foreground">
+        <div className="vs-col-meta flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
           <span className="truncate font-mono">{column.type}</span>
           {!column.nullable && !column.isPk && <Flag title="NOT NULL">NN</Flag>}
           {column.isUnique && !column.isPk && <Flag title="UNIQUE">U</Flag>}

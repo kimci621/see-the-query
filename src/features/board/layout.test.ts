@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { author, book, cart, category, col, SCHEMA, table, wideBook } from './__fixtures__/schema';
 import {
   anchorFrame,
@@ -6,12 +6,17 @@ import {
   COLUMN_WIDTH,
   foldColumns,
   foldWidth,
+  GROUP_PADDING,
+  ROW_HEIGHT,
+  rem,
   SCHEMA_GAP,
   STUB_WIDTH,
+  setRootFont,
   TABLE_WIDTH,
   tableHeight,
   tableWidth,
 } from './layout';
+import { resolvePositions } from './model';
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -42,6 +47,39 @@ describe('размеры таблицы', () => {
   it('ширина по числу колонок, не меньше TABLE_WIDTH', () => {
     expect(tableWidth(book)).toBe(6 * COLUMN_WIDTH);
     expect(tableWidth(table('public.one', [col('id', 'int')]))).toBe(TABLE_WIDTH);
+  });
+});
+
+// Крупный шрифт браузера (спека 3.4, WCAG 1.4.4): длины в rem, при корне 32px всё вдвое больше
+describe('размеры в rem', () => {
+  afterEach(() => setRootFont(16));
+
+  it('корень 32px: константы, высота и ширина таблицы вдвое больше', () => {
+    const before = {
+      h: tableHeight(book),
+      w: tableWidth(book),
+      fold: foldWidth(foldColumns(wideBook, [], false)),
+    };
+    setRootFont(32);
+    expect(rem(1)).toBe(32);
+    expect([ROW_HEIGHT, COLUMN_WIDTH, STUB_WIDTH, TABLE_WIDTH, SCHEMA_GAP, GROUP_PADDING]).toEqual([
+      48, 264, 192, 520, 240, 48,
+    ]);
+    expect(tableHeight(book)).toBe(2 * before.h);
+    expect(tableWidth(book)).toBe(2 * before.w);
+    expect(foldWidth(foldColumns(wideBook, [], false))).toBe(2 * before.fold);
+  });
+
+  it('корень 32px: раскладка и координаты урока растут вместе с таблицами, наложений нет', () => {
+    const auto = autoLayout(SCHEMA, null);
+    const lesson = { book: { x: 0, y: 0 }, author: { x: 0, y: 380 } };
+    setRootFont(32);
+    const big = autoLayout(SCHEMA, null);
+    for (const id of Object.keys(auto)) expect(big[id]).toEqual({ x: 2 * auto[id].x, y: 2 * auto[id].y });
+    const r = Object.values(rects(big));
+    for (let i = 0; i < r.length; i++)
+      for (let j = i + 1; j < r.length; j++) expect(overlap(r[i], r[j])).toBe(false);
+    expect(resolvePositions(SCHEMA, null, lesson)['public.author']).toEqual({ x: 0, y: 760 });
   });
 });
 

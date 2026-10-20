@@ -1,18 +1,55 @@
 import dagre from '@dagrejs/dagre';
 import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 
-export const TABLE_WIDTH = 260;
-export const ROW_HEIGHT = 24;
-export const HEADER_HEIGHT = 36;
-export const MAX_VISIBLE_ROWS = 15;
-export const COLUMN_WIDTH = 132;
+// Длины доски и призраков в rem (спека 3.4, WCAG 1.4.4): растут вместе с настройкой шрифта браузера.
+// React Flow, dagre и оверлей считают в px, поэтому rem переводится в px только здесь, от текущего
+// корневого размера шрифта. setRootFont пересчитывает константы; импортёры видят новые значения,
+// export let - живая привязка ES-модуля. Комментарии с px - значения при корне 16px
+let rootFont = 16;
+export const rem = (n: number) => n * rootFont;
+
+export let TABLE_WIDTH: number; // 260px
+export let ROW_HEIGHT: number; // 24px
+export let HEADER_HEIGHT: number; // 36px
+export let COLUMN_WIDTH: number; // 132px
 // Заглушка «+N колонки» у свёрнутой таблицы
-export const STUB_WIDTH = 96;
+export let STUB_WIDTH: number; // 96px
+export let COLUMN_HEADER_HEIGHT: number; // 40px
+export let SCHEMA_GAP: number; // 120px
+// Рамка схемы: отступ вокруг таблиц и строка подписи
+export let GROUP_PADDING: number; // 24px
+export let GROUP_LABEL: number; // 28px
+// Зазор между призраками сцены и от таблиц доски до рабочей зоны сцены
+export let TABLE_GAP: number; // 80px
+export let WORK_AREA_GAP: number; // 160px
+
+export function setRootFont(px: number): void {
+  rootFont = px;
+  TABLE_WIDTH = rem(16.25);
+  ROW_HEIGHT = rem(1.5);
+  HEADER_HEIGHT = rem(2.25);
+  COLUMN_WIDTH = rem(8.25);
+  STUB_WIDTH = rem(6);
+  COLUMN_HEADER_HEIGHT = rem(2.5);
+  SCHEMA_GAP = rem(7.5);
+  GROUP_PADDING = rem(1.5);
+  GROUP_LABEL = rem(1.75);
+  TABLE_GAP = rem(5);
+  WORK_AREA_GAP = rem(10);
+}
+
+// Корневой размер шрифта страницы, px; вне браузера (тесты в Node) 16
+export const readRootFont = () =>
+  (typeof document !== 'undefined' &&
+    Number.parseFloat(getComputedStyle(document.documentElement).fontSize)) ||
+  16;
+
+setRootFont(readRootFont());
+
+export const MAX_VISIBLE_ROWS = 15;
 // Таблица шире этого числа колонок свёрнута, видно не меньше FOLD_MIN колонок
 const FOLD_FROM = 6;
 const FOLD_MIN = 5;
-export const COLUMN_HEADER_HEIGHT = 40;
-export const SCHEMA_GAP = 120;
 // Ниже этого зума доска показывает только шапки и имена колонок (семантический зум, CSS в board.css)
 export const FAR_ZOOM = 0.5;
 // Нижняя граница зума автоподгонки: мельче текст не читается
@@ -20,10 +57,7 @@ export const FIT_MIN_ZOOM = 0.6;
 
 // Снизу у доски полоса хрома: кнопки зума и плашка версии Postgres (BoardStatus). Кадры держат её
 // пустой, чтобы хром не ложился на таблицы. Считаем в rem: плашка растёт вместе с текстом
-export const chromeBottom = () => {
-  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  return `${Math.round(3.5 * rem)}px` as const;
-};
+export const chromeBottom = () => `${Math.round(rem(3.5))}px` as const;
 
 // Якорь кадра (спека 3.4): если на зуме кадра таблицы не влезают в доску по оси, по этой оси
 // кадр держит левый (верхний) край у отступа, а не центр: шапка и PK видны. Отступы кадра
@@ -109,7 +143,7 @@ export function autoLayout(schema: SchemaSnapshot, visible: string[] | null): Po
     if (tables.length === 0) continue;
 
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 120 });
+    g.setGraph({ rankdir: 'LR', nodesep: rem(3.75), ranksep: rem(7.5) });
     g.setDefaultEdgeLabel(() => ({}));
     for (const t of tables) g.setNode(t.id, { width: tableWidth(t), height: tableHeight(t) });
     for (const fk of schema.fks) {

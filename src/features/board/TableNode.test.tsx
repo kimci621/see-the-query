@@ -274,12 +274,13 @@ describe('TableNode: акцент touched', () => {
 });
 
 describe('TableNode: читаемость', () => {
-  it('мета колонки и NULL-плашка 11px, не 10px', () => {
+  // 0.6875rem = 11px при корне 16px, в rem растёт со шрифтом браузера
+  it('мета колонки и NULL-плашка 0.6875rem (11px), не 10px', () => {
     render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
     const el = screen.getByTestId('table-node-public.book');
     const meta = el.querySelector('.vs-col-meta');
-    expect(meta?.className).toContain('text-[11px]');
-    expect(el.querySelector('[data-kind="null"]')?.className).toContain('text-[11px]');
+    expect(meta?.className).toContain('text-[0.6875rem]');
+    expect(el.querySelector('[data-kind="null"]')?.className).toContain('text-[0.6875rem]');
     expect(el.innerHTML).not.toContain('text-[10px]');
   });
 

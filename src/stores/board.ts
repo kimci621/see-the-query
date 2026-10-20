@@ -26,6 +26,8 @@ export interface BoardStore {
   frameRequest: number;
   focusRequest: number;
   startRequest: number;
+  // Корневой размер шрифта, px (board/layout, rem): смена пересобирает раскладку доски и призраки
+  rootFont: number;
   setSchema(s: SchemaSnapshot | null, userTables?: string[], rowWrites?: AppliedWrite[]): void;
   clearRowWrites(): void;
   setVisibleTables(t: string[] | null): void;
@@ -37,6 +39,7 @@ export interface BoardStore {
   setDimmed(v: boolean): void;
   requestFit(): void;
   requestFrame(): void;
+  setRootFont(px: number): void;
 }
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -56,6 +59,7 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   frameRequest: 0,
   focusRequest: 0,
   startRequest: 0,
+  rootFont: 16,
   // Одно обновление: новые данные и их пометки появляются на доске вместе, без анимации
   setSchema: (schema, userTables = [], rowWrites = []) =>
     set((s) => ({
@@ -79,4 +83,5 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   setDimmed: (dimmed) => set({ dimmed }),
   requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
   requestFrame: () => set((s) => ({ frameRequest: s.frameRequest + 1 })),
+  setRootFont: (rootFont) => set((s) => (s.rootFont === rootFont ? s : { rootFont })),
 }));

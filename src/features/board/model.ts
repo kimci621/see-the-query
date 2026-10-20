@@ -5,8 +5,11 @@ import {
   autoLayout,
   foldColumns,
   foldWidth,
+  GROUP_LABEL,
+  GROUP_PADDING,
   isTableVisible,
   type Positions,
+  rem,
   SCHEMA_GAP,
   schemaNames,
   tableHeight,
@@ -28,8 +31,7 @@ export type SchemaFlowNode = Node<SchemaGroupData, 'schemaGroup'>;
 export type BoardNode = TableFlowNode | SchemaFlowNode;
 export type FkFlowEdge = Edge<FkEdgeData, 'fk'>;
 
-export const GROUP_PADDING = 24;
-export const GROUP_LABEL = 28;
+export { GROUP_LABEL, GROUP_PADDING } from './layout';
 
 // Подпись ноды для скринридера: таблица, строк всего (не только показанных), все колонки
 export function tableAriaLabel(t: TableInfo): string {
@@ -40,7 +42,8 @@ export function normalizeTableId(name: string): string {
   return name.includes('.') ? name : `public.${name}`;
 }
 
-// Автораскладка, поверх неё координаты из frontmatter урока (имена без схемы считаются public)
+// Автораскладка, поверх неё координаты из frontmatter урока (имена без схемы считаются public).
+// Координаты урока - px при корне 16px, переводим в rem: таблицы растут со шрифтом, и расстояния тоже
 export function resolvePositions(
   schema: SchemaSnapshot,
   visible: string[] | null,
@@ -48,7 +51,10 @@ export function resolvePositions(
 ): Positions {
   if (!layout || layout === 'auto') return autoLayout(schema, visible);
   const manual: Positions = Object.fromEntries(
-    Object.entries(layout).map(([name, p]) => [normalizeTableId(name), p]),
+    Object.entries(layout).map(([name, p]) => [
+      normalizeTableId(name),
+      { x: rem(p.x / 16), y: rem(p.y / 16) },
+    ]),
   );
   // Таблицы без координат урока (например, созданные учеником) встают правее таблиц урока, а не поверх них
   const rest = schema.tables.filter((t) => isTableVisible(visible, t.id) && !manual[t.id]).map((t) => t.id);
