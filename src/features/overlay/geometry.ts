@@ -36,6 +36,15 @@ export function cellLeft(colIndex: number): number {
   return colIndex * COL_WIDTH;
 }
 
+// Ширина плашки счётчика (12px, полужирный, поля по 8px) без замера DOM.
+// ponytail: оценка по числу символов с запасом и шагом в 8 символов, чтобы набегающий
+// счётчик агрегата не двигал камеру на каждой цифре; точнее только замер после рендера
+const COUNTER_CHAR = 8;
+const COUNTER_PAD = 16;
+export function counterWidth(text: string): number {
+  return Math.ceil(text.length / 8) * 8 * COUNTER_CHAR + COUNTER_PAD;
+}
+
 export function frameBounds(frame: Frame): { x: number; y: number; width: number; height: number } | null {
   if (frame.camera) return frame.camera;
   if (frame.tables.length === 0) return null;
@@ -48,6 +57,10 @@ export function frameBounds(frame: Frame): { x: number; y: number; width: number
     minY = Math.min(minY, t.y);
     maxX = Math.max(maxX, t.x + ghostWidth(t));
     maxY = Math.max(maxY, t.y + ghostHeight(t));
+  }
+  // Счётчики «было → стало» стоят справа от таблицы: кадр держит их целиком
+  for (const d of frame.decorations) {
+    if (d.kind === 'counter') maxX = Math.max(maxX, d.x + counterWidth(d.text));
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }

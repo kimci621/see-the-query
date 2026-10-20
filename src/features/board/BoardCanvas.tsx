@@ -21,7 +21,7 @@ import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 import { FkEdge, FkMarkers } from './FkEdge';
-import { FAR_ZOOM, FIT_MIN_ZOOM } from './layout';
+import { chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM } from './layout';
 import { type BoardNode, buildEdges, buildNodes, normalizeTableId, resolvePositions } from './model';
 import { SchemaGroupNode } from './SchemaGroupNode';
 import { TableNode } from './TableNode';
@@ -57,13 +57,6 @@ const tablesOf = (nodes: { id: string; type?: string }[]) =>
 
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
-
-// Снизу у доски полоса хрома: кнопки зума и плашка версии Postgres (BoardStatus). Кадры держат её
-// пустой, чтобы хром не ложился на таблицы. Считаем в rem: плашка растёт вместе с текстом
-const chromeBottom = () => {
-  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  return `${Math.round(3.5 * rem)}px` as const;
-};
 
 // Кадры камеры. Фокус (и стартовый кадр урока): таблицы запроса крупно, не ближе зума 1.
 // Отступ 0.1: при 0.3 свёрнутая book (756) на доске 719 px получала зум 0.73 и мелкий текст

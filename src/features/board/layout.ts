@@ -18,6 +18,13 @@ export const FAR_ZOOM = 0.5;
 // Нижняя граница зума автоподгонки: мельче текст не читается
 export const FIT_MIN_ZOOM = 0.6;
 
+// Снизу у доски полоса хрома: кнопки зума и плашка версии Postgres (BoardStatus). Кадры держат её
+// пустой, чтобы хром не ложился на таблицы. Считаем в rem: плашка растёт вместе с текстом
+export const chromeBottom = () => {
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  return `${Math.round(3.5 * rem)}px` as const;
+};
+
 export type Positions = Record<string, { x: number; y: number }>;
 
 // Полная ширина: по ней раскладка резервирует место, чтобы разворот не задевал соседей

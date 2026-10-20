@@ -1,6 +1,7 @@
-import { useReactFlow, ViewportPortal } from '@xyflow/react';
+import { getViewportForBounds, useReactFlow, useStoreApi, ViewportPortal } from '@xyflow/react';
 import { AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
+import { chromeBottom } from '@/features/board/layout';
 import { useBoardStore } from '@/stores/board';
 import { effectiveSpeed, useSceneStore } from '@/stores/scene';
 import { makeAnimatorContext } from './context';
@@ -40,6 +41,7 @@ export function OverlayLayer() {
   const hidden = useSceneStore((s) => s.hidden);
   const schema = useBoardStore((s) => s.schema);
   const rf = useReactFlow();
+  const flowStore = useStoreApi();
   const reduced = useReducedMotion() ?? false;
   const lastCamera = useRef('');
 
@@ -76,8 +78,12 @@ export function OverlayLayer() {
     const key = `${Math.round(b.x)}:${Math.round(b.y)}:${Math.round(b.width)}:${Math.round(b.height)}`;
     if (key === lastCamera.current) return;
     lastCamera.current = key;
-    void rf.fitBounds(b, { padding: 0.2, duration: durationSec * 1000 });
-  }, [phase, followCamera, rf, durationSec]);
+    // Снизу полоса под хром доски, как у focusFrame/boardFrame: fitBounds берёт только число
+    const { width, height, minZoom, maxZoom } = flowStore.getState();
+    const padding = { x: 0.2, top: 0.2, bottom: chromeBottom() };
+    const vp = getViewportForBounds(b, width, height, minZoom, maxZoom, padding);
+    void rf.setViewport(vp, { duration: durationSec * 1000 });
+  }, [phase, followCamera, rf, flowStore, durationSec]);
 
   // Сцена ушла (ошибка, итог без шагов, Esc), а камера стоит там, где был призрак: там пусто.
   // Возвращаем её к таблицам запроса, если сцену вёл пользователь (переход в урок держит его камеру).

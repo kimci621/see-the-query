@@ -109,6 +109,30 @@ test('«На доску» и «Дальше» из урока проигрыва
   await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
 });
 
+test('кадр сцены вмещает счётчик LIMIT и оставляет снизу место под хром доски', async ({ page }) => {
+  await page.goto('/l/logical-order');
+  await expect(page.locator('.cm-content')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+  await typeQuery(
+    page,
+    'select title, price * 0.9 as sale from book where price > 1000 order by sale desc limit 2',
+  );
+  await expect(page.getByTestId('ghost-row')).toHaveCount(2, { timeout: 10_000 });
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+    timeout: 15_000,
+  });
+  // камера доезжает за долю секунды после последней фазы
+  await page.waitForTimeout(800);
+  const board = await page.getByTestId('board-area').boundingBox();
+  const counter = await page.getByTestId('deco-counter').boundingBox();
+  const ghost = await page.getByTestId('ghost-table').boundingBox();
+  const chrome = await page.locator('.react-flow__controls').boundingBox();
+  expect((counter?.x ?? 0) + (counter?.width ?? 0)).toBeLessThanOrEqual(
+    (board?.x ?? 0) + (board?.width ?? 0),
+  );
+  expect((ghost?.y ?? 0) + (ghost?.height ?? 0)).toBeLessThanOrEqual(chrome?.y ?? 0);
+});
+
 test('после запроса с ошибкой камера возвращается к таблице, доска не пустая', async ({ page }) => {
   await openBoard(page);
   await typeQuery(page, QUERY);

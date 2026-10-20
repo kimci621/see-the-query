@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TABLE_WIDTH } from '@/features/board/layout';
+import { counterNear } from './frame';
 import {
   COL_WIDTH,
   COLHEAD_HEIGHT,
@@ -66,6 +67,13 @@ describe('geometry', () => {
       height: 50 + ghostHeight(a),
     });
     expect(frameBounds({ tables: [], decorations: [] })).toBeNull();
+  });
+
+  it('frameBounds вмещает счётчик справа от таблицы: камера не обрезает «4 → 2»', () => {
+    const t = table();
+    const b = frameBounds({ tables: [t], decorations: [counterNear(t, 'c', '4 → 2')] });
+    expect(b?.x).toBe(100);
+    expect((b?.x ?? 0) + (b?.width ?? 0)).toBeGreaterThan(100 + ghostWidth(t) + 16 + 5 * 7);
   });
 
   it('frameBounds берёт camera, если она задана', () => {
