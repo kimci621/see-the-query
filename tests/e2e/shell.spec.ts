@@ -71,8 +71,12 @@ test('Tab с доски фокусирует ноду таблицы с подп
     'aria-label',
     /^Таблица public\.\w+, \d+ (строк|строки|строка), колонки: \w+/,
   );
-  // следующий Tab переходит ко второй таблице
+  // дальше Tab идёт по шапкам колонок этой таблицы (подсказки с ограничениями, P8.17), потом ко второй таблице
+  const first = page.locator(`.react-flow__node[data-id="${await focused.getAttribute('data-id')}"]`);
   await page.keyboard.press('Tab');
+  await expect(first.locator('[data-column]:focus')).toHaveCount(1);
+  const stops = await first.locator('[data-column], [data-testid="hidden-columns"]').count();
+  for (let i = 0; i < stops; i++) await page.keyboard.press('Tab');
   await expect(page.getByTestId('rf__node-public.book')).toBeFocused();
 });
 

@@ -1,7 +1,8 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { type NodeProps, ReactFlowProvider } from '@xyflow/react';
 import { Profiler } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { TableInfo } from '@/features/db/introspect';
 import { useBoardStore } from '@/stores/board';
 import { author, book, cart, category, col, wideBook } from './__fixtures__/schema';
@@ -11,9 +12,11 @@ import { columnTitle, TableNode } from './TableNode';
 function node(table: TableInfo, onRender: () => void = () => undefined) {
   const props = { id: table.id, data: { table }, type: 'table' } as unknown as NodeProps<TableFlowNode>;
   return (
-    <Profiler id={table.id} onRender={onRender}>
-      <TableNode {...props} />
-    </Profiler>
+    <TooltipProvider>
+      <Profiler id={table.id} onRender={onRender}>
+        <TableNode {...props} />
+      </Profiler>
+    </TooltipProvider>
   );
 }
 
@@ -35,12 +38,20 @@ describe('TableNode', () => {
     expect(within(el).getByText('numeric(10,2)')).toBeInTheDocument();
     const title = el.querySelector('[data-column="title"]');
     expect(title && within(title as HTMLElement).getByText('NN')).toBeInTheDocument();
-    expect(el.querySelector('[data-column="published_at"]')?.getAttribute('title')).toContain(
-      'DEFAULT CURRENT_DATE',
-    );
-    expect(el.querySelector('[data-column="price"]')?.getAttribute('title')).toContain(
-      'CHECK ((price >= (0)::numeric))',
-    );
+  });
+
+  it('шапка колонки в порядке Tab, на фокусе подсказка с ограничениями вместо title', async () => {
+    render(<ReactFlowProvider>{node(book)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    const head = el.querySelector<HTMLElement>('[data-column="published_at"]');
+    expect(head).toHaveAttribute('tabindex', '0');
+    expect(head).not.toHaveAttribute('title');
+    act(() => head?.focus());
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('DEFAULT CURRENT_DATE');
+    fireEvent.blur(head as HTMLElement);
+    const price = el.querySelector<HTMLElement>('[data-column="price"]');
+    act(() => price?.focus());
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('CHECK ((price >= (0)::numeric))');
   });
 
   it('NULL и пустая строка выглядят по-разному, дата без времени', () => {
@@ -109,9 +120,23 @@ describe('TableNode: свёртка широкой таблицы', () => {
     expect(heads(el)).toEqual(['book_id', 'title', 'author_id', 'category_id', 'price']);
     const stub = within(el).getByTestId('hidden-columns');
     expect(stub).toHaveTextContent('+4 колонки');
-    expect(stub).toHaveAttribute('title', 'pages, published_at, tags, meta');
     expect(el.querySelectorAll('[data-stub-cell]')).toHaveLength(1);
     expect(el.style.width).toBe('756px');
+  });
+
+  it('заглушка - кнопка: на фокусе имена свёрнутых колонок, нажатие разворачивает таблицу как select *', async () => {
+    useBoardStore.getState().expandTables(['public.author']);
+    render(<ReactFlowProvider>{node(wideBook)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    const stub = within(el).getByRole('button', { name: '+4 колонки' });
+    expect(stub).toHaveAttribute('data-testid', 'hidden-columns');
+    expect(stub).not.toHaveAttribute('title');
+    act(() => stub.focus());
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('pages, published_at, tags, meta');
+    fireEvent.click(stub);
+    expect(useBoardStore.getState().expandedTables).toEqual(['public.author', 'public.book']);
+    expect(heads(el)).toEqual(wideBook.columns.map((c) => c.name));
+    expect(within(el).queryByTestId('hidden-columns')).toBeNull();
   });
 
   it('склонение: колонка, колонки, колонок', () => {

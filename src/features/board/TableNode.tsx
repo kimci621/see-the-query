@@ -3,6 +3,7 @@ import { KeyRound, Link2 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ColumnInfo } from '@/features/db/introspect';
 import { plural } from '@/lib/plural';
 import { bumpRenderCount } from '@/lib/renderCount';
@@ -55,31 +56,44 @@ function Flag({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+// Подсказка доски (спека 3.4): мышь и фокус с клавиатуры. Только шапки колонок и заглушка, не ячейки
+function Hint({ text, children }: { text: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent className="font-mono whitespace-pre-line">{text}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: boolean }) {
   return (
-    <div
-      data-column={column.name}
-      data-highlighted={highlighted || undefined}
-      title={columnTitle(column)}
-      className={cn(
-        'flex shrink-0 flex-col justify-center gap-0.5 border-r px-2 last:border-r-0',
-        // подложка не плотнее /10: на ней тип колонки 11px держит контраст 4.5 (tests/unit/contrast.test.ts)
-        highlighted && 'bg-touched/10',
-      )}
-      style={{ width: COLUMN_WIDTH }}
-    >
-      <div className="flex items-center gap-1 text-xs font-medium">
-        {column.isPk && <KeyRound aria-label="Первичный ключ" className="size-3 shrink-0" />}
-        {column.fk && <Link2 aria-label="Внешний ключ" className="size-3 shrink-0" />}
-        <span className="vs-col-name truncate font-mono">{column.name}</span>
+    <Hint text={columnTitle(column)}>
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: шапка в порядке Tab ради подсказки с ограничениями
+        tabIndex={0}
+        data-column={column.name}
+        data-highlighted={highlighted || undefined}
+        className={cn(
+          'vs-col-head flex shrink-0 flex-col justify-center gap-0.5 border-r px-2 last:border-r-0',
+          // подложка не плотнее /10: на ней тип колонки 11px держит контраст 4.5 (tests/unit/contrast.test.ts)
+          highlighted && 'bg-touched/10',
+        )}
+        style={{ width: COLUMN_WIDTH }}
+      >
+        <div className="flex items-center gap-1 text-xs font-medium">
+          {column.isPk && <KeyRound aria-label="Первичный ключ" className="size-3 shrink-0" />}
+          {column.fk && <Link2 aria-label="Внешний ключ" className="size-3 shrink-0" />}
+          <span className="vs-col-name truncate font-mono">{column.name}</span>
+        </div>
+        <div className="vs-col-meta flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="truncate font-mono">{column.type}</span>
+          {!column.nullable && !column.isPk && <Flag title="NOT NULL">NN</Flag>}
+          {column.isUnique && !column.isPk && <Flag title="UNIQUE">U</Flag>}
+          {column.checks.length > 0 && <Flag title="CHECK">✓</Flag>}
+        </div>
       </div>
-      <div className="vs-col-meta flex items-center gap-1 text-[11px] text-muted-foreground">
-        <span className="truncate font-mono">{column.type}</span>
-        {!column.nullable && !column.isPk && <Flag title="NOT NULL">NN</Flag>}
-        {column.isUnique && !column.isPk && <Flag title="UNIQUE">U</Flag>}
-        {column.checks.length > 0 && <Flag title="CHECK">✓</Flag>}
-      </div>
-    </div>
+    </Hint>
   );
 }
 
@@ -146,18 +160,28 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
           <ColumnHead key={c.name} column={c} highlighted={highlighted.includes(c.name)} />
         ))}
         {stub > 0 && (
-          <div
-            data-testid="hidden-columns"
-            data-highlighted={stubHighlighted || undefined}
-            title={fold.hidden.map((c) => c.name).join(', ')}
-            className={cn(
-              'flex shrink-0 items-center px-2 text-xs text-muted-foreground',
-              stubHighlighted && 'bg-touched/10',
-            )}
-            style={{ width: STUB_WIDTH }}
-          >
-            +{stub} {plural(stub, 'колонка', 'колонки', 'колонок')}
-          </div>
+          <Hint text={fold.hidden.map((c) => c.name).join(', ')}>
+            <button
+              type="button"
+              data-testid="hidden-columns"
+              data-highlighted={stubHighlighted || undefined}
+              className={cn(
+                'vs-col-head flex shrink-0 cursor-pointer items-center px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
+                stubHighlighted && 'bg-touched/10',
+              )}
+              style={{ width: STUB_WIDTH }}
+              onClick={(e) => {
+                // Тот же путь, что select *: таблица в развёрнутых до следующего запроса.
+                // Кнопка исчезнет вместе с заглушкой, фокус остаётся на ноде таблицы
+                const node = e.currentTarget.closest<HTMLElement>('.react-flow__node');
+                const board = useBoardStore.getState();
+                board.expandTables([...board.expandedTables, id]);
+                node?.focus();
+              }}
+            >
+              +{stub} {plural(stub, 'колонка', 'колонки', 'колонок')}
+            </button>
+          </Hint>
         )}
       </div>
       {rows.map((row) => (

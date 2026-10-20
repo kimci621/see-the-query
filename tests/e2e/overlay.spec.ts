@@ -233,3 +233,24 @@ test('переход из урока со сценой не сдвигает с�
   await page.waitForTimeout(2_000);
   expect(await camera()).toEqual(kept);
 });
+
+// Клик по «+N колонки» во время сцены разворачивает и призраки: призрак свёрнут как нода (P8.18), иначе
+// развёрнутая нода торчит из-под свёрнутого призрака (P8.17)
+test('«+N колонки» во время сцены разворачивает и призрак, как select *', async ({ page }) => {
+  // Камера стоит на book: иначе она уходит к призраку, а нода вне кадра не рисуется
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'vs-scene',
+      JSON.stringify({ state: { speed: 1, autoplay: true, followCamera: false }, version: 0 }),
+    );
+  });
+  await openBoard(page);
+  await typeQuery(page, 'select title from book where price > 500');
+  await expect(page.getByTestId('ghost-row').first()).toBeVisible({ timeout: 10_000 });
+  await page.getByTestId('stage-chip').first().click();
+  await expect(page.getByTestId('ghost-folded').first()).toBeVisible();
+  await page.getByTestId('table-node-public.book').getByTestId('hidden-columns').click();
+  await expect(page.getByTestId('table-node-public.book').locator('[data-column]')).toHaveCount(9);
+  await expect(page.getByTestId('ghost-folded')).toHaveCount(0);
+  await expect(page.getByTestId('ghost-table').first()).toBeVisible();
+});

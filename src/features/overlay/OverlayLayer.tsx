@@ -2,6 +2,8 @@ import { getViewportForBounds, useReactFlow, useStoreApi, ViewportPortal } from 
 import { AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { chromeBottom } from '@/features/board/layout';
+import type { SchemaSnapshot } from '@/features/db/introspect';
+import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { effectiveSpeed, useSceneStore } from '@/stores/scene';
@@ -42,6 +44,8 @@ export function OverlayLayer() {
   const stale = useSceneStore((s) => s.stale);
   const hidden = useSceneStore((s) => s.hidden);
   const schema = useBoardStore((s) => s.schema);
+  const expanded = useBoardStore((s) => s.expandedTables);
+  const builtFor = useRef<{ trace: Trace; schema: SchemaSnapshot } | null>(null);
   const rf = useReactFlow();
   const flowStore = useStoreApi();
   const reduced = useReducedMotion() ?? false;
@@ -51,14 +55,27 @@ export function OverlayLayer() {
   useEffect(() => {
     const scene = useSceneStore.getState();
     if (!trace || !schema) {
+      builtFor.current = null;
       scene.setPlayback(null);
       return;
     }
-    scene.setPlayback(buildPlayback(trace, makeAnimatorContext(rf, schema, trace.touched)));
+    // Призраки свёрнуты как нода: звёздочка трассы и таблицы, развёрнутые кликом по «+N колонки»
+    const touched = {
+      columns: trace.touched.columns,
+      expanded: [...(trace.touched.expanded ?? []), ...expanded],
+    };
+    const playback = buildPlayback(trace, makeAnimatorContext(rf, schema, touched));
+    // Трасса та же, сменилась только свёртка: меняем призраки на месте, шаг и видимость сцены не трогаем
+    if (builtFor.current?.trace === trace && builtFor.current.schema === schema) {
+      useSceneStore.setState({ playback });
+      return;
+    }
+    builtFor.current = { trace, schema };
+    scene.setPlayback(playback);
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
     // таймлайн и плеер её вернут
     if (!userDrivesScene()) scene.hide();
-  }, [trace, schema, rf]);
+  }, [trace, schema, rf, expanded]);
 
   const active = !!playback && playback.phases.length > 0 && !hidden;
 

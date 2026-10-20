@@ -71,6 +71,12 @@
   outline-offset: 2px;
 }
 
+/* Шапка колонки и заглушка «+N колонки»: таблица режет всё за краем (overflow hidden), кольцо внутрь */
+.vs-board .vs-col-head:focus-visible {
+  outline: 2px solid var(--touched);
+  outline-offset: -2px;
+}
+
 /* Атрибуция React Flow остаётся (лицензия), но не спорит с доской */
 .vs-board .react-flow__attribution {
   background: transparent;

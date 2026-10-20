@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactFlowInstance, useStoreApi } from '@xyflow/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
@@ -49,11 +50,14 @@ function mockReducedMotion(reduced: boolean) {
 
 function renderBoard() {
   return render(
-    <MemoryRouter initialEntries={['/l/unknown']}>
-      <Routes>
-        <Route path="/l/:lessonId" element={<BoardCanvas />} />
-      </Routes>
-    </MemoryRouter>,
+    // Подсказки шапок колонок берут TooltipProvider приложения (app/providers.tsx)
+    <TooltipProvider>
+      <MemoryRouter initialEntries={['/l/unknown']}>
+        <Routes>
+          <Route path="/l/:lessonId" element={<BoardCanvas />} />
+        </Routes>
+      </MemoryRouter>
+    </TooltipProvider>,
   );
 }
 

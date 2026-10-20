@@ -501,3 +501,32 @@ for (const lesson of ['select-basics', 'how-to-use']) {
     }
   });
 }
+
+// Подсказки доски с клавиатуры (P8.17): ограничения колонки и имена свёрнутых колонок видны на фокусе,
+// заглушка «+N колонки» - кнопка, Enter разворачивает таблицу, как select *, фокус остаётся на ноде
+test('клавиатура: Tab до шапки колонки показывает ограничения, Enter на «+N колонки» разворачивает book', async ({
+  page,
+}) => {
+  await openBookstore(page);
+  const node = page.locator('.react-flow__node[data-id="public.book"]');
+  const hint = page.locator('[data-slot="tooltip-content"][data-state$="open"]');
+  await node.focus();
+  await page.keyboard.press('Tab');
+  await expect(node.locator('[data-column="book_id"]')).toBeFocused();
+  await expect(hint).toBeVisible();
+  await expect(hint).toContainText('PRIMARY KEY');
+  await page.keyboard.press('Tab');
+  await expect(node.locator('[data-column="title"]')).toBeFocused();
+  await expect(hint).toContainText('NOT NULL');
+  // стартовый запрос select title, price: видны book_id, title, author_id, category_id, price, дальше заглушка
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Tab');
+  const stub = node.getByRole('button', { name: '+4 колонки' });
+  await expect(stub).toBeFocused();
+  await expect(hint).toContainText('pages, published_at, tags, meta');
+  await page.keyboard.press('Enter');
+  await expect(node.locator('[data-column]')).toHaveCount(9);
+  await expect(node.getByTestId('hidden-columns')).toHaveCount(0);
+  await expect(node).toBeFocused();
+  // book развернулась целиком в кадре, как после select *
+  await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
+});
