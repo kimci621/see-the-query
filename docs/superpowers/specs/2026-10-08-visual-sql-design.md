@@ -507,8 +507,9 @@ board:
   layout: auto                             # или координаты
 initialQuery: |
   select * from book;
-docs:
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+docs:                                      # ссылка + русская подпись, её видит ученик под уроком
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Соединение таблиц (JOIN)
 tags: [join, inner join, using, null]
 mvp: true
 ---
