@@ -77,7 +77,7 @@ interface SqlErrorLike {
   sqlDetails?: { cursorPosition?: number };
 }
 
-// SqlError libpg-query: 0-based символьная позиция курсора в sqlDetails.cursorPosition
+// SqlError libpg-query: 0-based позиция курсора в кодовых точках (не UTF-16) в sqlDetails.cursorPosition
 function toParseError(e: unknown): { message: string; position: number } {
   const err = (e ?? {}) as SqlErrorLike;
   const pos = typeof err.sqlDetails?.cursorPosition === 'number' ? err.sqlDetails.cursorPosition : 0;

@@ -14,7 +14,7 @@ export interface ParsedStatement {
 
 export type ParseOutcome =
   | { ok: true; statements: ParsedStatement[] }
-  | { ok: false; error: { message: string; position: number /* символьная, 0-based */ } };
+  | { ok: false; error: { message: string; position: number /* кодовые точки, 0-based (не UTF-16) */ } };
 
 export interface RangeRef {
   schema: string | null;
