@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { Controls, ReactFlowInstance, useStoreApi } from '@xyflow/react';
-import type { ComponentProps } from 'react';
+import type { ReactFlowInstance, useStoreApi } from '@xyflow/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBoardStore } from '@/stores/board';
@@ -13,22 +12,14 @@ import { BoardCanvas } from './BoardCanvas';
 const holder: {
   flow: ReactFlowInstance | null;
   store: ReturnType<typeof useStoreApi> | null;
-  controlsProps: ComponentProps<typeof Controls> | null;
 } = {
   flow: null,
   store: null,
-  controlsProps: null,
 };
 vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
-    // Кнопка «Вписать доску» зовёт fitView из своего экземпляра useReactFlow, шпион до него не достаёт:
-    // проверяем кадр, который доска отдала Controls
-    Controls: (props: ComponentProps<typeof Controls>) => {
-      holder.controlsProps = props;
-      return <actual.Controls {...props} />;
-    },
     useReactFlow: () => {
       const flow = actual.useReactFlow();
       holder.store = actual.useStoreApi();
@@ -82,11 +73,21 @@ function flow(): ReactFlowInstance {
   return holder.flow;
 }
 
+// Размер панели доски: jsdom не меряет, React Flow тогда берёт 500×500. Таблицы фикстуры в такую
+// панель не влезают и кадр якорится; для проверок fitView даём панель побольше
+function paneSize(size: number) {
+  for (const prop of ['offsetWidth', 'offsetHeight'] as const) {
+    vi.spyOn(HTMLElement.prototype, prop, 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('react-flow__renderer') ? size : 0;
+    });
+  }
+}
+
 describe('BoardCanvas', () => {
   beforeEach(() => {
+    paneSize(4000);
     holder.flow = null;
     holder.store = null;
-    holder.controlsProps = null;
     useBoardStore.setState(useBoardStore.getInitialState(), true);
     useBoardStore.getState().setSchema(SCHEMA);
     useLessonStore.setState({ byId: {} });
@@ -153,7 +154,28 @@ describe('BoardCanvas', () => {
     renderBoard();
     act(() => useBoardStore.getState().requestFit());
     const hotkey = vi.mocked(flow().fitView).mock.lastCall?.[0];
-    expect(holder.controlsProps?.fitViewOptions).toEqual(hotkey);
+    vi.mocked(flow().fitView).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Вписать доску' }));
+    expect(flow().fitView).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(flow().fitView).mock.lastCall?.[0]).toEqual(hotkey);
+  });
+
+  // Спека 3.4: не влезают на минимальном зуме - левый верхний угол у отступа, а не центр
+  it('кадр, который не влезает на минимальном зуме, держит левый верхний угол', () => {
+    mockReducedMotion(true);
+    paneSize(500);
+    renderBoard();
+    const setViewport = vi.spyOn(flow(), 'setViewport');
+    vi.mocked(flow().fitView).mockClear();
+    act(() => useBoardStore.getState().requestFit());
+    expect(flow().fitView).not.toHaveBeenCalled();
+    const bounds = flow().getNodesBounds(SCHEMA.tables.map((t) => t.id));
+    // отступ 0.15 по оси, как в React Flow: (500 - 500 / 1.15) / 2
+    const pad = Math.floor((500 - 500 / 1.15) * 0.5);
+    expect(setViewport).toHaveBeenLastCalledWith(
+      { x: pad - bounds.x * 0.6, y: expect.any(Number), zoom: 0.6 },
+      { duration: 0 },
+    );
   });
 
   it('кадр берёт только таблицы, без рамок схем', () => {
@@ -170,13 +192,13 @@ describe('BoardCanvas', () => {
     vi.mocked(flow().fitView).mockClear();
     act(() => useSettingsStore.getState().toggleFocusMode());
     expect(flow().fitView).not.toHaveBeenCalled();
-    act(() => holder.store?.setState({ width: 900 }));
+    act(() => holder.store?.setState({ width: 3900 }));
     expect(flow().fitView).toHaveBeenCalledTimes(1);
     expect(flow().fitView).toHaveBeenCalledWith(
       expect.objectContaining({ padding: BOARD_PAD, minZoom: 0.6, duration: 300 }),
     );
     // Дальнейшие смены ширины без режима фокуса камеру не трогают
-    act(() => holder.store?.setState({ width: 800 }));
+    act(() => holder.store?.setState({ width: 3800 }));
     expect(flow().fitView).toHaveBeenCalledTimes(1);
   });
 

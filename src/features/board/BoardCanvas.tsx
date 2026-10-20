@@ -5,13 +5,16 @@ import {
   BackgroundVariant,
   ControlButton,
   Controls,
+  getViewportForBounds,
   MiniMap,
   ReactFlow,
+  type ReactFlowInstance,
   ReactFlowProvider,
   useReactFlow,
   useStore,
+  useStoreApi,
 } from '@xyflow/react';
-import { MapIcon } from 'lucide-react';
+import { MapIcon, Maximize } from 'lucide-react';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useResolvedTheme } from '@/app/ThemeProvider';
@@ -21,7 +24,7 @@ import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 import { FkEdge, FkMarkers } from './FkEdge';
-import { chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM } from './layout';
+import { anchorFrame, chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM } from './layout';
 import { type BoardNode, buildEdges, buildNodes, normalizeTableId, resolvePositions } from './model';
 import { SchemaGroupNode } from './SchemaGroupNode';
 import { TableNode } from './TableNode';
@@ -74,6 +77,49 @@ const boardFrame = (nodes: { id: string; type?: string }[], duration = animation
   minZoom: FIT_MIN_ZOOM,
   duration,
 });
+
+type Frame = ReturnType<typeof focusFrame> | ReturnType<typeof boardFrame>;
+
+// Отступ кадра в px, как его считает React Flow: доля размера или строка '56px'
+const padPx = (p: number | string, size: number) =>
+  typeof p === 'number' ? Math.floor((size - size / (1 + p)) * 0.5) : Math.floor(Number.parseFloat(p));
+
+const near = (a: { x: number; y: number; zoom: number }, b: { x: number; y: number; zoom: number }) =>
+  Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1 && Math.abs(a.zoom - b.zoom) < 1e-3;
+
+// Вписывает кадр с якорем (спека 3.4): таблицы, которые не влезают на минимальном зуме, держат
+// левый верхний угол, а не центр. fitView ставит центр и ждёт замера нод, поэтому якорь проверяем
+// до него (ноды уже замерены: сразу летим куда надо) и после (замер изменил ширины)
+function fitFrame(flow: ReactFlowInstance<BoardNode>, store: ReturnType<typeof useStoreApi>, f: Frame) {
+  const ids = f.nodes.map((n) => n.id);
+  const target = () => {
+    const { width, height, maxZoom } = store.getState();
+    const b = flow.getNodesBounds(ids);
+    // Панель ещё не замерена или нод нет: якорить не к чему
+    if (width === 0 || height === 0 || b.width === 0 || b.height === 0) return null;
+    const max = 'maxZoom' in f ? f.maxZoom : maxZoom;
+    const centered = getViewportForBounds(b, width, height, f.minZoom, max, f.padding);
+    const pad = {
+      left: padPx(f.padding.x, width),
+      top: padPx(f.padding.top, height),
+      bottom: padPx(f.padding.bottom, height),
+    };
+    const anchored = anchorFrame(centered, b, width, height, pad);
+    return near(anchored, centered) ? null : { centered, anchored };
+  };
+  const early = target();
+  if (early) {
+    void flow.setViewport(early.anchored, { duration: f.duration });
+    return;
+  }
+  void flow.fitView(f).then(() => {
+    const late = target();
+    // Камеру уже увёл другой кадр: не перебиваем его
+    if (late && near(flow.getViewport(), late.centered)) {
+      void flow.setViewport(late.anchored, { duration: f.duration });
+    }
+  });
+}
 
 export function BoardCanvas() {
   return (
@@ -149,12 +195,16 @@ function BoardFlow() {
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
         {/* Кнопки в строку: вся полоса хрома внизу, её оставляют пустой кадры (chromeBottom) */}
-        <Controls
-          showInteractive={false}
-          position="bottom-left"
-          orientation="horizontal"
-          fitViewOptions={boardFrame(nodes)}
-        >
+        {/* Своя кнопка «Вписать»: тот же кадр с якорем, что и ⌘0 (встроенная только центрирует) */}
+        <Controls showInteractive={false} showFitView={false} position="bottom-left" orientation="horizontal">
+          <ControlButton
+            className="react-flow__controls-fitview"
+            onClick={() => useBoardStore.getState().requestFit()}
+            title={ariaLabelConfig['controls.fitView.ariaLabel']}
+            aria-label={ariaLabelConfig['controls.fitView.ariaLabel']}
+          >
+            <Maximize />
+          </ControlButton>
           <ControlButton
             onClick={() => setMiniMap((v) => !v)}
             title="Миникарта"
@@ -178,7 +228,8 @@ function useCamera(
   boardRef: RefObject<HTMLDivElement | null>,
   over: RefObject<boolean>,
 ) {
-  const flow = useReactFlow();
+  const flow = useReactFlow<BoardNode>();
+  const store = useStoreApi();
   const startedFor = useRef<string | null>(null);
   // Свёртка старта урока. Пока свёртка та же (стартовый запрос и его первый трейс), её замер
   // ещё часть старта: сохранённую камеру ученика рефит не трогает (keep), без неё ставит кадр
@@ -222,30 +273,30 @@ function useCamera(
     startFold.current = { fold: foldKey(), keep: false };
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
-    void flow.fitView(ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
-  }, [nodeKey, lessonId, startRequest, flow]);
+    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
+  }, [nodeKey, lessonId, startRequest, flow, store]);
 
   useEffect(() => {
     if (fitRequest === 0) return;
     startFold.current = null;
-    void flow.fitView(boardFrame(flow.getNodes()));
-  }, [fitRequest, flow]);
+    fitFrame(flow, store, boardFrame(flow.getNodes()));
+  }, [fitRequest, flow, store]);
 
   useEffect(() => {
     if (frameRequest === 0) return;
     startFold.current = null;
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
-    void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(all));
-  }, [frameRequest, flow]);
+    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids) : boardFrame(all));
+  }, [frameRequest, flow, store]);
 
   useEffect(() => {
     const ids = useBoardStore.getState().focused;
     if (focusRequest > 0 && ids.length > 0) {
       startFold.current = null;
-      void flow.fitView(focusFrame(ids));
+      fitFrame(flow, store, focusFrame(ids));
     }
-  }, [focusRequest, flow]);
+  }, [focusRequest, flow, store]);
 
   // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
   // Цель рефита - focused: при смене урока это новый стартовый кадр. Первый замер ноды
@@ -266,8 +317,8 @@ function useCamera(
     if (!start) startFold.current = null;
     const ids = useBoardStore.getState().focused;
     const duration = start ? 0 : undefined;
-    void flow.fitView(ids.length > 0 ? focusFrame(ids, duration) : boardFrame(nodes, duration));
-  }, [tableWidths, nodes, flow]);
+    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids, duration) : boardFrame(nodes, duration));
+  }, [tableWidths, nodes, flow, store]);
 
   // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver
   // уже после раскладки, поэтому вписываем не сразу, а когда придёт новая ширина. Кадр тот же,
@@ -284,8 +335,8 @@ function useCamera(
     pendingFit.current = false;
     startFold.current = null;
     const ids = useBoardStore.getState().focused;
-    void flow.fitView(ids.length > 0 ? focusFrame(ids) : boardFrame(flow.getNodes()));
-  }, [width, flow]);
+    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids) : boardFrame(flow.getNodes()));
+  }, [width, flow, store]);
 
   // ⌘0 / Ctrl+0: по event.code, на русской раскладке key другой; preventDefault гасит сброс зума браузера.
   // Перехватываем только когда курсор над доской или фокус внутри неё, иначе ломаем сброс зума страницы

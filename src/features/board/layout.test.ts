@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { author, book, cart, category, col, SCHEMA, table, wideBook } from './__fixtures__/schema';
 import {
+  anchorFrame,
   autoLayout,
   COLUMN_WIDTH,
   foldColumns,
@@ -131,5 +132,39 @@ describe('свёртка широкой таблицы', () => {
     expect(foldWidth(foldColumns(table('public.one', [col('id', 'int')]), [], false))).toBe(TABLE_WIDTH);
     // свёрнутая всегда уже полной: раскладка резервирует полную ширину
     expect(foldWidth(foldColumns(wideBook, [], false))).toBeLessThan(tableWidth(wideBook));
+  });
+});
+
+// Якорь кадра (спека 3.4): доска 600×400, отступы 20, снизу хром 40, зум кадра упёрся в 0.6
+describe('anchorFrame', () => {
+  const pads = { left: 20, top: 20, bottom: 40 };
+  const centered = (b: { x: number; y: number; width: number; height: number }, zoom: number) => ({
+    x: 300 - (b.x + b.width / 2) * zoom,
+    y: 200 - (b.y + b.height / 2) * zoom,
+    zoom,
+  });
+
+  it('влезает: кадр по центру не трогаем', () => {
+    const b = { x: 0, y: 0, width: 756, height: 340 };
+    const vp = centered(b, 0.6);
+    expect(anchorFrame(vp, b, 600, 400, pads)).toEqual(vp);
+  });
+
+  it('залезает только на отступы: fitView сам ужимает их поровну, кадр не трогаем', () => {
+    const b = { x: 0, y: 0, width: 980, height: 580 };
+    const vp = centered(b, 0.6);
+    expect(anchorFrame(vp, b, 600, 400, pads)).toEqual(vp);
+  });
+
+  it('шире доски: левый край таблицы у левого отступа, по высоте центр', () => {
+    const b = { x: 100, y: 50, width: 1188, height: 340 };
+    const vp = centered(b, 0.6);
+    expect(anchorFrame(vp, b, 600, 400, pads)).toEqual({ x: 20 - 100 * 0.6, y: vp.y, zoom: 0.6 });
+  });
+
+  it('выше доски без полосы хрома: верх таблиц у верхнего отступа, по ширине центр', () => {
+    const b = { x: 0, y: -40, width: 858, height: 620 };
+    const vp = centered(b, 0.6);
+    expect(anchorFrame(vp, b, 600, 400, pads)).toEqual({ x: vp.x, y: 20 + 40 * 0.6, zoom: 0.6 });
   });
 });

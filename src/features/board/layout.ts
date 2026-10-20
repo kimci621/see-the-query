@@ -25,6 +25,25 @@ export const chromeBottom = () => {
   return `${Math.round(3.5 * rem)}px` as const;
 };
 
+// Якорь кадра (спека 3.4): если на зуме кадра таблицы не влезают в доску по оси, по этой оси
+// кадр держит левый (верхний) край у отступа, а не центр: шапка и PK видны. Отступы кадра
+// декоративные, их fitView ужимает сам; снизу полоса хрома, её занимать нельзя. Всё в px экрана
+export function anchorFrame(
+  vp: { x: number; y: number; zoom: number },
+  b: { x: number; y: number; width: number; height: number },
+  width: number,
+  height: number,
+  pad: { left: number; top: number; bottom: number },
+) {
+  const z = vp.zoom;
+  // 1 px допуска: отступы React Flow округляет вниз
+  return {
+    x: b.width * z > width + 1 ? pad.left - b.x * z : vp.x,
+    y: b.height * z > height - pad.bottom + 1 ? pad.top - b.y * z : vp.y,
+    zoom: z,
+  };
+}
+
 export type Positions = Record<string, { x: number; y: number }>;
 
 // Полная ширина: по ней раскладка резервирует место, чтобы разворот не задевал соседей
