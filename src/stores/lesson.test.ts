@@ -28,17 +28,27 @@ describe('useLessonStore', () => {
     });
   });
 
-  it('setJournal, setViewport, markRanExample, markCompleted', () => {
+  it('setJournal, setViewport, markRanExample', () => {
     const s = useLessonStore.getState();
     s.setJournal('a', ['insert into t values (1)']);
     s.setViewport('a', { x: 1, y: 2, zoom: 0.5 });
     s.markRanExample('a');
-    s.markCompleted('a');
     expect(useLessonStore.getState().byId.a).toMatchObject({
       journal: ['insert into t values (1)'],
       viewport: { x: 1, y: 2, zoom: 0.5 },
       ranExample: true,
-      completed: true,
+      completed: false,
     });
+  });
+
+  it('пройден = дочитал и запустил пример, в любом порядке', () => {
+    const s = useLessonStore.getState();
+    s.markReadToEnd('a');
+    expect(useLessonStore.getState().byId.a?.completed).toBe(false);
+    s.markRanExample('a');
+    expect(useLessonStore.getState().byId.a).toMatchObject({ readToEnd: true, completed: true });
+    s.markRanExample('b');
+    s.markReadToEnd('b');
+    expect(useLessonStore.getState().byId.b?.completed).toBe(true);
   });
 });

@@ -64,4 +64,14 @@ describe('useLessonProgress', () => {
     act(() => reveal(true));
     expect(progress()?.completed).toBe(true);
   });
+
+  it('дочитал, урок размонтирован (режим фокуса), пример запущен после возврата: пройден', () => {
+    const first = render(<Harness />);
+    act(() => reveal(true));
+    first.unmount();
+    // теория снова на месте, но прокрутка в начале: метка конца не видна
+    render(<Harness />);
+    act(() => useLessonStore.getState().markRanExample('inner-join'));
+    expect(progress()?.completed).toBe(true);
+  });
 });

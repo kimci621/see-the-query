@@ -8,13 +8,16 @@ export interface LessonProgress {
   journal: string[];
   viewport?: { x: number; y: number; zoom: number };
   ranExample: boolean;
+  // Метка конца урока была на экране. Хранится, а не живёт в эффекте урока: режим фокуса и перезагрузка
+  // размонтируют теорию, и дочитанный урок не стал бы «пройден» после запуска примера. Старые записи без поля
+  readToEnd?: boolean;
 }
 
 export interface LessonStore {
   byId: Record<string, LessonProgress>;
   markVisited(id: string): void;
   markRanExample(id: string): void;
-  markCompleted(id: string): void;
+  markReadToEnd(id: string): void;
   setLastQuery(id: string, q: string | undefined): void;
   setJournal(id: string, j: string[]): void;
   setViewport(id: string, v: LessonProgress['viewport']): void;
@@ -35,15 +38,23 @@ export function lessonStatus(p: LessonProgress | undefined): 'new' | 'visited' |
 
 export const useLessonStore = create<LessonStore>()(
   persist(
-    (set) => {
-      // Обновляет одну запись, создавая её при первом обращении
+    (set, get) => {
+      // Обновляет одну запись, создавая её при первом обращении.
+      // Пройден (спека 3.1): дочитал до конца и запустил пример, в любом порядке и в любой заход
       const patch = (id: string, change: Partial<LessonProgress>) =>
-        set((s) => ({ byId: { ...s.byId, [id]: { ...(s.byId[id] ?? emptyProgress()), ...change } } }));
+        set((s) => {
+          const next = { ...(s.byId[id] ?? emptyProgress()), ...change };
+          if (next.readToEnd && next.ranExample) next.completed = true;
+          return { byId: { ...s.byId, [id]: next } };
+        });
       return {
         byId: {},
         markVisited: (id) => patch(id, { visited: true }),
         markRanExample: (id) => patch(id, { ranExample: true }),
-        markCompleted: (id) => patch(id, { completed: true }),
+        // метка конца показывается при каждой прокрутке к ней: пишем один раз
+        markReadToEnd: (id) => {
+          if (!get().byId[id]?.readToEnd) patch(id, { readToEnd: true });
+        },
         setLastQuery: (id, lastQuery) => patch(id, { lastQuery }),
         setJournal: (id, journal) => patch(id, { journal }),
         setViewport: (id, viewport) => patch(id, { viewport }),
