@@ -1,6 +1,7 @@
 /* Призрачные таблицы и декорации оверлея.
    Двигаем только transform и opacity; длительность берём из --vs-dur */
-.vs-overlay { position: absolute; left: 0; top: 0; pointer-events: none; --vs-dur: 0.5s; }
+/* Слой сцены над нодами доски: у нод внутри рамки схемы z-index 1, без своего z-index призрак уходил под них */
+.vs-overlay { position: absolute; left: 0; top: 0; z-index: 10; pointer-events: none; --vs-dur: 0.5s; }
 .vs-ghost { position: absolute; left: 0; top: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); overflow: hidden; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
 .vs-ghost--dashed { border-style: dashed; }
 .vs-ghost-title { display: flex; align-items: center; padding: 0 10px; font-weight: 600; font-family: var(--font-sans, ui-sans-serif); border-bottom: 1px solid var(--border); }
@@ -23,6 +24,7 @@
 .vs-col--highlight, .vs-col--key { background: color-mix(in oklab, var(--match) 20%, transparent); }
 .vs-col--computed, .vs-col--added { background: color-mix(in oklab, var(--new) 18%, transparent); }
 .vs-null { font-style: italic; color: var(--muted-foreground); outline: 1px dashed var(--null); outline-offset: -4px; border-radius: 4px; }
+.vs-folded { font-family: var(--font-sans, ui-sans-serif); color: var(--muted-foreground); }
 .vs-ghost-hidden { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; color: var(--muted-foreground); font-style: italic; }
 .vs-scanner { position: absolute; left: 0; top: 0; height: 2px; background: var(--match); box-shadow: 0 0 8px var(--match); }
 .vs-scissors { position: absolute; left: 0; top: 0; border-top: 2px dashed var(--dropped); }

@@ -100,4 +100,33 @@ test.describe('сцены JOIN и GROUP BY', () => {
     await expect(page.getByTestId('deco-bracket')).toHaveCount(6);
     await expect(page.getByTestId('timeline-caption')).toContainText('разные значения title');
   });
+
+  test('42803 без GROUP BY: призрак ложится на свёрнутую ноду book и лежит над ней', async ({ page }) => {
+    await openBoard(page);
+    await typeQuery(page, 'select title, max(price) from book');
+    await expect(page.getByTestId('stage-chip')).toHaveText(['ОШИБКА'], { timeout: 5_000 });
+    const ghost = page.getByTestId('ghost-table');
+    await expect(ghost).toHaveCount(1, { timeout: 10_000 });
+    await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+      timeout: 15_000,
+    });
+    const node = page.getByTestId('table-node-public.book');
+    // колонки и заглушка как у ноды: 5 видимых и «+4 колонки»
+    await expect(ghost.locator('.vs-colhead:not(.vs-folded)')).toHaveCount(5);
+    await expect(page.getByTestId('ghost-folded')).toHaveText(
+      await node.getByTestId('hidden-columns').innerText(),
+    );
+    const g = await ghost.boundingBox();
+    const n = await node.boundingBox();
+    expect(Math.abs((g?.x ?? 0) - (n?.x ?? 0))).toBeLessThan(2);
+    expect(Math.abs((g?.width ?? 0) - (n?.width ?? 0))).toBeLessThan(2);
+    // слой сцены над нодой: в точке заголовка призрака сверху призрак, а не приглушённая нода
+    // elementFromPoint пропускает слой с pointer-events: none, для замера включаем их
+    await page.addStyleTag({ content: '.vs-overlay, .vs-overlay * { pointer-events: auto !important; }' });
+    const top = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid]')?.getAttribute('data-testid'),
+      [(g?.x ?? 0) + 20, (g?.y ?? 0) + 10],
+    );
+    expect(top).toBe('ghost-table');
+  });
 });

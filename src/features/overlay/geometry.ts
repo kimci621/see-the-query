@@ -3,6 +3,7 @@ import {
   COLUMN_WIDTH,
   HEADER_HEIGHT,
   ROW_HEIGHT,
+  STUB_WIDTH,
   TABLE_WIDTH,
 } from '@/features/board/layout';
 import type { Frame, GhostTable } from './types';
@@ -16,8 +17,9 @@ export const TABLE_GAP = 80;
 export const COMPRESS_THRESHOLD = 200;
 export const COMPRESSED_VISIBLE_ROWS = 20;
 
+// Как foldWidth у ноды: колонки и заглушка «+N колонки», если часть колонок свёрнута
 export function ghostWidth(t: GhostTable): number {
-  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH);
+  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + (t.foldedColumns ? STUB_WIDTH : 0));
 }
 
 export function ghostHeight(t: GhostTable): number {

@@ -8,6 +8,7 @@ import {
   mapColumns,
   mapRows,
   rebuildTable,
+  shownIndices,
   stageRows,
   totalRows,
   withTable,
@@ -48,7 +49,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   const colored = { ...clean, rows: clean.rows.map((r) => ({ ...r, group: groupOf.get(r.key) })) };
 
   // Стопки: члены групп подряд, скобка на каждую группу. NULL в колонке count(col) не засчитывается
-  const nullCols = stage.nullSkipColumns;
+  const nullCols = shownIndices(cur, stage.nullSkipColumns);
   const byKey = new Map(colored.rows.map((r) => [r.key, r]));
   const rows: GhostRow[] = [];
   const brackets: Decoration[] = [];
@@ -68,12 +69,10 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   rows.push(...colored.rows.filter((r) => !groupOf.has(r.key)));
 
   // Колонки: ключ GROUP BY подсвечен, колонка внутри агрегата видна, остальные перечёркнуты (ошибка 42803)
+  const keyCols = shownIndices(cur, stage.keyColumns);
+  const aggCols = shownIndices(cur, stage.aggregateColumns);
   const stacked = mapColumns({ ...colored, rows }, (_, i) => ({
-    state: stage.keyColumns.includes(i)
-      ? 'key'
-      : stage.aggregateColumns.includes(i)
-        ? 'highlight'
-        : 'removed',
+    state: keyCols.includes(i) ? 'key' : aggCols.includes(i) ? 'highlight' : 'removed',
   }));
 
   const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';

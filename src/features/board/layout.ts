@@ -47,6 +47,12 @@ export function foldColumns(t: TableInfo, touched: string[], expanded: boolean):
   };
 }
 
+// Имена колонок этой таблицы из списка 'public.book.title'
+export function ownColumns(all: string[], tableId: string): string[] {
+  const prefix = `${tableId}.`;
+  return all.filter((c) => c.startsWith(prefix)).map((c) => c.slice(prefix.length));
+}
+
 export function foldWidth(f: Fold): number {
   return Math.max(TABLE_WIDTH, f.visible.length * COLUMN_WIDTH + (f.hidden.length > 0 ? STUB_WIDTH : 0));
 }

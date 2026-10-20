@@ -41,6 +41,21 @@ describe('sortAnimator', () => {
     }
   });
 
+  it('свёрнутая таблица: ключ по номеру колонки выхода, хотя колонка перед ним спрятана', () => {
+    const ctx = { ...testCtx(), folded: () => ['title'] };
+    const p = sortAnimator(runUpTo(trace, 3, ctx), stage, 3, ctx);
+    for (const phase of p) {
+      const t = phase.frame.tables[0];
+      expect(
+        t.columns.map((c) => [c.name, c.state]),
+        phase.id,
+      ).toEqual([
+        ['price', 'key'],
+        ['sale', 'normal'],
+      ]);
+    }
+  });
+
   it('сжатый режим Ф5: одна фаза, строки по rowCount', () => {
     const big = compressedTrace(5000);
     const s = {

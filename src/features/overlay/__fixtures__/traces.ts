@@ -205,7 +205,12 @@ export function testCtx(
     'public.book': { x: 0, y: 0, width: 260, height: 400 },
   },
 ): AnimatorContext {
-  return { nodeRect: (id) => rects[id] ?? null, workArea: { x: 500, y: 0 }, schema: EMPTY_SCHEMA };
+  return {
+    nodeRect: (id) => rects[id] ?? null,
+    workArea: { x: 500, y: 0 },
+    schema: EMPTY_SCHEMA,
+    folded: () => [],
+  };
 }
 
 // select b.title, a.name from book b <тип> join author a on b.author_id = a.author_id (4 книги, 3 автора)

@@ -1,4 +1,6 @@
+import { foldColumns, ownColumns } from '@/features/board/layout';
 import type { SchemaSnapshot } from '@/features/db/introspect';
+import type { Trace } from '@/features/tracer/types';
 import type { AnimatorContext } from './types';
 
 export const WORK_AREA_GAP = 160;
@@ -15,7 +17,12 @@ export interface FlowApi {
   getNodesBounds(nodes: unknown[]): { x: number; y: number; width: number; height: number };
 }
 
-export function makeAnimatorContext(api: FlowApi, schema: SchemaSnapshot): AnimatorContext {
+// touched трейса задаёт свёртку нод доски (EditorPane): по нему же сворачиваем призраки
+export function makeAnimatorContext(
+  api: FlowApi,
+  schema: SchemaSnapshot,
+  touched: Pick<Trace['touched'], 'columns' | 'expanded'> = { columns: [] },
+): AnimatorContext {
   const nodes = api.getNodes();
   const bounds = nodes.length ? api.getNodesBounds(nodes) : null;
   return {
@@ -31,6 +38,12 @@ export function makeAnimatorContext(api: FlowApi, schema: SchemaSnapshot): Anima
         width: n.measured.width ?? 0,
         height: n.measured.height ?? 0,
       };
+    },
+    folded(tableId) {
+      const t = schema.tables.find((x) => x.id === tableId);
+      if (!t) return [];
+      const expanded = touched.expanded?.includes(tableId) ?? false;
+      return foldColumns(t, ownColumns(touched.columns, tableId), expanded).hidden.map((c) => c.name);
     },
   };
 }

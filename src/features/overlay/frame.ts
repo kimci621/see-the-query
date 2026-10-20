@@ -35,14 +35,20 @@ export function stageRows(stage: Stage): number {
 }
 
 // Пересборка таблицы из выхода стадии: это гарантирует, что кадр совпадает с данными Postgres.
-// total: настоящее число строк, если их больше, чем пришло (сжатый режим Ф5)
+// Колонки из свёртки base.fold не рисуем, как и нода доски. total: настоящее число строк,
+// если их больше, чем пришло (сжатый режим Ф5)
 export function rebuildTable(
-  base: Pick<GhostTable, 'id' | 'title' | 'x' | 'y'>,
+  base: Pick<GhostTable, 'id' | 'title' | 'x' | 'y' | 'fold'>,
   rel: Relation,
   order?: RowKey[],
   total = rel.rows.length,
 ): GhostTable {
-  let rows = rel.rows;
+  const fold = new Set(base.fold);
+  const shown = rel.columns.flatMap((c, i) =>
+    c.source && fold.has(`${c.source.alias}.${c.source.column}`) ? [] : [i],
+  );
+  const folded = rel.columns.length - shown.length;
+  let rows = folded ? rel.rows.map((r) => ({ ...r, values: shown.map((i) => r.values[i]) })) : rel.rows;
   if (order) {
     const pos = new Map(order.map((k, i) => [k, i]));
     rows = [...rows].sort(
@@ -55,15 +61,25 @@ export function rebuildTable(
     title: base.title,
     x: base.x,
     y: base.y,
-    columns: rel.columns.map((c) => ({
-      name: c.name,
-      type: c.type,
-      source: c.source,
-      state: 'normal' as const,
-    })),
+    columns: shown
+      .map((i) => rel.columns[i])
+      .map((c) => ({
+        name: c.name,
+        type: c.type,
+        source: c.source,
+        state: 'normal' as const,
+      })),
     rows: g.rows,
     hiddenRows: Math.max(g.hiddenRows, total - g.rows.length),
+    ...(base.fold?.length ? { fold: base.fold } : {}),
+    ...(folded ? { foldedColumns: folded, shown } : {}),
   };
+}
+
+// Номера колонок выхода стадии (keyColumns и т. п.) → позиции колонок призрака. Спрятанные выпадают
+export function shownIndices(t: GhostTable, indices: number[]): number[] {
+  const { shown } = t;
+  return shown ? indices.flatMap((i) => (shown.includes(i) ? [shown.indexOf(i)] : [])) : indices;
 }
 
 export function mapRows(t: GhostTable, fn: (r: GhostRow, i: number) => Partial<GhostRow>): GhostTable {

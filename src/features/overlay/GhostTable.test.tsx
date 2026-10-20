@@ -75,4 +75,9 @@ describe('GhostTableView', () => {
     render(<GhostTableView table={table} />);
     expect(screen.getByText('price').className).toContain('vs-col--removed');
   });
+
+  it('свёрнутые колонки: заглушка «+N колонки» в шапке, как у ноды', () => {
+    render(<GhostTableView table={{ ...table, foldedColumns: 4 }} />);
+    expect(screen.getByTestId('ghost-folded').textContent).toBe('+4 колонки');
+  });
 });

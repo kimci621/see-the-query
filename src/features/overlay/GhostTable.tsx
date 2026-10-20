@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { memo } from 'react';
 import { formatCell } from '@/features/board/format';
+import { STUB_WIDTH } from '@/features/board/layout';
+import { plural } from '@/lib/plural';
 import {
   COL_WIDTH,
   COLHEAD_HEIGHT,
@@ -105,6 +107,15 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
             {c.name}
           </div>
         ))}
+        {table.foldedColumns ? (
+          <div
+            data-testid="ghost-folded"
+            className="vs-colhead vs-folded"
+            style={{ width: STUB_WIDTH, transform: `translateX(${cellLeft(table.columns.length)}px)` }}
+          >
+            +{table.foldedColumns} {plural(table.foldedColumns, 'колонка', 'колонки', 'колонок')}
+          </div>
+        ) : null}
       </div>
       <AnimatePresence initial={false}>
         {table.rows.map((row, i) => (

@@ -97,6 +97,18 @@ describe('groupAnimator', () => {
     trace.stages[1] = { ...trace.stages[1], compressed: true, rowCount: 3 } as StageOf<'group'>;
     expect(run(trace).phases.map((p) => p.id)).toEqual(['1:collapse']);
   });
+  it('свёрнутый вход: номера колонок трассировщика ложатся на показанные колонки, а не на позиции', () => {
+    // title спрятан, как на ноде: в призраке book_id и author_id, а ключ и count(author_id) это колонка 2 входа
+    const ctx = { ...testCtx(), folded: () => ['title'] };
+    const trace = groupTrace(['count(author_id)'], [2], [2]);
+    const p = groupAnimator(runUpTo(trace, 1, ctx), trace.stages[1] as StageOf<'group'>, 1, ctx);
+    const t = p[1].frame.tables[0];
+    expect(t.columns.map((c) => [c.name, c.state])).toEqual([
+      ['book_id', 'removed'],
+      ['author_id', 'key'],
+    ]);
+    expect(t.rows.find((r) => r.key === 'b=(0,10)')?.badge).toBe('NULL не считается');
+  });
 });
 
 describe('groupAnimator: агрегат без GROUP BY', () => {

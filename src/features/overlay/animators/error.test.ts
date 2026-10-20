@@ -66,6 +66,18 @@ describe('errorAnimator', () => {
     expect(phases[0].caption).toContain('42803');
     expect(phases[0].caption).toContain('Колонка вне GROUP BY');
   });
+  it('42803 по свёрнутой таблице: колонки и заглушка как у ноды', () => {
+    const folded = { ...ctx, folded: () => ['author_id'] };
+    const [p] = errorAnimator(
+      { tables: [], decorations: [] },
+      errorStage('42803', ['public.book.title']),
+      0,
+      folded,
+    );
+    const t = p.frame.tables[0];
+    expect(t.columns.map((c) => c.name)).toEqual(['book_id', 'title']);
+    expect(t.foldedColumns).toBe(1);
+  });
   it('другие ошибки сцены не дают', () => {
     const phases = errorAnimator(
       { tables: [], decorations: [] },
@@ -130,5 +142,14 @@ describe('errorAnimator: 42803 в стопке группы', () => {
       title: 'key',
       author_id: 'normal',
     });
+  });
+  it('свёрнутая таблица: ключ подсвечен по номеру колонки входа, хотя колонка перед ним спрятана', () => {
+    const folded = { ...ctx, folded: () => ['book_id'] };
+    const p = errorAnimator(runUpTo(trace, 1, folded), stage, 1, folded);
+    const cols = p[p.length - 1].frame.tables[0].columns;
+    expect(cols.map((c) => [c.name, c.state])).toEqual([
+      ['title', 'error'],
+      ['author_id', 'key'],
+    ]);
   });
 });

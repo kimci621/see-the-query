@@ -50,7 +50,7 @@ export function OverlayLayer() {
       scene.setPlayback(null);
       return;
     }
-    scene.setPlayback(buildPlayback(trace, makeAnimatorContext(rf, schema)));
+    scene.setPlayback(buildPlayback(trace, makeAnimatorContext(rf, schema, trace.touched)));
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
     // таймлайн и плеер её вернут
     if (!userDrivesScene()) scene.hide();

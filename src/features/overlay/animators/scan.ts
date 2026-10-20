@@ -12,7 +12,13 @@ export const scanAnimator: Animator<StageOf<'scan'>> = (prev, stage, stageIndex,
   const targetX = others.reduce((x, t) => Math.max(x, t.x + ghostWidth(t) + TABLE_GAP), ctx.workArea.x);
   const rect = ctx.nodeRect(stage.tableId);
   const start = rebuildTable(
-    { id, title, x: rect?.x ?? targetX, y: rect?.y ?? ctx.workArea.y },
+    {
+      id,
+      title,
+      x: rect?.x ?? targetX,
+      y: rect?.y ?? ctx.workArea.y,
+      fold: ctx.folded(stage.tableId).map((c) => `${stage.alias}.${c}`),
+    },
     stage.output,
     undefined,
     stageRows(stage),

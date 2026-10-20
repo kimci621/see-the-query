@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { SchemaSnapshot } from '@/features/db/introspect';
 import { EMPTY_SCHEMA } from './__fixtures__/traces';
 import { makeAnimatorContext, WORK_AREA_GAP } from './context';
 
@@ -26,5 +27,29 @@ describe('makeAnimatorContext', () => {
   it('пустая доска: рабочая зона в начале координат', () => {
     const ctx = makeAnimatorContext({ ...api, getNodes: () => [] }, EMPTY_SCHEMA);
     expect(ctx.workArea).toEqual({ x: 0, y: 0 });
+  });
+
+  it('folded: колонки, которые прячет нода, по колонкам и звёздочке трейса', () => {
+    const names = [
+      'book_id',
+      'title',
+      'author_id',
+      'category_id',
+      'price',
+      'pages',
+      'published_at',
+      'tags',
+      'meta',
+    ];
+    const book = {
+      id: 'public.book',
+      columns: names.map((name) => ({ name, isPk: name === 'book_id', fk: null })),
+    } as unknown as SchemaSnapshot['tables'][number];
+    const schema = { ...EMPTY_SCHEMA, tables: [book] };
+    const ctx = makeAnimatorContext(api, schema, { columns: ['public.book.meta', 'public.author.name'] });
+    expect(ctx.folded('public.book')).toEqual(['price', 'pages', 'published_at', 'tags']);
+    const star = makeAnimatorContext(api, schema, { columns: [], expanded: ['public.book'] });
+    expect(star.folded('public.book')).toEqual([]);
+    expect(ctx.folded('public.nope')).toEqual([]);
   });
 });

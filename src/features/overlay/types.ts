@@ -41,6 +41,12 @@ export interface GhostTable {
   opacity?: number;
   // сколько строк стадии не нарисовано (сжатый режим)
   hiddenRows?: number;
+  // колонки, которые нода на доске прячет в «+N колонки» (свёртка, спека 3.4): 'b.pages'
+  fold?: string[];
+  // сколько колонок стадии спрятано свёрткой: призрак рисует заглушку, как нода
+  foldedColumns?: number;
+  // номера показанных колонок в выходе стадии: по ним номера колонок трассировщика ложатся на призрак
+  shown?: number[];
 }
 
 export type Decoration =
@@ -80,6 +86,8 @@ export interface AnimatorContext {
   nodeRect(tableId: string): { x: number; y: number; width: number; height: number } | null;
   workArea: { x: number; y: number };
   schema: SchemaSnapshot;
+  // имена колонок, которые нода таблицы прячет в «+N колонки»: призрак берёт ту же свёртку
+  folded(tableId: string): string[];
 }
 
 export type Animator<S extends Stage = Stage> = (

@@ -16,6 +16,7 @@ import {
   foldWidth,
   HEADER_HEIGHT,
   MAX_VISIBLE_ROWS,
+  ownColumns,
   ROW_HEIGHT,
   STUB_WIDTH,
 } from './layout';
@@ -34,12 +35,6 @@ export function columnTitle(c: ColumnInfo): string {
   ]
     .filter(Boolean)
     .join('\n');
-}
-
-// Имена колонок этой таблицы из списка 'public.book.title'
-function ownColumns(all: string[], tableId: string): string[] {
-  const prefix = `${tableId}.`;
-  return all.filter((c) => c.startsWith(prefix)).map((c) => c.slice(prefix.length));
 }
 
 // Пометка строки по последней записи «Применить», которая её коснулась

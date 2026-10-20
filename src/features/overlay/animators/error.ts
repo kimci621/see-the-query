@@ -1,5 +1,5 @@
 import { explainError } from '@/features/errors/explain';
-import { currentTable, mapColumns, withTable } from '../frame';
+import { currentTable, mapColumns, shownIndices, withTable } from '../frame';
 import type { Animator, GhostTable, Phase, StageOf } from '../types';
 import { groupAnimator } from './group';
 
@@ -15,17 +15,22 @@ export const errorAnimator: Animator<StageOf<'error'>> = (prev, stage, stageInde
   if (stage.group && currentTable(prev)) return inStacks(prev, stage, stageIndex, ctx, column ?? '', title);
   const rect = ctx.nodeRect(table.id);
   const focus = new Set(stage.focus.columns);
+  // Призрак ложится на ноду: колонки и заглушка «+N колонки» как у неё
+  const folded = new Set(ctx.folded(table.id));
   const ghost: GhostTable = {
     id: `t:${table.name}`,
     title: table.name,
     x: rect?.x ?? ctx.workArea.x,
     y: rect?.y ?? ctx.workArea.y,
-    columns: table.columns.map((c) => ({
-      name: c.name,
-      type: c.type,
-      state: focus.has(`${table.id}.${c.name}`) ? 'error' : 'normal',
-    })),
+    columns: table.columns
+      .filter((c) => !folded.has(c.name))
+      .map((c) => ({
+        name: c.name,
+        type: c.type,
+        state: focus.has(`${table.id}.${c.name}`) ? 'error' : 'normal',
+      })),
     rows: [],
+    ...(folded.size ? { foldedColumns: folded.size } : {}),
   };
   return [
     {
@@ -73,8 +78,9 @@ function inStacks(
   const qualifier = stage.error.message.match(/column "([^".]+)\.[^"]+" must appear/)?.[1];
   const named = cur.columns.filter((c) => c.name === column);
   const target = named.find((c) => c.source?.alias === qualifier) ?? named[0];
+  const keyCols = shownIndices(cur, keyColumns);
   const marked = mapColumns(cur, (c, i) => ({
-    state: c === target ? 'error' : keyColumns.includes(i) ? 'key' : 'normal',
+    state: c === target ? 'error' : keyCols.includes(i) ? 'key' : 'normal',
   }));
   return [
     ...stacked,

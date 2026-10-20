@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { foldWidth } from '@/features/board/layout';
 import { bookScan, testCtx } from '../__fixtures__/traces';
+import { rebuildTable } from '../frame';
+import { ghostWidth } from '../geometry';
 import { scanAnimator } from './scan';
 
 describe('scanAnimator', () => {
@@ -26,5 +29,20 @@ describe('scanAnimator', () => {
     const tables = second[1].frame.tables;
     expect(tables).toHaveLength(2);
     expect(tables[1].x).toBeGreaterThan(tables[0].x + 3 * 132);
+  });
+
+  it('широкая таблица свёрнута, как нода: те же колонки, заглушка и ширина', () => {
+    const ctx = { ...testCtx(), folded: (id: string) => (id === 'public.book' ? ['title'] : []) };
+    const [appear] = scanAnimator({ tables: [], decorations: [] }, bookScan(), 0, ctx);
+    const t = appear.frame.tables[0];
+    expect(t.columns.map((c) => c.name)).toEqual(['book_id', 'price']);
+    expect(t.rows[0].values).toEqual([1, '890.00']);
+    expect(t).toMatchObject({ fold: ['b.title'], foldedColumns: 1 });
+    const node = { visible: [{}, {}], hidden: [{}] } as Parameters<typeof foldWidth>[0];
+    expect(ghostWidth(t)).toBe(foldWidth(node));
+    // следующая стадия пересобирает таблицу из своего выхода, свёртка остаётся
+    const next = rebuildTable(t, bookScan().output);
+    expect(next.columns.map((c) => c.name)).toEqual(['book_id', 'price']);
+    expect(next.foldedColumns).toBe(1);
   });
 });
