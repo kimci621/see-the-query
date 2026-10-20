@@ -94,7 +94,14 @@ export function OverlayLayer() {
     if (phase || !lastCamera.current) return;
     lastCamera.current = '';
     if (!followCamera || !userDrivesScene()) return;
-    const timer = setTimeout(() => useBoardStore.getState().requestFrame(), RETURN_DELAY_MS);
+    const { fitRequest, startRequest } = useBoardStore.getState();
+    const timer = setTimeout(() => {
+      // За паузу ученик мог вписать доску (⌘0) или уйти в урок (стартовый кадр): их камеру не перебиваем
+      const board = useBoardStore.getState();
+      if (board.fitRequest !== fitRequest || board.startRequest !== startRequest || !userDrivesScene())
+        return;
+      board.requestFrame();
+    }, RETURN_DELAY_MS);
     return () => clearTimeout(timer);
   }, [phase, followCamera]);
 
