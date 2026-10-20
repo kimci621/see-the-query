@@ -8,8 +8,9 @@ import { genericAnimator } from './generic';
 // id таблицы-результата: 't:b|a'. Следующий JOIN цепочки находит по нему левую сторону
 export const joinTableId = (aliases: string[]) => `t:${aliases.join('|')}`;
 
-// Сближение до половины обычного зазора: видно, что таблицы «съехались»
-const JOIN_GAP = TABLE_GAP / 2;
+// Сближение до половины обычного зазора: видно, что таблицы «съехались».
+// Функция, а не константа: TABLE_GAP в rem меняется вместе со шрифтом
+const joinGap = () => TABLE_GAP / 2;
 
 // INNER / LEFT / RIGHT / FULL JOIN: сближение, линии пар, отсев непарных, слияние в одну таблицу
 export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex, ctx) => {
@@ -33,11 +34,11 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     mapColumns(clearMarks(t), (c) => ({ state: c.name === col ? 'key' : 'normal' }));
   const mirrored = stage.joinType === 'right';
   const l1 = mirrored
-    ? { ...markKeys(left, leftKey), x: right.x - ghostWidth(left) - JOIN_GAP, y: right.y }
+    ? { ...markKeys(left, leftKey), x: right.x - ghostWidth(left) - joinGap(), y: right.y }
     : markKeys(left, leftKey);
   const r1 = mirrored
     ? markKeys(right, rightKey)
-    : { ...markKeys(right, rightKey), x: left.x + ghostWidth(left) + JOIN_GAP, y: left.y };
+    : { ...markKeys(right, rightKey), x: left.x + ghostWidth(left) + joinGap(), y: left.y };
   const result = rebuildTable(
     {
       id: joinTableId([...stage.leftAliases, stage.rightAlias]),
@@ -130,7 +131,7 @@ function crossPhases(
   left: GhostTable,
   right: GhostTable,
 ): Phase[] {
-  const near = { ...clearMarks(right), x: left.x + ghostWidth(left) + JOIN_GAP, y: left.y };
+  const near = { ...clearMarks(right), x: left.x + ghostWidth(left) + joinGap(), y: left.y };
   const others = prev.tables.filter((t) => t.id !== left.id && t.id !== right.id);
   const visible = new Set([...left.rows, ...right.rows].map((r) => r.key));
   const lines: Decoration[] = stage.pairs

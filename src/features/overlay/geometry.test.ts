@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STUB_WIDTH, TABLE_WIDTH } from '@/features/board/layout';
+import { STUB_WIDTH, setRootFont, TABLE_WIDTH } from '@/features/board/layout';
 import { counterNear } from './frame';
 import {
   COL_WIDTH,
@@ -36,6 +36,26 @@ const table = (over: Partial<GhostTable> = {}): GhostTable => ({
 });
 
 describe('geometry', () => {
+  it('корень 32px (крупный шрифт браузера): призрак, его строки, плашки и счётчик вдвое больше', () => {
+    const t = table({ x: 0, y: 0, rows: [{ key: 'k', values: ['a', 'b'], state: 'unknown', badge: '×2' }] });
+    // ширина кадра со счётчиком: отступ счётчика от таблицы и его оценочная ширина
+    const sizes = () => [
+      ghostWidth(t),
+      ghostHeight(t),
+      rowTop(1),
+      marksWidth(t),
+      frameBounds({ tables: [t], decorations: [counterNear(t, 'c', '6 → 3')] })?.width,
+    ];
+    const before = sizes();
+    try {
+      setRootFont(32);
+      expect(sizes()).toEqual(before.map((n) => 2 * (n ?? 0)));
+      expect([COL_WIDTH, ROW_H, TITLE_HEIGHT, COLHEAD_HEIGHT]).toEqual([264, 48, 72, 80]);
+    } finally {
+      setRootFont(16);
+    }
+  });
+
   it('размеры как у ноды доски: ширина по колонкам, но не меньше TABLE_WIDTH', () => {
     expect(ghostWidth(table())).toBe(Math.max(TABLE_WIDTH, 2 * COL_WIDTH));
     expect(

@@ -1,9 +1,9 @@
-import { foldColumns, ownColumns } from '@/features/board/layout';
+import { foldColumns, ownColumns, WORK_AREA_GAP } from '@/features/board/layout';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { Trace } from '@/features/tracer/types';
 import type { AnimatorContext } from './types';
 
-export const WORK_AREA_GAP = 160;
+export { WORK_AREA_GAP } from '@/features/board/layout';
 
 // Минимум API React Flow, который нужен аниматорам (удобно подменять в тестах)
 export interface FlowApi {

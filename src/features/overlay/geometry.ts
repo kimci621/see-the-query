@@ -1,19 +1,23 @@
 import {
-  COLUMN_HEADER_HEIGHT,
-  COLUMN_WIDTH,
-  HEADER_HEIGHT,
-  ROW_HEIGHT,
+  COLUMN_WIDTH as COL_WIDTH,
+  COLUMN_HEADER_HEIGHT as COLHEAD_HEIGHT,
+  ROW_HEIGHT as ROW_H,
+  rem,
   STUB_WIDTH,
   TABLE_WIDTH,
+  HEADER_HEIGHT as TITLE_HEIGHT,
 } from '@/features/board/layout';
 import type { Frame, GhostTable, RowState } from './types';
 
-// Размеры призрака совпадают с нодой доски: призрак scan стартует ровно поверх неё
-export const COL_WIDTH = COLUMN_WIDTH;
-export const TITLE_HEIGHT = HEADER_HEIGHT;
-export const COLHEAD_HEIGHT = COLUMN_HEADER_HEIGHT;
-export const ROW_H = ROW_HEIGHT;
-export const TABLE_GAP = 80;
+// Размеры призрака совпадают с нодой доски: призрак scan стартует ровно поверх неё.
+// Реэкспорт, а не копия: размеры в rem пересчитываются при смене шрифта (board/layout)
+export {
+  COLUMN_HEADER_HEIGHT as COLHEAD_HEIGHT,
+  COLUMN_WIDTH as COL_WIDTH,
+  HEADER_HEIGHT as TITLE_HEIGHT,
+  ROW_HEIGHT as ROW_H,
+  TABLE_GAP,
+} from '@/features/board/layout';
 export const COMPRESS_THRESHOLD = 200;
 export const COMPRESSED_VISIBLE_ROWS = 20;
 
@@ -29,17 +33,17 @@ export const ROW_ICONS: Partial<Record<RowState, { icon: string; label: string }
 };
 
 // Значок стоит у правого края строки, плашка левее него (overlay.css: .vs-row-icon, .vs-row-badge).
-// ponytail: ширина плашки (10px) по числу символов с запасом, без замера DOM
-const ICON_LANE = 20;
-const BADGE_CHAR = 7;
-const BADGE_PAD = 12;
+// ponytail: ширина плашки (0.625rem) по числу символов с запасом, без замера DOM. Всё в rem
+const ICON_LANE = 1.25;
+const BADGE_CHAR = 0.4375;
+const BADGE_PAD = 0.75;
 
 // Полоса под значок и плашку строки (✓, UNKNOWN, ×2), чтобы они не ложились на последнюю колонку
 export function marksWidth(t: GhostTable): number {
   let lane = 0;
   for (const r of t.rows) {
     if (!ROW_ICONS[r.state] && !r.badge) continue;
-    lane = Math.max(lane, ICON_LANE + (r.badge ? r.badge.length * BADGE_CHAR + BADGE_PAD : 0));
+    lane = Math.max(lane, rem(ICON_LANE + (r.badge ? r.badge.length * BADGE_CHAR + BADGE_PAD : 0)));
   }
   return lane;
 }
@@ -88,13 +92,13 @@ export function stubLefts(t: GhostTable): number[] {
   return (t.folds ?? []).map((f, i) => f.at * COL_WIDTH + i * STUB_WIDTH);
 }
 
-// Ширина плашки счётчика (12px, полужирный, поля по 8px) без замера DOM.
+// Ширина плашки счётчика (0.75rem, полужирный, поля по 0.5rem) без замера DOM.
 // ponytail: оценка по числу символов с запасом и шагом в 8 символов, чтобы набегающий
 // счётчик агрегата не двигал камеру на каждой цифре; точнее только замер после рендера
-const COUNTER_CHAR = 8;
-const COUNTER_PAD = 16;
+const COUNTER_CHAR = 0.5;
+const COUNTER_PAD = 1;
 export function counterWidth(text: string): number {
-  return Math.ceil(text.length / 8) * 8 * COUNTER_CHAR + COUNTER_PAD;
+  return rem(Math.ceil(text.length / 8) * 8 * COUNTER_CHAR + COUNTER_PAD);
 }
 
 export function frameBounds(frame: Frame): { x: number; y: number; width: number; height: number } | null {

@@ -45,6 +45,8 @@ export function OverlayLayer() {
   const hidden = useSceneStore((s) => s.hidden);
   const schema = useBoardStore((s) => s.schema);
   const expanded = useBoardStore((s) => s.expandedTables);
+  // Смена шрифта браузера меняет размеры нод (rem): призраки пересобираются по новой раскладке
+  const rootFont = useBoardStore((s) => s.rootFont);
   const builtFor = useRef<{ trace: Trace; schema: SchemaSnapshot } | null>(null);
   const rf = useReactFlow();
   const flowStore = useStoreApi();
@@ -52,6 +54,7 @@ export function OverlayLayer() {
   const lastCamera = useRef('');
 
   // новая трасса → новое проигрывание
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rootFont служит только триггером, размеры читаются из board/layout
   useEffect(() => {
     const scene = useSceneStore.getState();
     if (!trace || !schema) {
@@ -75,7 +78,7 @@ export function OverlayLayer() {
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
     // таймлайн и плеер её вернут
     if (!userDrivesScene()) scene.hide();
-  }, [trace, schema, rf, expanded]);
+  }, [trace, schema, rf, expanded, rootFont]);
 
   const active = !!playback && playback.phases.length > 0 && !hidden;
 

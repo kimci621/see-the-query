@@ -1,13 +1,14 @@
 /* Призрачные таблицы и декорации оверлея.
-   Двигаем только transform и opacity; длительность берём из --vs-dur */
+   Двигаем только transform и opacity; длительность берём из --vs-dur.
+   Текст и поля в rem, как геометрия призрака (board/layout): растут с шрифтом браузера */
 /* Слой сцены над нодами доски: у нод внутри рамки схемы z-index 1, без своего z-index призрак уходил под них */
 .vs-overlay { position: absolute; left: 0; top: 0; z-index: 10; pointer-events: none; --vs-dur: 0.5s; }
-.vs-ghost { position: absolute; left: 0; top: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); overflow: hidden; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.vs-ghost { position: absolute; left: 0; top: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card); box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); overflow: hidden; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.75rem; }
 .vs-ghost--dashed { border-style: dashed; }
-.vs-ghost-title { display: flex; align-items: center; padding: 0 10px; font-weight: 600; font-family: var(--font-sans, ui-sans-serif); border-bottom: 1px solid var(--border); }
+.vs-ghost-title { display: flex; align-items: center; padding: 0 0.625rem; font-weight: 600; font-family: var(--font-sans, ui-sans-serif); border-bottom: 1px solid var(--border); }
 .vs-ghost-head { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--border); background: var(--muted); }
 /* Блок, а не flex: у flex-контейнера text-overflow не срабатывает и текст режется по краю. line-height задаёт разметка */
-.vs-colhead, .vs-cell { position: absolute; top: 0; height: 100%; display: block; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform var(--vs-dur) ease-in-out, opacity var(--vs-dur) ease-in-out; }
+.vs-colhead, .vs-cell { position: absolute; top: 0; height: 100%; display: block; padding: 0 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform var(--vs-dur) ease-in-out, opacity var(--vs-dur) ease-in-out; }
 .vs-row { position: absolute; left: 0; right: 0; top: 0; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
 .vs-row--kept { background: color-mix(in oklab, var(--kept) 18%, transparent); }
 .vs-row--dropped { background: color-mix(in oklab, var(--dropped) 18%, transparent); }
@@ -20,8 +21,8 @@
 /* Зачёркивание на ячейках: спозиционированные абсолютно, они не наследуют его от строки */
 .vs-row--dropped .vs-cell, .vs-row--deleted .vs-cell { text-decoration: line-through; }
 .vs-row[style*='--vs-group'] { box-shadow: inset 3px 0 0 var(--vs-group); }
-.vs-row-icon { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 11px; }
-.vs-row-badge { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 10px; padding: 0 4px; border-radius: 4px; background: var(--secondary); }
+.vs-row-icon { position: absolute; right: 0.25rem; top: 50%; transform: translateY(-50%); font-size: 0.6875rem; }
+.vs-row-badge { position: absolute; right: 1.25rem; top: 50%; transform: translateY(-50%); font-size: 0.625rem; padding: 0 0.25rem; border-radius: 4px; background: var(--secondary); }
 .vs-col--removed { opacity: 0.35; text-decoration: line-through; }
 .vs-col--error { background: color-mix(in oklab, var(--dropped) 22%, transparent); color: var(--dropped); }
 .vs-col--highlight, .vs-col--key { background: color-mix(in oklab, var(--match) 20%, transparent); }
@@ -31,9 +32,9 @@
 .vs-ghost-hidden { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; color: var(--muted-foreground); font-style: italic; }
 .vs-scanner { position: absolute; left: 0; top: 0; height: 2px; background: var(--match); box-shadow: 0 0 8px var(--match); }
 .vs-scissors { position: absolute; left: 0; top: 0; border-top: 2px dashed var(--dropped); }
-.vs-scissors span { position: absolute; left: 0; top: -12px; font-size: 16px; }
-.vs-counter { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.vs-bracket { position: absolute; left: 0; top: 0; width: 12px; border: 2px solid var(--vs-group); border-right: none; border-radius: 6px 0 0 6px; font-size: 10px; }
+.vs-scissors span { position: absolute; left: 0; top: -0.75rem; font-size: 1rem; }
+.vs-counter { position: absolute; left: 0; top: 0; padding: 0.125rem 0.5rem; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.vs-bracket { position: absolute; left: 0; top: 0; width: 0.75rem; border: 2px solid var(--vs-group); border-right: none; border-radius: 6px 0 0 6px; font-size: 0.625rem; }
 .vs-svg-layer { position: absolute; left: 0; top: 0; color: var(--match); }
 .vs-pair-line { fill: none; stroke: var(--match); stroke-width: 2; }
 .vs-arrow { stroke-width: 2; }

@@ -1,3 +1,4 @@
+import { rem } from '@/features/board/layout';
 import type { Relation, Row, RowKey, Stage } from '@/features/tracer/types';
 import { COMPRESS_THRESHOLD, COMPRESSED_VISIBLE_ROWS, ghostWidth } from './geometry';
 import type { Decoration, Frame, GhostColumn, GhostRow, GhostTable, RowState } from './types';
@@ -117,5 +118,5 @@ export function totalRows(t: GhostTable): number {
 
 // Счётчик «было → стало» справа от таблицы
 export function counterNear(t: GhostTable, id: string, text: string): Decoration {
-  return { kind: 'counter', id, x: t.x + ghostWidth(t) + 16, y: t.y, text };
+  return { kind: 'counter', id, x: t.x + ghostWidth(t) + rem(1), y: t.y, text };
 }

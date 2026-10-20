@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { rem } from '@/features/board/layout';
 import { ghostWidth, ROW_H, rowAnchor, rowTop } from './geometry';
 import type { Decoration, Frame, GhostTable } from './types';
 
@@ -28,9 +29,9 @@ function DecorationView({ d, frame }: { d: Decoration; frame: Frame }) {
         <motion.div
           data-testid="deco-scissors"
           className="vs-scissors"
-          style={{ width: ghostWidth(t) + 24 }}
-          initial={{ opacity: 0, x: t.x - 24, y: t.y + rowTop(d.afterRow + 1) }}
-          animate={{ opacity: 1, x: t.x - 24, y: t.y + rowTop(d.afterRow + 1) }}
+          style={{ width: ghostWidth(t) + rem(1.5) }}
+          initial={{ opacity: 0, x: t.x - rem(1.5), y: t.y + rowTop(d.afterRow + 1) }}
+          animate={{ opacity: 1, x: t.x - rem(1.5), y: t.y + rowTop(d.afterRow + 1) }}
         >
           <span aria-hidden>✂</span>
         </motion.div>
@@ -57,8 +58,8 @@ function DecorationView({ d, frame }: { d: Decoration; frame: Frame }) {
           data-testid="deco-bracket"
           className="vs-bracket"
           style={{ height, ['--vs-group' as string]: `var(--group-${(d.color % 8) + 1})` }}
-          initial={{ opacity: 0, x: t.x - 18, y: top }}
-          animate={{ opacity: 1, x: t.x - 18, y: top }}
+          initial={{ opacity: 0, x: t.x - rem(1.125), y: top }}
+          animate={{ opacity: 1, x: t.x - rem(1.125), y: top }}
         >
           {d.label ?? null}
         </motion.div>
