@@ -115,6 +115,17 @@ test('далёкий зум: строки скрыты, рёбра остают�
   }
 });
 
+// Камера сцены (спека 3.5) сама летит к призраку, пока фокус в редакторе: тест камеры базовой доски с ней гонится,
+// нода book уходит из кадра и размонтируется (P8.90). Камеру сцены проверяет overlay.spec
+async function withoutSceneCamera(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'vs-scene',
+      JSON.stringify({ state: { speed: 1, autoplay: true, followCamera: false }, version: 0 }),
+    );
+  });
+}
+
 async function setEditorText(page: Page, text: string) {
   await page.locator('.cm-content').click({ position: { x: 8, y: 8 } });
   await page.keyboard.press('ControlOrMeta+a');
