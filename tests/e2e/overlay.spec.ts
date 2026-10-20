@@ -162,6 +162,19 @@ test('вердикты WHERE: значок и плашка UNKNOWN не ложа
   await expect(cell).toHaveCSS('display', 'block');
 });
 
+test('вердикты WHERE: текст отсеянных строк зачёркнут', async ({ page }) => {
+  await openBoard(page);
+  await typeQuery(page, 'select title, price from book where price > 500');
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+    timeout: 15_000,
+  });
+  await page.getByTestId('stage-chip').nth(1).click();
+  await page.getByTestId('player-prev').click();
+  // ячейки спозиционированы абсолютно и не наследуют зачёркивание строки
+  const cell = page.locator('.vs-row--dropped .vs-cell').first();
+  await expect(cell).toHaveCSS('text-decoration-line', 'line-through');
+});
+
 test('после запроса с ошибкой камера возвращается к таблице, доска не пустая', async ({ page }) => {
   await openBoard(page);
   await typeQuery(page, QUERY);

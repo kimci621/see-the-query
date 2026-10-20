@@ -10,13 +10,15 @@
 .vs-colhead, .vs-cell { position: absolute; top: 0; height: 100%; display: block; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform var(--vs-dur) ease-in-out, opacity var(--vs-dur) ease-in-out; }
 .vs-row { position: absolute; left: 0; right: 0; top: 0; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
 .vs-row--kept { background: color-mix(in oklab, var(--kept) 18%, transparent); }
-.vs-row--dropped { background: color-mix(in oklab, var(--dropped) 18%, transparent); text-decoration: line-through; }
+.vs-row--dropped { background: color-mix(in oklab, var(--dropped) 18%, transparent); }
 .vs-row--unknown { background: color-mix(in oklab, var(--null) 22%, transparent); }
 .vs-row--null-filled { background: color-mix(in oklab, var(--null) 14%, transparent); }
 .vs-row--matched { background: color-mix(in oklab, var(--match) 18%, transparent); }
 .vs-row--new { background: color-mix(in oklab, var(--new) 18%, transparent); }
 .vs-row--changed { background: color-mix(in oklab, var(--changed) 22%, transparent); }
-.vs-row--deleted { background: color-mix(in oklab, var(--deleted) 18%, transparent); text-decoration: line-through; }
+.vs-row--deleted { background: color-mix(in oklab, var(--deleted) 18%, transparent); }
+/* Зачёркивание на ячейках: спозиционированные абсолютно, они не наследуют его от строки */
+.vs-row--dropped .vs-cell, .vs-row--deleted .vs-cell { text-decoration: line-through; }
 .vs-row[style*='--vs-group'] { box-shadow: inset 3px 0 0 var(--vs-group); }
 .vs-row-icon { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 11px; }
 .vs-row-badge { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 10px; padding: 0 4px; border-radius: 4px; background: var(--secondary); }
