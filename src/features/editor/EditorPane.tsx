@@ -21,12 +21,15 @@ import { useParserReady } from './useParsedText';
 // CodeMirror тяжёлый: грузим лениво, оболочка его не ждёт (спека 5.12)
 const SqlEditor = lazy(() => import('./SqlEditor').then((m) => ({ default: m.SqlEditor })));
 
-// Фокус на целевую таблицу DML-оператора из текста; для остальных операторов ничего не делает
-function focusDmlTarget(sql: string): void {
+// Фокус на целевую таблицу DML-оператора из текста; для остальных операторов ничего не делает.
+// fly: камера летит к таблице, даже если фокус уже на ней (после «Применить» камера могла остаться на призраке сцены)
+function focusDmlTarget(sql: string, fly = false): void {
   const parsed = parseSql(sql);
   const stmt = parsed.ok ? parsed.statements[0] : undefined;
   const target = stmt && dmlTargetOf(stmt, useBoardStore.getState().schema);
-  if (target) useBoardStore.getState().focus([target]);
+  if (!target) return;
+  useBoardStore.getState().focus([target]);
+  if (fly) useBoardStore.getState().requestFrame();
 }
 
 export function EditorPane() {
@@ -142,7 +145,7 @@ export function EditorPane() {
       .apply(stmt.text)
       .then((results) => {
         notifyApplied(results);
-        focusDmlTarget(stmt.text);
+        focusDmlTarget(stmt.text, true);
       })
       .catch((e: unknown) => notifyDbError(e, stmt.text));
   };

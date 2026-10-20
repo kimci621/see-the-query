@@ -110,12 +110,14 @@ test('применить, отменить и применить всё', async 
   await openLesson(page);
   await setEditorText(page, "insert into author (name) values ('Аноним') returning author_id");
   await page.getByTestId('apply-button').click();
-  await expect(page.getByTestId('result-count')).toContainText('1', { timeout: 5000 });
+  await expect(page.getByTestId('result-count')).toHaveText('INSERT: 1', { timeout: 5000 });
   await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
   // камера ушла на целевую таблицу оператора
   await expect(page.getByTestId('table-node-public.author')).toHaveAttribute('data-focused', 'true');
 
-  await setEditorText(page, 'select 1');
+  // пустой редактор: у запроса была бы сцена, и камера, если успеет за ней, уйдёт от author к призраку;
+  // доска рисует только ноды в кадре, и строки author тогда не найти
+  await setEditorText(page, '');
   // фокус вне редактора: клик по фону страницы
   await page.locator('body').click({ position: { x: 5, y: 5 } });
   await page.keyboard.press('ControlOrMeta+z');

@@ -354,6 +354,23 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     expect(useBoardStore.getState().focused).toEqual(['public.author']);
   });
 
+  it('⌘⏎ с INSERT возвращает камеру к таблице, даже если она уже в фокусе', async () => {
+    const sandbox = setup();
+    // фокус на author остался от прошлого применения, а камера ушла за призраком сцены
+    act(() => useBoardStore.getState().focus(['public.author']));
+    act(() => {
+      useEditorStore.getState().setText("insert into author (name) values ('Ада')");
+      useEditorStore.getState().setCursor(40);
+    });
+    await act(async () => undefined);
+    const frames = useBoardStore.getState().frameRequest;
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    expect(sandbox.apply).toHaveBeenCalledTimes(1);
+    expect(useBoardStore.getState().frameTarget).toEqual(['public.author']);
+    expect(useBoardStore.getState().frameRequest).toBe(frames + 1);
+  });
+
   it('⌘Z вне полей ввода отменяет применённый запрос', () => {
     const sandbox = setup();
     fireEvent.keyDown(document.body, { code: 'KeyZ', metaKey: true });
