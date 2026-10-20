@@ -4,7 +4,8 @@ async function openBoard(page: Page) {
   await page.goto('/l/select-basics');
   // ждём, пока песочница поднимет Postgres и доска нарисует таблицы
   await expect(page.locator('.cm-content')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('table-node-public.author')).toBeVisible({ timeout: 20_000 });
+  // author на старте вне кадра и не рисуется, ждём book
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
 }
 
 async function typeQuery(page: Page, sql: string) {

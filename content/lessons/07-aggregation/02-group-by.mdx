@@ -9,8 +9,8 @@ board:
   tables: [public.author, public.book, public.orders]
   layout:
     book: { x: 0, y: 0 }
-    author: { x: 0, y: 380 }
-    orders: { x: 560, y: 380 }
+    author: { x: 0, y: 480 }
+    orders: { x: 560, y: 480 }
 initialQuery: |
   select category_id, count(*) from book group by category_id;
 docs:

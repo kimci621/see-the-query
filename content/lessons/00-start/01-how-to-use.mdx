@@ -6,7 +6,7 @@ number: "0.1"
 order: 1
 dataset: bookstore
 initialQuery: |
-  select * from book;
+  select title, price from book;
 docs:
   - https://www.postgresql.org/docs/current/tutorial-sql.html
   - https://www.postgresql.org/docs/current/tutorial-transactions.html
@@ -14,7 +14,7 @@ docs:
 board:
   tables: [book, author]
   layout:
-    author: { x: 330, y: 0 }
+    author: { x: 330, y: -100 }
     book: { x: 0, y: 280 }
 tags: [доска, старт, интерфейс]
 mvp: true

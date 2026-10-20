@@ -59,7 +59,8 @@ test('SQL-блок урока подсвечен и несёт мету', async 
 });
 
 test('Tab с доски фокусирует ноду таблицы с подписью', async ({ page }) => {
-  await page.goto('/l/select-basics');
+  // обе таблицы урока в стартовом кадре: нода вне кадра не рисуется и в порядок Tab не попадает
+  await page.goto('/l/inner-join');
   await expect(page.getByTestId('rf__node-public.book')).toBeVisible({ timeout: 20_000 });
   // доска сама остановка Tab (клавиши плеера), следующий Tab попадает на первую по DOM ноду таблицы
   await page.getByTestId('board-area').focus();

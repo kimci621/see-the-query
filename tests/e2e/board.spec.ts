@@ -7,6 +7,9 @@ async function openBookstore(page: Page) {
 
 test('bookstore разложен без наложений, FK и рамка схемы на месте', async ({ page }) => {
   await openBookstore(page);
+  // author на старте вне кадра, а React Flow рисует только ноды в кадре: вписываем всю доску
+  await page.getByTestId('table-node-public.book').hover();
+  await page.keyboard.press('ControlOrMeta+0');
   const nodes = page.locator('[data-testid^="table-node-"]');
   await expect(nodes).toHaveCount(2);
   const boxes = await nodes.evaluateAll((els) =>
@@ -127,6 +130,9 @@ test('широкая book свёрнута, колонки запроса вид
   const zoom = await zoomOf(page);
   const collapsed = await book.boundingBox();
   expect(collapsed?.width ?? 0).toBeCloseTo(756 * zoom, 0);
+  // author вне стартового кадра не рисуется: ⌘0 вписывает доску, нода появляется
+  await book.hover();
+  await page.keyboard.press('ControlOrMeta+0');
   const author = await flowTransform(page, 'public.author');
 
   await setEditorText(page, 'select tags from book');
@@ -137,6 +143,8 @@ test('широкая book свёрнута, колонки запроса вид
   await expect(book.getByTestId('hidden-columns')).toHaveCount(0);
   await expect(book.locator('[data-column]')).toHaveCount(9);
   await expect(book.locator('[data-column="meta"]')).toBeVisible();
+  await book.hover();
+  await page.keyboard.press('ControlOrMeta+0');
   expect(await flowTransform(page, 'public.author')).toBe(author);
   await expect(page.locator('.react-flow__node[data-id="public.book"]')).toHaveCSS('width', '1188px');
 });
@@ -185,22 +193,51 @@ test('стартовый кадр на book крупно, ⌘0 вписывае�
   expect(fitted).toBeGreaterThanOrEqual(0.6);
 });
 
-// how-to-use стартует с select * from book: book развёрнута до 1188 единиц и целиком в кадре
-test('how-to-use: развёрнутая book в кадре, ⌘0 добавляет author и подпись схемы', async ({ page }) => {
+// how-to-use стартует со свёрнутой book (P8.13), select * разворачивает её до 1188 единиц: целиком в кадре
+test('how-to-use: свёрнутая book на старте, после select * в кадре, ⌘0 показывает шапки book и author', async ({
+  page,
+}) => {
   await page.goto('/l/how-to-use');
   const book = page.getByTestId('table-node-public.book');
-  await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
+  await expect(book.getByTestId('hidden-columns')).toHaveText('+4 колонки', { timeout: 20_000 });
+  await setEditorText(page, 'select * from book');
+  await expect(book.locator('[data-column="meta"]')).toBeVisible();
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
-  expect(await zoomOf(page)).toBeGreaterThanOrEqual(0.6);
+  // сцена доиграла: её камера больше не двигается
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+    timeout: 15_000,
+  });
 
-  await book.hover();
+  // развёрнутая book с author на 0.6 по высоте не влезает: кадр держит левый верхний угол, шапки видны.
+  // Камера сцены ушла к итогу, book может быть вне кадра: наводим на центр доски
+  const box = await page.getByTestId('board-canvas').boundingBox();
+  if (!box) throw new Error('нет доски');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.keyboard.press('ControlOrMeta+0');
-  await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
+  await expect.poll(() => headersOutside(page, ['public.book', 'public.author'])).toEqual([]);
 });
+
+// Чьи шапки (имя таблицы) не целиком на доске
+async function headersOutside(page: Page, ids: string[]): Promise<string[]> {
+  const board = await page.locator('.react-flow').boundingBox();
+  if (!board) throw new Error('нет доски');
+  const out: string[] = [];
+  for (const id of ids) {
+    const r = await page.getByTestId(`table-node-${id}`).locator('.vs-table-name').boundingBox();
+    const inside =
+      r &&
+      r.x >= board.x &&
+      r.x + r.width <= board.x + board.width &&
+      r.y >= board.y &&
+      r.y + r.height <= board.y + board.height;
+    if (!inside) out.push(id);
+  }
+  return out;
+}
 
 // P8.60: до первого замера обёртка ноды не должна держать ширину initialWidth (свёрнутая book).
 // Иначе после замера развёрнутая book растёт посреди обработки ResizeObserver и браузер пишет «loop completed»
-test('how-to-use: старт доски без «ResizeObserver loop»', async ({ page }) => {
+test('table-anatomy: старт доски без «ResizeObserver loop»', async ({ page }) => {
   await page.addInitScript(() => {
     const seen: string[] = [];
     (window as unknown as { roErrors: string[] }).roErrors = seen;
@@ -208,7 +245,7 @@ test('how-to-use: старт доски без «ResizeObserver loop»', async (
       if (String(e.message).includes('ResizeObserver')) seen.push(e.message);
     });
   });
-  await page.goto('/l/how-to-use');
+  await page.goto('/l/table-anatomy');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
@@ -216,8 +253,10 @@ test('how-to-use: старт доски без «ResizeObserver loop»', async (
 });
 
 // Первый трейс нового урока сворачивает book: рефит идёт в стартовый кадр нового урока, а не во всю доску
-test('переход how-to-use → select-basics заканчивается стартовым кадром select-basics', async ({ page }) => {
-  await page.goto('/l/how-to-use');
+test('переход table-anatomy → select-basics заканчивается стартовым кадром select-basics', async ({
+  page,
+}) => {
+  await page.goto('/l/table-anatomy');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
   await page.keyboard.press('ControlOrMeta+k');
@@ -264,11 +303,11 @@ async function cameraStays(page: Page, style: string) {
 }
 
 // Сохранённая камера важнее стартового кадра и рефита по первому трейсу (разворот book)
-test('how-to-use: сохранённая камера переживает перезагрузку и разворот book', async ({ page }) => {
-  await page.goto('/l/how-to-use');
+test('table-anatomy: сохранённая камера переживает перезагрузку и разворот book', async ({ page }) => {
+  await page.goto('/l/table-anatomy');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
-  const zoomed = await saveCamera(page, 'how-to-use');
+  const zoomed = await saveCamera(page, 'table-anatomy');
 
   await page.reload();
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
@@ -309,7 +348,8 @@ for (const sql of ['select name from author', 'select name from author where aut
     await setEditorText(page, sql);
     const author = page.getByTestId('table-node-public.author');
     await expect(author).toHaveAttribute('data-focused', 'true', { timeout: 5000 });
-    await expect(page.getByTestId('table-node-public.book')).not.toHaveAttribute('data-focused');
+    // book может уйти из кадра, а ноду вне кадра React Flow не рисует: проверяем, что фокусной book нет
+    await expect(page.locator('[data-testid="table-node-public.book"][data-focused]')).toHaveCount(0);
     await expect
       .poll(async () => (await outsideBoard(page, ['public.author'])).includes('public.author'))
       .toBe(false);
@@ -393,7 +433,7 @@ test('режим фокуса: доска на всю ширину, зум не 
 
 // Стартовый кадр ставится без полёта (спека 3.4), даже когда select * стартового запроса
 // разворачивает book уже после первого кадра. Пишем все трансформы вьюпорта с загрузки страницы
-test('how-to-use: стартовый кадр без полёта', async ({ page }) => {
+test('table-anatomy: стартовый кадр без полёта', async ({ page }) => {
   await page.addInitScript(() => {
     const seen: string[] = [];
     Object.assign(window, { __transforms: seen });
@@ -404,7 +444,7 @@ test('how-to-use: стартовый кадр без полёта', async ({ pag
     };
     requestAnimationFrame(tick);
   });
-  await page.goto('/l/how-to-use');
+  await page.goto('/l/table-anatomy');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.locator('[data-column="meta"]')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 20_000 });
