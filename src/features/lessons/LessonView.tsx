@@ -2,6 +2,7 @@ import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useEffect
 import { Link } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLessonStore } from '@/stores/lesson';
+import { NewTabLink } from './mdx/Callouts';
 import { mdxComponents } from './mdx/components';
 import { loadLessonContent, neighbours } from './registry';
 import type { LessonMeta } from './types';
@@ -57,9 +58,9 @@ export function LessonView({ meta }: { meta: LessonMeta }) {
           <ul>
             {meta.docs.map((url) => (
               <li key={url}>
-                <a href={url} target="_blank" rel="noreferrer">
+                <NewTabLink href={url}>
                   {url.replace('https://www.postgresql.org/docs/current/', '')}
-                </a>
+                </NewTabLink>
               </li>
             ))}
           </ul>

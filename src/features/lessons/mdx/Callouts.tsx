@@ -1,5 +1,5 @@
-import { Ban, Info, Lightbulb, ListChecks, Rocket, TriangleAlert } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Ban, ExternalLink, Info, Lightbulb, ListChecks, Rocket, TriangleAlert } from 'lucide-react';
+import { type ReactNode, useId } from 'react';
 import { cn } from '@/lib/utils';
 
 export type CalloutKind = 'analogy' | 'trap' | 'tip' | 'note';
@@ -27,6 +27,16 @@ const KINDS = {
 } as const;
 
 export const CALLOUT_KINDS = Object.keys(KINDS) as CalloutKind[];
+
+// Внешняя ссылка урока: новая вкладка, иконка для глаз и пометка для читалки
+export function NewTabLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer">
+      {children} <ExternalLink aria-hidden className="inline size-3.5 align-baseline" />
+      <span className="sr-only">(откроется в новой вкладке)</span>
+    </a>
+  );
+}
 
 export function TlDr({ children }: { children: ReactNode }) {
   return (
@@ -62,18 +72,18 @@ export function DontDoThis({ href, children }: { href: string; children: ReactNo
       </p>
       {children}
       <p>
-        <a href={href} target="_blank" rel="noreferrer">
-          PostgreSQL wiki: Don't Do This
-        </a>
+        <NewTabLink href={href}>PostgreSQL wiki: Don't Do This</NewTabLink>
       </p>
     </aside>
   );
 }
 
 export function Cheatsheet({ children }: { children: ReactNode }) {
+  // id на экземпляр: две шпаргалки на странице не делят подпись
+  const title = useId();
   return (
-    <section aria-labelledby="lesson-cheatsheet" className="my-8 rounded-md border px-4 py-1">
-      <h2 id="lesson-cheatsheet" className="flex items-center gap-2">
+    <section aria-labelledby={title} className="my-8 rounded-md border px-4 py-1">
+      <h2 id={title} className="flex items-center gap-2">
         <ListChecks aria-hidden className="size-5" />
         Шпаргалка
       </h2>

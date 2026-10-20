@@ -32,7 +32,7 @@ export function Scene({ children }: { children: ReactNode }) {
   const back = useRef<HTMLButtonElement>(null);
   const forward = useRef<HTMLButtonElement>(null);
   // MDX кладёт между шагами текстовые переводы строк, их отбрасываем
-  const steps = Children.toArray(children).filter(isValidElement);
+  const steps = Children.toArray(children).filter(isValidElement<{ caption?: unknown }>);
 
   const go = (next: number) => {
     // Крайний шаг выключает нажатую кнопку, и фокус улетел бы на body. Переносим его на вторую кнопку:
@@ -45,11 +45,17 @@ export function Scene({ children }: { children: ReactNode }) {
     if (sql !== null) sendToBoard(sql, lessonId);
   };
 
+  // Сцена без шагов - ошибка автора урока: пустую рамку и «Шаг 1 из 0» не рисуем
+  if (steps.length === 0) return null;
+  const caption = steps[index]?.props.caption;
+
   return (
     <section aria-label="Сцена" className="my-6 rounded-lg border px-4 py-2">
       <div className="not-prose flex items-center justify-between gap-2 py-2">
-        <span className="text-sm text-muted-foreground">
+        {/* Живой регион: экранная читалка слышит смену шага, подпись шага ей не видна в номере */}
+        <span role="status" className="text-sm text-muted-foreground">
           Шаг {index + 1} из {steps.length}
+          {typeof caption === 'string' && <span className="sr-only">: {caption}</span>}
         </span>
         <div className="flex gap-2">
           <Button ref={back} size="sm" variant="outline" disabled={index === 0} onClick={() => go(index - 1)}>

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { Callout, Cheatsheet, DontDoThis, TlDr } from './Callouts';
+import { Callout, Cheatsheet, DontDoThis, NewTabLink, TlDr } from './Callouts';
 
 describe('выноски урока', () => {
   it('TlDr показывает суть и подсказку для скринридера', () => {
@@ -26,7 +26,10 @@ describe('выноски урока', () => {
   it('DontDoThis ведёт на PG wiki в новой вкладке', () => {
     const href = "https://wiki.postgresql.org/wiki/Don't_Do_This#Don't_use_NOT_IN";
     render(<DontDoThis href={href}>Не используй NOT IN.</DontDoThis>);
-    const link = screen.getByRole('link', { name: /Don't Do This/ });
+    // читалка слышит, что ссылка откроется в новой вкладке
+    const link = screen.getByRole('link', {
+      name: "PostgreSQL wiki: Don't Do This (откроется в новой вкладке)",
+    });
     expect(link).toHaveAttribute('href', href);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noreferrer');
@@ -36,5 +39,26 @@ describe('выноски урока', () => {
     render(<Cheatsheet>список</Cheatsheet>);
     expect(screen.getByRole('heading', { name: 'Шпаргалка' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Шпаргалка' })).toHaveTextContent('список');
+  });
+
+  it('две шпаргалки на странице подписаны каждая своим заголовком, id не повторяются', () => {
+    render(
+      <>
+        <Cheatsheet>первая</Cheatsheet>
+        <Cheatsheet>вторая</Cheatsheet>
+      </>,
+    );
+    const [first, second] = screen.getAllByRole('region', { name: 'Шпаргалка' });
+    expect(first).toHaveTextContent('первая');
+    expect(second).toHaveTextContent('вторая');
+    expect(first?.getAttribute('aria-labelledby')).not.toBe(second?.getAttribute('aria-labelledby'));
+  });
+
+  it('NewTabLink: новая вкладка, иконка без подписи и пометка для читалки', () => {
+    render(<NewTabLink href="https://www.postgresql.org/docs/current/sql-select.html">SELECT</NewTabLink>);
+    const link = screen.getByRole('link', { name: 'SELECT (откроется в новой вкладке)' });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noreferrer');
+    expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   });
 });

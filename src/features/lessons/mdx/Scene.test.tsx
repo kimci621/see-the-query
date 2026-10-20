@@ -93,4 +93,21 @@ describe('Scene', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
     expect(screen.getByRole('button', { name: 'Дальше' })).toHaveFocus();
   });
+
+  it('смену шага объявляет живой регион: номер и подпись шага', () => {
+    renderScene();
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Шаг 1 из 3: Берём книги');
+    fireEvent.click(screen.getByRole('button', { name: 'Дальше' }));
+    expect(status).toHaveTextContent('Шаг 2 из 3: Убираем книги без цены');
+  });
+
+  it('сцена без шагов ничего не рисует, а не «Шаг 1 из 0»', () => {
+    const router = createMemoryRouter([{ path: '/l/:lessonId', element: <Scene>{'\n'}</Scene> }], {
+      initialEntries: ['/l/logical-order'],
+    });
+    render(<RouterProvider router={router} />);
+    expect(screen.queryByText(/Шаг/)).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Сцена' })).toBeNull();
+  });
 });
