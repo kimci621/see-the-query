@@ -105,7 +105,7 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useBoardStore.getState().focused.toSorted()).toEqual(['public.author', 'public.book']);
   });
 
-  it('трейс SELECT меняет цель рефита на свои таблицы, но камеру и рамку не двигает', async () => {
+  it('трейс SELECT с другим набором таблиц переводит фокус и камеру, с тем же - камеру не дёргает (P8.12)', async () => {
     render(<EditorPane />);
     act(() => useBoardStore.getState().focus(['public.author']));
     const requests = useBoardStore.getState().focusRequest;
@@ -115,9 +115,20 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     };
     act(() => useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration()));
     await act(async () => undefined);
-    expect(useBoardStore.getState().frameTarget).toEqual(['public.book']);
+    expect(useBoardStore.getState()).toMatchObject({ focused: ['public.book'], focusRequest: requests + 1 });
+    act(() => useSceneStore.getState().setTrace({ ...trace }, useSceneStore.getState().nextGeneration()));
+    await act(async () => undefined);
+    expect(useBoardStore.getState().focusRequest).toBe(requests + 1);
+  });
+
+  it('каретка в конце имени таблицы во FROM фокусирует её до трейса (P8.12)', async () => {
+    render(<EditorPane />);
+    act(() => {
+      useEditorStore.getState().setText('select name from author');
+      useEditorStore.getState().setCursor(23);
+    });
+    await act(async () => undefined);
     expect(useBoardStore.getState().focused).toEqual(['public.author']);
-    expect(useBoardStore.getState().focusRequest).toBe(requests);
   });
 
   it('hoveredColumn подсвечивает колонку, уход с hover возвращает подсветку трейса', async () => {
@@ -368,7 +379,7 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
     await act(async () => undefined);
     expect(sandbox.apply).toHaveBeenCalledTimes(1);
-    expect(useBoardStore.getState().frameTarget).toEqual(['public.author']);
+    expect(useBoardStore.getState().focused).toEqual(['public.author']);
     expect(useBoardStore.getState().frameRequest).toBe(frames + 1);
   });
 

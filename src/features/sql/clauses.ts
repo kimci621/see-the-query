@@ -94,10 +94,17 @@ const CLAUSE_KEYWORDS: Partial<Record<ClauseName, RegExp>> = {
   using: /\s*\busing\s*$/i,
 };
 
-// Клауз под курсором
+// Клаузы с таблицами: курсор в них фокусирует доску
+const TABLE_CLAUSES: ReadonlySet<ClauseName> = new Set(['from', 'into', 'using']);
+
+// Клауз под курсором. Каретка в конце имени таблицы - обычное состояние при наборе:
+// FROM/INTO/USING держат свой конец, а последний из них и хвост оператора (`;`, пробелы)
 export function clauseAt(stmt: ParsedStatement, cursor: number): ClauseName | null {
-  for (const r of clauseRanges(stmt)) {
+  const ranges = clauseRanges(stmt);
+  for (const [i, r] of ranges.entries()) {
     if (cursor >= r.from && cursor < r.to) return r.clause;
+    const tail = cursor === r.to || i === ranges.length - 1;
+    if (TABLE_CLAUSES.has(r.clause) && cursor >= r.from && tail) return r.clause;
   }
   return null;
 }

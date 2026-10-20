@@ -61,13 +61,13 @@ export function EditorPane() {
   }, [trace]);
 
   // INSERT/UPDATE/DELETE: камера летит к целевой таблице, строки базовой доски не двигаются.
-  // SELECT: камера не летит, но цель рефита при развороте свёртки становится таблицами трейса
+  // SELECT: фокус и камера на таблицах трейса, если набор сменился (каретка в WHERE и дальше)
   // Пока курсор в from/into/using, фокус ведёт курсор (ниже): трейс его не перебивает
   useEffect(() => {
     const clause = useEditorStore.getState().activeClause;
     if (clause === 'from' || clause === 'into' || clause === 'using') return;
     if (!trace) return;
-    if (trace.statementType === 'select') useBoardStore.getState().retarget(trace.touched.tableIds);
+    if (trace.statementType === 'select') useBoardStore.getState().focus(trace.touched.tableIds);
     else focusDmlTarget(trace.sql);
   }, [trace]);
 

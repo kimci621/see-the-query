@@ -13,8 +13,6 @@ export interface BoardStore {
   // Таблицы, которых нет в датасете (создал ученик): доска урока показывает их вместе с board.tables
   userTables: string[];
   focused: string[];
-  // Цель рефита камеры: focused или таблицы SELECT-трейса. Рамку не рисует
-  frameTarget: string[];
   highlightedColumns: string[];
   // Колонки трейса: по ним сворачиваются широкие таблицы. Наведённой здесь нет: hover не меняет ширину ноды
   queryColumns: string[];
@@ -24,7 +22,7 @@ export interface BoardStore {
   // Пометки строк после «Применить»: ставятся вместе со схемой, снимаются следующим запросом
   rowWrites: AppliedWrite[];
   fitRequest: number;
-  // Камера к frameTarget (без него вся доска) без проверки набора: сцена ушла, а камера стоит на призраке
+  // Камера к focused (без него вся доска) без проверки набора: сцена ушла, а камера стоит на призраке
   frameRequest: number;
   focusRequest: number;
   startRequest: number;
@@ -32,7 +30,6 @@ export interface BoardStore {
   clearRowWrites(): void;
   setVisibleTables(t: string[] | null): void;
   focus(tableIds: string[]): void;
-  retarget(tableIds: string[]): void;
   frameStart(tableIds: string[]): void;
   highlightColumns(cols: string[]): void;
   setQueryColumns(cols: string[]): void;
@@ -50,7 +47,6 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   visibleTables: null,
   userTables: [],
   focused: [],
-  frameTarget: [],
   highlightedColumns: [],
   queryColumns: [],
   expandedTables: [],
@@ -71,20 +67,10 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   setVisibleTables: (visibleTables) => set({ visibleTables }),
   // Камера летит только при смене набора: ввод в редакторе вызывает focus на каждый символ
   focus: (tableIds) =>
-    set((s) =>
-      sameSet(s.focused, tableIds)
-        ? sameSet(s.frameTarget, tableIds)
-          ? s
-          : { frameTarget: tableIds }
-        : { focused: tableIds, frameTarget: tableIds, focusRequest: s.focusRequest + 1 },
-    ),
-  // Цель камеры без полёта и без рамки: SELECT-трейс называет свои таблицы, и рефит при развороте
-  // целится в них, а не в прошлый фокус. Рамка остаётся у DML и курсора во FROM (спека 3.4)
-  retarget: (tableIds) => set((s) => (sameSet(s.frameTarget, tableIds) ? s : { frameTarget: tableIds })),
+    set((s) => (sameSet(s.focused, tableIds) ? s : { focused: tableIds, focusRequest: s.focusRequest + 1 })),
   // Стартовый кадр урока (спека 3.4): таблицы стартового запроса. Ставится и при том же наборе,
   // доска наводит камеру без полёта
-  frameStart: (tableIds) =>
-    set((s) => ({ focused: tableIds, frameTarget: tableIds, startRequest: s.startRequest + 1 })),
+  frameStart: (tableIds) => set((s) => ({ focused: tableIds, startRequest: s.startRequest + 1 })),
   highlightColumns: (cols) =>
     set((s) => (sameList(s.highlightedColumns, cols) ? s : { highlightedColumns: cols })),
   setQueryColumns: (cols) => set((s) => (sameList(s.queryColumns, cols) ? s : { queryColumns: cols })),

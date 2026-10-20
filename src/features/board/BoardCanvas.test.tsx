@@ -238,17 +238,16 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 400 }));
   });
 
-  it('разворот после SELECT-трейса вписывает его таблицы, а не прошлый фокус', () => {
+  it('разворот после смены фокуса вписывает новые таблицы, а не прошлый фокус', () => {
     renderBoard();
     measure('public.book', 756);
+    act(() => useBoardStore.getState().focus(['public.author']));
     act(() => {
-      useBoardStore.getState().focus(['public.author']);
-      useBoardStore.getState().retarget(['public.book']);
+      useBoardStore.getState().focus(['public.book']);
       useBoardStore.getState().expandTables(['public.book']);
     });
     measure('public.book', 1188);
     expect(fitNodes()).toEqual(['public.book']);
-    expect(useBoardStore.getState().focused).toEqual(['public.author']);
   });
 
   it('сохранённая камера урока важнее стартового кадра', async () => {
@@ -274,10 +273,8 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).toHaveBeenLastCalledWith(
       expect.objectContaining({ padding: FOCUS_PAD, duration: 400 }),
     );
-    act(() => {
-      useBoardStore.getState().retarget(['public.nope']);
-      useBoardStore.getState().requestFrame();
-    });
+    act(() => useBoardStore.getState().focus(['public.nope']));
+    act(() => useBoardStore.getState().requestFrame());
     expect(fitNodes()).toHaveLength(SCHEMA.tables.length);
   });
 

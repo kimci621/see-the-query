@@ -284,6 +284,21 @@ test('select * разворачивает book, и она целиком в ка
     .toBe(false);
 });
 
+// Доска следует за набором (P8.12): каретка в конце текста, как при обычном наборе.
+// Конец имени во FROM ведёт фокус сразу, хвост WHERE - по завершении трассы
+for (const sql of ['select name from author', 'select name from author where author_id > 2']) {
+  test(`набор «${sql}»: author в фокусе и целиком в кадре`, async ({ page }) => {
+    await openBookstore(page);
+    await setEditorText(page, sql);
+    const author = page.getByTestId('table-node-public.author');
+    await expect(author).toHaveAttribute('data-focused', 'true', { timeout: 5000 });
+    await expect(page.getByTestId('table-node-public.book')).not.toHaveAttribute('data-focused');
+    await expect
+      .poll(async () => (await outsideBoard(page, ['public.author'])).includes('public.author'))
+      .toBe(false);
+  });
+}
+
 // Ноды ловят указатель (иначе title у колонок, флагов и «+N колонки» не показываются),
 // а перетаскивание поверх ноды по-прежнему двигает доску
 test('подсказки на нодах доступны мыши, drag по ноде двигает вьюпорт', async ({ page }) => {

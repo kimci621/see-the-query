@@ -90,11 +90,23 @@ describe('clauseAt', () => {
     expect(clauseAt(stmt, 36)).toBe('where');
   });
 
-  it('курсор между клаузами и в хвосте: null', () => {
+  it('курсор между клаузами: null', () => {
     const stmt = stmtOf('select 1 from t');
     expect(clauseAt(stmt, 9)).toBeNull(); // на 'from'
-    expect(clauseAt(stmt, 100)).toBeNull();
     expect(clauseAt(stmt, -1)).toBeNull();
+  });
+
+  it('каретка в конце имени FROM/INTO/USING и в хвосте оператора: клауз ещё под ней (P8.12)', () => {
+    expect(clauseAt(stmtOf('select name from author'), 23)).toBe('from');
+    expect(clauseAt(stmtOf('select name from author;'), 24)).toBe('from');
+    expect(clauseAt(stmtOf('select name from author  '), 25)).toBe('from');
+    const where = 'select name from author where author_id > 2';
+    expect(clauseAt(stmtOf(where), where.indexOf(' where'))).toBe('from');
+    expect(clauseAt(stmtOf(where), where.length)).toBeNull();
+    const del = 'delete from author using book';
+    expect(clauseAt(stmtOf(del), del.length)).toBe('using');
+    // остальные клаузы конец не держат: подсветка в редакторе не прыгает за набором
+    expect(clauseAt(stmtOf('select title from book'), 'select title'.length)).toBeNull();
   });
 });
 
