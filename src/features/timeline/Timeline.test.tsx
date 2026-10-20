@@ -35,6 +35,14 @@ describe('Timeline', () => {
     expect(screen.getByTestId('timeline-caption').textContent).toBe('WHERE price > 500: осталось 3 из 5');
   });
 
+  it('подпись режется по ширине, полный текст в подсказке', () => {
+    load();
+    render(<Timeline />);
+    fireEvent.click(screen.getAllByTestId('stage-chip')[1]);
+    const caption = screen.getByTestId('timeline-caption');
+    expect(caption.getAttribute('title')).toBe('WHERE price > 500: осталось 3 из 5');
+  });
+
   it('подпись в aria-live', () => {
     load();
     render(<Timeline />);

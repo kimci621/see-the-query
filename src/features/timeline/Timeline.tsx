@@ -167,7 +167,13 @@ export function Timeline() {
           aria-label="Позиция в сцене"
         />
       ) : null}
-      <p data-testid="timeline-caption" aria-live="polite" className="truncate text-sm">
+      {/* Длинная подпись режется по ширине панели: полный текст в подсказке, читалка слышит его целиком */}
+      <p
+        data-testid="timeline-caption"
+        aria-live="polite"
+        title={current?.caption || undefined}
+        className="truncate text-sm"
+      >
         {current?.caption ?? ''}
       </p>
     </div>
