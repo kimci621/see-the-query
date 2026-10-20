@@ -52,7 +52,8 @@ board:
 initialQuery: |                # запрос в редакторе при первом открытии урока
   select * from book;
 docs:                          # официальная документация, минимум одна ссылка
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Соединение таблиц (JOIN)   # подпись под уроком: по-русски, коротко, по заголовку страницы
 course: ["11.38"]              # номера референс-уроков курса (только для авторов)
 tags: [join, inner join]       # для поиска ⌘K
 mvp: true
@@ -138,7 +139,8 @@ dataset: bookstore
 initialQuery: |
   select title, price from book;
 docs:
-  - https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+    title: Условие WHERE
 tags: [where, фильтр]
 ---
 

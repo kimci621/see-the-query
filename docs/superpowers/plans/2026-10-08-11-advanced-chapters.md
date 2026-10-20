@@ -673,8 +673,10 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   initialQuery: |
     select title, price, pages from book;
   docs:
-    - https://www.postgresql.org/docs/current/datatype.html
-    - https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS
+    - url: https://www.postgresql.org/docs/current/datatype.html
+      title: Типы данных
+    - url: https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS
+      title: Приведение типов
   course: ["11.25"]
   tags: [типы, приведение, cast]
   ---
@@ -832,8 +834,10 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   initialQuery: |
     select title, price, pages from book;
   docs:
-    - https://www.postgresql.org/docs/current/datatype-numeric.html
-    - https://www.postgresql.org/docs/current/functions-math.html
+    - url: https://www.postgresql.org/docs/current/datatype-numeric.html
+      title: Числовые типы
+    - url: https://www.postgresql.org/docs/current/functions-math.html
+      title: Математические функции и операторы
   course: ["11.26"]
   tags: [числа, integer, numeric, float, деление, округление]
   ---
@@ -997,8 +1001,10 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   initialQuery: |
     select title from book;
   docs:
-    - https://www.postgresql.org/docs/current/datatype-character.html
-    - https://www.postgresql.org/docs/current/functions-string.html
+    - url: https://www.postgresql.org/docs/current/datatype-character.html
+      title: Строковые типы
+    - url: https://www.postgresql.org/docs/current/functions-string.html
+      title: Функции и операторы для строк
   course: ["11.27"]
   tags: [строки, text, varchar, char, ilike, format]
   ---
@@ -1164,8 +1170,10 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   initialQuery: |
     select order_id, created_at from orders;
   docs:
-    - https://www.postgresql.org/docs/current/datatype-datetime.html
-    - https://www.postgresql.org/docs/current/functions-datetime.html
+    - url: https://www.postgresql.org/docs/current/datatype-datetime.html
+      title: Типы даты и времени
+    - url: https://www.postgresql.org/docs/current/functions-datetime.html
+      title: Функции и операторы для дат и времени
   course: ["11.29"]
   tags: [дата, время, timestamp, timestamptz, interval, часовой пояс]
   ---
@@ -1335,7 +1343,8 @@ export function findSrfFromItems(stmt: ParsedStatement): SrfFromItem[];
   initialQuery: |
     select name, bonus from customer;
   docs:
-    - https://www.postgresql.org/docs/current/datatype-boolean.html
+    - url: https://www.postgresql.org/docs/current/datatype-boolean.html
+      title: Логический тип
   course: ["11.30"]
   tags: [boolean, true, false, null, filter, is distinct from]
   ---
