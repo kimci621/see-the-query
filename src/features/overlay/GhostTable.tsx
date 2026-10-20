@@ -11,6 +11,7 @@ import {
   ghostHeight,
   ghostWidth,
   ROW_H,
+  ROW_ICONS,
   rowTop,
   TITLE_HEIGHT,
 } from './geometry';
@@ -18,17 +19,6 @@ import type { GhostColumn, GhostRow, GhostTable } from './types';
 
 // Прозрачность строки по состоянию: через animate, иначе inline opacity motion перебьёт CSS
 const STATE_OPACITY: Partial<Record<GhostRow['state'], number>> = { cut: 0.35, unknown: 0.8 };
-
-// Иконка состояния: цвет не единственный сигнал
-const STATE_ICON: Partial<Record<GhostRow['state'], { icon: string; label: string }>> = {
-  kept: { icon: '✓', label: 'прошла' },
-  dropped: { icon: '✕', label: 'отсеяна' },
-  unknown: { icon: '?', label: 'UNKNOWN' },
-  cut: { icon: '✂', label: 'отрезана' },
-  new: { icon: '+', label: 'новая' },
-  changed: { icon: '~', label: 'изменена' },
-  deleted: { icon: '✕', label: 'удалена' },
-};
 
 const GhostRowView = memo(function GhostRowView({
   row,
@@ -41,7 +31,7 @@ const GhostRowView = memo(function GhostRowView({
   columns: GhostColumn[];
   keys: string[];
 }) {
-  const icon = STATE_ICON[row.state];
+  const icon = ROW_ICONS[row.state];
   return (
     <motion.div
       data-testid="ghost-row"
@@ -64,7 +54,7 @@ const GhostRowView = memo(function GhostRowView({
           <div
             key={keys[ci]}
             className={`vs-cell vs-col--${c.state}${kind === 'null' ? ' vs-null' : ''}`}
-            style={{ width: COL_WIDTH, transform: `translateX(${cellLeft(ci)}px)` }}
+            style={{ width: COL_WIDTH, lineHeight: `${ROW_H}px`, transform: `translateX(${cellLeft(ci)}px)` }}
             title={row.cellNotes?.[ci]}
           >
             {text}
@@ -102,7 +92,11 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
           <div
             key={keys[ci]}
             className={`vs-colhead vs-col--${c.state}`}
-            style={{ width: COL_WIDTH, transform: `translateX(${cellLeft(ci)}px)` }}
+            style={{
+              width: COL_WIDTH,
+              lineHeight: `${COLHEAD_HEIGHT}px`,
+              transform: `translateX(${cellLeft(ci)}px)`,
+            }}
           >
             {c.name}
           </div>
@@ -111,7 +105,11 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
           <div
             data-testid="ghost-folded"
             className="vs-colhead vs-folded"
-            style={{ width: STUB_WIDTH, transform: `translateX(${cellLeft(table.columns.length)}px)` }}
+            style={{
+              width: STUB_WIDTH,
+              lineHeight: `${COLHEAD_HEIGHT}px`,
+              transform: `translateX(${cellLeft(table.columns.length)}px)`,
+            }}
           >
             +{table.foldedColumns} {plural(table.foldedColumns, 'колонка', 'колонки', 'колонок')}
           </div>

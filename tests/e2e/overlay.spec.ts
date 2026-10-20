@@ -133,6 +133,35 @@ test('кадр сцены вмещает счётчик LIMIT и оставля�
   expect((ghost?.y ?? 0) + (ghost?.height ?? 0)).toBeLessThanOrEqual(chrome?.y ?? 0);
 });
 
+test('вердикты WHERE: значок и плашка UNKNOWN не ложатся на ячейки, длинный текст с многоточием', async ({
+  page,
+}) => {
+  await openBoard(page);
+  await typeQuery(page, 'select * from book where price > 500');
+  await expect(page.getByTestId('stage-chip')).toContainText(['FROM', 'WHERE'], { timeout: 5_000 });
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+    timeout: 15_000,
+  });
+  // конец WHERE и шаг назад: кадр вердиктов
+  await page.getByTestId('stage-chip').nth(1).click();
+  await page.getByTestId('player-prev').click();
+  await expect(page.locator('.vs-row-badge')).toHaveText(['UNKNOWN']);
+  const overlaps = await page.getByTestId('ghost-row').evaluateAll((rows) =>
+    rows.flatMap((row) => {
+      const cellsRight = Math.max(
+        ...Array.from(row.querySelectorAll('.vs-cell')).map((c) => c.getBoundingClientRect().right),
+      );
+      return Array.from(row.querySelectorAll('.vs-row-icon, .vs-row-badge'))
+        .filter((m) => m.getBoundingClientRect().left < cellsRight - 0.5)
+        .map((m) => `${row.getAttribute('data-row-key')}: ${m.textContent}`);
+    }),
+  );
+  expect(overlaps).toEqual([]);
+  const cell = page.locator('.vs-ghost .vs-cell').first();
+  await expect(cell).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(cell).toHaveCSS('display', 'block');
+});
+
 test('после запроса с ошибкой камера возвращается к таблице, доска не пустая', async ({ page }) => {
   await openBoard(page);
   await typeQuery(page, QUERY);

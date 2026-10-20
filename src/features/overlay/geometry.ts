@@ -6,7 +6,7 @@ import {
   STUB_WIDTH,
   TABLE_WIDTH,
 } from '@/features/board/layout';
-import type { Frame, GhostTable } from './types';
+import type { Frame, GhostTable, RowState } from './types';
 
 // Размеры призрака совпадают с нодой доски: призрак scan стартует ровно поверх неё
 export const COL_WIDTH = COLUMN_WIDTH;
@@ -17,9 +17,38 @@ export const TABLE_GAP = 80;
 export const COMPRESS_THRESHOLD = 200;
 export const COMPRESSED_VISIBLE_ROWS = 20;
 
-// Как foldWidth у ноды: колонки и заглушка «+N колонки», если часть колонок свёрнута
+// Иконка состояния строки: цвет не единственный сигнал
+export const ROW_ICONS: Partial<Record<RowState, { icon: string; label: string }>> = {
+  kept: { icon: '✓', label: 'прошла' },
+  dropped: { icon: '✕', label: 'отсеяна' },
+  unknown: { icon: '?', label: 'UNKNOWN' },
+  cut: { icon: '✂', label: 'отрезана' },
+  new: { icon: '+', label: 'новая' },
+  changed: { icon: '~', label: 'изменена' },
+  deleted: { icon: '✕', label: 'удалена' },
+};
+
+// Значок стоит у правого края строки, плашка левее него (overlay.css: .vs-row-icon, .vs-row-badge).
+// ponytail: ширина плашки (10px) по числу символов с запасом, без замера DOM
+const ICON_LANE = 20;
+const BADGE_CHAR = 7;
+const BADGE_PAD = 12;
+
+// Полоса под значок и плашку строки (✓, UNKNOWN, ×2), чтобы они не ложились на последнюю колонку
+export function marksWidth(t: GhostTable): number {
+  let lane = 0;
+  for (const r of t.rows) {
+    if (!ROW_ICONS[r.state] && !r.badge) continue;
+    lane = Math.max(lane, ICON_LANE + (r.badge ? r.badge.length * BADGE_CHAR + BADGE_PAD : 0));
+  }
+  return lane;
+}
+
+// Как foldWidth у ноды: колонки и заглушка «+N колонки», если часть колонок свёрнута.
+// Ячейки строк под заглушкой пустые, поэтому значки строк встают туда же
 export function ghostWidth(t: GhostTable): number {
-  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + (t.foldedColumns ? STUB_WIDTH : 0));
+  const tail = Math.max(t.foldedColumns ? STUB_WIDTH : 0, marksWidth(t));
+  return Math.max(TABLE_WIDTH, t.columns.length * COL_WIDTH + tail);
 }
 
 export function ghostHeight(t: GhostTable): number {

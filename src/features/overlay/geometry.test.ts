@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TABLE_WIDTH } from '@/features/board/layout';
+import { STUB_WIDTH, TABLE_WIDTH } from '@/features/board/layout';
 import { counterNear } from './frame';
 import {
   COL_WIDTH,
@@ -9,6 +9,7 @@ import {
   frameBounds,
   ghostHeight,
   ghostWidth,
+  marksWidth,
   ROW_H,
   rowTop,
   TITLE_HEIGHT,
@@ -91,5 +92,27 @@ describe('geometry', () => {
 
   it('columnKeys различает одноимённые колонки', () => {
     expect(columnKeys([{ name: 'a' }, { name: 'b' }, { name: 'a' }])).toEqual(['a', 'b', 'a#2']);
+  });
+});
+
+describe('место под значки строк', () => {
+  const wide = (rows: GhostTable['rows']) =>
+    table({
+      columns: Array.from({ length: 3 }, (_, i) => ({ name: `c${i}`, state: 'normal' as const })),
+      rows,
+    });
+  it('значок и плашка строки получают полосу справа, последняя колонка не под ними', () => {
+    const plain = wide([{ key: 'r', values: [1, 2, 3], state: 'normal' }]);
+    expect(ghostWidth(plain)).toBe(3 * COL_WIDTH);
+    const unknown = wide([{ key: 'r', values: [1, 2, null], state: 'unknown', badge: 'UNKNOWN' }]);
+    expect(ghostWidth(unknown)).toBe(3 * COL_WIDTH + marksWidth(unknown));
+    const kept = wide([{ key: 'r', values: [], state: 'kept' }]);
+    expect(marksWidth(kept)).toBeGreaterThan(0);
+    expect(marksWidth(unknown)).toBeGreaterThan(marksWidth(kept));
+    expect(marksWidth(wide([{ key: 'r', values: [], state: 'normal', badge: '×2' }]))).toBeGreaterThan(20);
+  });
+  it('у свёрнутой таблицы значки встают в пустые ячейки заглушки', () => {
+    const t = { ...wide([{ key: 'r', values: [], state: 'kept' as const }]), foldedColumns: 4 };
+    expect(ghostWidth(t)).toBe(3 * COL_WIDTH + STUB_WIDTH);
   });
 });

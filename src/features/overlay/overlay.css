@@ -6,7 +6,8 @@
 .vs-ghost--dashed { border-style: dashed; }
 .vs-ghost-title { display: flex; align-items: center; padding: 0 10px; font-weight: 600; font-family: var(--font-sans, ui-sans-serif); border-bottom: 1px solid var(--border); }
 .vs-ghost-head { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--border); background: var(--muted); }
-.vs-colhead, .vs-cell { position: absolute; top: 0; height: 100%; display: flex; align-items: center; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform var(--vs-dur) ease-in-out, opacity var(--vs-dur) ease-in-out; }
+/* Блок, а не flex: у flex-контейнера text-overflow не срабатывает и текст режется по краю. line-height задаёт разметка */
+.vs-colhead, .vs-cell { position: absolute; top: 0; height: 100%; display: block; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform var(--vs-dur) ease-in-out, opacity var(--vs-dur) ease-in-out; }
 .vs-row { position: absolute; left: 0; right: 0; top: 0; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
 .vs-row--kept { background: color-mix(in oklab, var(--kept) 18%, transparent); }
 .vs-row--dropped { background: color-mix(in oklab, var(--dropped) 18%, transparent); text-decoration: line-through; }
