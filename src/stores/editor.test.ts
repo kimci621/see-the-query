@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { Trace } from '@/features/tracer/types';
 import { useEditorStore } from './editor';
 
 beforeEach(() => {
@@ -24,6 +25,18 @@ describe('useEditorStore', () => {
     const s = useEditorStore.getState();
     expect(s.text).toBe('select * from book');
     expect(s.cursor).toBe('select * from book'.length);
+  });
+
+  it('любая правка текста сбрасывает применённые операторы, тот же текст их держит (P8.50)', () => {
+    useEditorStore.getState().setText('insert into t values (1)');
+    useEditorStore.getState().markApplied(0, { sql: 'insert into t values (1)' } as Trace);
+    useEditorStore.getState().setText('insert into t values (1)');
+    expect(useEditorStore.getState().applied[0]?.sql).toBe('insert into t values (1)');
+    useEditorStore.getState().setText('insert into t values (1) ');
+    expect(useEditorStore.getState().applied).toEqual({});
+    useEditorStore.getState().markApplied(0, { sql: 'x' } as Trace);
+    useEditorStore.getState().insertQuery('select 1');
+    expect(useEditorStore.getState().applied).toEqual({});
   });
 
   it('activeClause и hoveredColumn', () => {

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Sandbox } from '@/features/db/sandbox';
-import type { DbError } from '@/features/db/types';
+import type { DbError, QueryResult } from '@/features/db/types';
 import { DbException } from '@/features/db/types';
 import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
+import type { ParsedStatement } from '@/features/sql/types';
 import { traceStatement } from '@/features/tracer/trace';
 import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
@@ -24,11 +25,14 @@ export function useLiveTrace(sandbox: Sandbox | null): void {
   const parserReady = useParserReady();
   const [dataVersion, setDataVersion] = useState(0);
 
-  // После apply/undo/reset/loadLesson песочница шлёт changed: данные изменились, превью перевыполняем
+  // После apply/undo/reset/loadLesson песочница шлёт changed: данные изменились, превью перевыполняем.
+  // Отмена, сброс и новый урок снимают «Применено»: операторы текста больше не применены
   useEffect(() => {
     if (!sandbox) return;
     return sandbox.subscribe((e) => {
-      if (e.type === 'changed') setDataVersion((v) => v + 1);
+      if (e.type !== 'changed') return;
+      if (!e.apply) useEditorStore.getState().clearApplied();
+      setDataVersion((v) => v + 1);
     });
   }, [sandbox]);
 
@@ -53,6 +57,30 @@ export function useLiveTrace(sandbox: Sandbox | null): void {
   }, [sandbox, parserReady, text, stmtIndex, dataVersion, schema]);
 }
 
+// Трасса без шагов: подсветка из редактора, итог задаёт вызывающий
+function baseTrace(stmt: ParsedStatement, schema: ReturnType<typeof useBoardStore.getState>['schema']) {
+  return {
+    sql: stmt.text,
+    statementType: stmt.kind,
+    mode: 'final-only' as const,
+    fallbackReason: 'Пошаговый разбор недоступен',
+    touched: touchedOf(stmt, schema),
+    stages: [],
+    notices: [],
+  };
+}
+
+// Итог «Применить» для панели результата: последний результат оператора, без сцены (спека 3.9)
+export function appliedTrace(stmt: ParsedStatement, results: QueryResult[], timingMs: number): Trace {
+  return {
+    ...baseTrace(stmt, useBoardStore.getState().schema),
+    fallbackReason: 'Запрос применён. Измени текст, и превью вернётся',
+    result: results.at(-1) ?? null,
+    error: null,
+    timingMs,
+  };
+}
+
 async function runPreview(
   text: string,
   cursor: number,
@@ -75,16 +103,14 @@ async function runPreview(
     scene.close();
     return;
   }
+  // Применённый оператор повторно не выполняем: CREATE дал бы «уже есть», INSERT показал бы следующий id
+  const applied = editor.applied[stmt.index];
+  if (applied) {
+    scene.setTrace(applied, generation);
+    return;
+  }
   const started = performance.now();
-  const base = {
-    sql: stmt.text,
-    statementType: stmt.kind,
-    mode: 'final-only' as const,
-    fallbackReason: 'Пошаговый разбор недоступен',
-    touched: touchedOf(stmt, schema),
-    stages: [],
-    notices: [],
-  };
+  const base = baseTrace(stmt, schema);
   try {
     const traced = schema
       ? await sandbox.preview(async (db): Promise<Trace | null> => {

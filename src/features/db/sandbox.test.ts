@@ -193,7 +193,7 @@ describe('sandbox: применить, отменить, сбросить', () =
       const { sandbox, events } = await bookstore();
       const [res] = await sandbox.apply(add);
       expect(res.rows).toEqual([[7]]);
-      expect(events.at(-1)).toEqual({ type: 'changed' });
+      expect(events.at(-1)).toEqual({ type: 'changed', apply: true });
       await expect(sandbox.apply('insert into author (name) values (null)')).rejects.toMatchObject({
         db: { code: '23502' },
       });

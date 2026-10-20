@@ -1,5 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { QueryResult } from '@/features/db/types';
 import { SCHEMA } from '@/features/editor/__fixtures__/schema';
 import { initParser } from '@/features/sql/parser';
 import { useBoardStore } from '@/stores/board';
@@ -322,7 +323,7 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
   const setup = () => {
     const sandbox = {
       undo: vi.fn(async () => undefined),
-      apply: vi.fn(async () => []),
+      apply: vi.fn(async (_sql: string): Promise<QueryResult[]> => []),
       preview: () => new Promise(() => undefined),
       journal: () => [],
       subscribe: () => () => undefined,
@@ -369,6 +370,52 @@ describe('EditorPane: глобальные ⌘Z и ⌘⏎', () => {
     expect(sandbox.apply).toHaveBeenCalledTimes(1);
     expect(useBoardStore.getState().frameTarget).toEqual(['public.author']);
     expect(useBoardStore.getState().frameRequest).toBe(frames + 1);
+  });
+
+  it('повторный ⌘⏎ после применения ничего не применяет, пока текст не изменён (P8.50)', async () => {
+    const sandbox = setup();
+    const applied: QueryResult = {
+      fields: [{ name: 'author_id', dataTypeID: 23 }],
+      rows: [[7]],
+      command: 'INSERT',
+      rowCount: 1,
+    };
+    sandbox.apply.mockResolvedValue([applied]);
+    const insert = "insert into author (name) values ('Ада') returning author_id";
+    act(() => {
+      useEditorStore.getState().setText(insert);
+      useEditorStore.getState().setCursor(insert.length);
+    });
+    await act(async () => undefined);
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    // панель результата показывает итог применения, а не повтор превью
+    const trace = useSceneStore.getState().trace;
+    expect(trace?.result).toEqual(applied);
+    expect(trace?.sql).toBe(insert);
+    expect(trace?.mode).toBe('final-only');
+
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    expect(sandbox.apply).toHaveBeenCalledTimes(1);
+
+    // любая правка текста снова разрешает применить
+    act(() => useEditorStore.getState().setText(`${insert} `));
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    expect(sandbox.apply).toHaveBeenCalledTimes(2);
+  });
+
+  it('SELECT после ⌘⏎ не помечается применённым: сцена превью остаётся', async () => {
+    const sandbox = setup();
+    act(() => {
+      useEditorStore.getState().setText('select 1');
+      useEditorStore.getState().setCursor(8);
+    });
+    fireEvent.keyDown(document.body, { code: 'Enter', metaKey: true });
+    await act(async () => undefined);
+    expect(sandbox.apply).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().applied).toEqual({});
   });
 
   it('⌘Z вне полей ввода отменяет применённый запрос', () => {

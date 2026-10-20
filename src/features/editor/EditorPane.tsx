@@ -15,7 +15,7 @@ import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
 import { notifyApplied, notifyDbError } from './notifyDbError';
 import { dmlTargetOf, touchedOf } from './touched';
-import { useLiveTrace } from './useLiveTrace';
+import { appliedTrace, useLiveTrace } from './useLiveTrace';
 import { useParserReady } from './useParsedText';
 
 // CodeMirror тяжёлый: грузим лениво, оболочка его не ждёт (спека 5.12)
@@ -140,10 +140,18 @@ export function EditorPane() {
     const parsed = parseSql(editor.text);
     if (!parsed.ok) return;
     const stmt = statementAt(parsed.statements, editor.cursor);
-    if (!stmt) return;
+    // «Применено»: повтор ничего не пишет, пока текст не изменён (спека 3.9)
+    if (!stmt || editor.applied[stmt.index]) return;
+    const started = performance.now();
     void sandbox
       .apply(stmt.text)
       .then((results) => {
+        // SELECT базу не меняет: его сцена превью остаётся. Текст правили во время применения - номер уже чужой
+        if (stmt.kind !== 'select' && useEditorStore.getState().text === editor.text) {
+          const trace = appliedTrace(stmt, results, Math.round(performance.now() - started));
+          useEditorStore.getState().markApplied(stmt.index, trace);
+          useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
+        }
         notifyApplied(results);
         focusDmlTarget(stmt.text, true);
       })

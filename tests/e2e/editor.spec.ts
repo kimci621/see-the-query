@@ -106,6 +106,34 @@ test('Tab выводит фокус из редактора к тулбару', 
   await expect(page.locator('.cm-content')).toHaveText('select 1');
 });
 
+test('после «Применить» превью не повторяет оператор: CREATE без «уже есть», INSERT с тем же id', async ({
+  page,
+}) => {
+  await openLesson(page);
+  await setEditorText(page, 'create table mine (id int)');
+  await expect(page.getByTestId('preview-status')).toContainText('Превью', { timeout: 5000 });
+  const apply = page.getByTestId('apply-button');
+  await apply.click();
+  await expect(apply).toContainText('Применено', { timeout: 5000 });
+  await expect(page.getByTestId('result-count')).toHaveText('CREATE');
+  // дольше паузы превью (250 мс) и возврата камеры (0,8 с): карточки 42P07 нет
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('pg-explain-title')).toHaveCount(0);
+  await expect(page.getByTestId('preview-status')).not.toContainText('Ошибка');
+  // повтор в состоянии «Применено» ничего не пишет
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await page.waitForTimeout(500);
+  await expect(page.getByText('Записано в базу', { exact: true })).toHaveCount(1);
+
+  await setEditorText(page, "insert into author (name) values ('Аноним') returning author_id");
+  await expect(apply).toContainText('Применить', { timeout: 5000 });
+  await apply.click();
+  await expect(page.getByTestId('cell-0-0')).toHaveText('7', { timeout: 5000 });
+  await page.waitForTimeout(1000);
+  await expect(page.getByTestId('cell-0-0')).toHaveText('7');
+  await expect(page.getByTestId('table-node-public.author').getByTestId('row-count')).toHaveText('7');
+});
+
 test('применить, отменить и применить всё', async ({ page }) => {
   await openLesson(page);
   await setEditorText(page, "insert into author (name) values ('Аноним') returning author_id");

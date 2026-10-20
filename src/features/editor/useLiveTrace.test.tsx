@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { act } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Sandbox } from '@/features/db/sandbox';
+import type { Sandbox, SandboxEvent } from '@/features/db/sandbox';
 import { DbException, type QueryResult } from '@/features/db/types';
 import { initParser } from '@/features/sql/parser';
 import type { Trace } from '@/features/tracer/types';
@@ -216,5 +216,49 @@ describe('useLiveTrace', () => {
       await vi.advanceTimersByTimeAsync(250);
     });
     expect(calls).toEqual(['select 1', 'select 2']);
+  });
+
+  it('применённый оператор не перевыполняется до правки текста: результат = итог применения (P8.50)', async () => {
+    const calls: string[] = [];
+    const listeners = new Set<(e: SandboxEvent) => void>();
+    const sandbox = {
+      ...fakeSandbox({ calls }),
+      subscribe: (l: (e: SandboxEvent) => void) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+    } as unknown as Sandbox;
+    const emit = (e: SandboxEvent) => {
+      for (const l of listeners) l(e);
+    };
+    const create = 'create table mine (id int)';
+    useEditorStore.getState().setText(create);
+    renderHook(() => useLiveTrace(sandbox));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(calls).toEqual([create]);
+
+    const outcome = { sql: create, result: null, error: null } as unknown as Trace;
+    act(() => {
+      useEditorStore.getState().markApplied(0, outcome);
+      emit({ type: 'changed', apply: true });
+    });
+    // новая схема после «Применить» тоже не перезапускает превью
+    act(() => useBoardStore.getState().setSchema(SCHEMA));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(calls).toEqual([create]);
+    expect(useSceneStore.getState().trace).toBe(outcome);
+    expect(useSceneStore.getState().status).toBe('ready');
+
+    // отмена: оператор больше не применён, превью снова выполняется
+    act(() => emit({ type: 'changed' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(useEditorStore.getState().applied).toEqual({});
+    expect(calls).toEqual([create, create]);
   });
 });

@@ -19,6 +19,7 @@ import { cn, modKey } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { notifyApplied, notifyDbError } from './notifyDbError';
+import { appliedTrace } from './useLiveTrace';
 import { useParsedText } from './useParsedText';
 
 const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', string> = {
@@ -47,7 +48,7 @@ export function EditorToolbar({
   const [confirmReset, setConfirmReset] = useState(false);
   const [journal, setJournal] = useState<readonly string[]>([]);
 
-  // журнал: пустой блокирует «Отменить», последняя запись подсказывает «Применено»
+  // журнал: пустой блокирует «Отменить»
   useEffect(() => {
     if (!sandbox) return;
     const sync = () => setJournal(sandbox.journal());
@@ -61,9 +62,9 @@ export function EditorToolbar({
   const statements = parsed?.ok ? parsed.statements : [];
   const statementCount = statements.length;
   const current = statementAt(statements, cursor);
-  // Текущий оператор только что применён: кнопка гаснет до «Применено», но остаётся активной,
-  // повторить можно намеренно. SELECT ничего не пишет в базу, для него кнопка тоже вторичная
-  const applied = current != null && journal.at(-1) === current.text;
+  // Текущий оператор применён и текст не правили: кнопка гаснет до «Применено» и ничего не делает
+  // (спека 3.9). SELECT ничего не пишет в базу, для него кнопка тоже вторичная
+  const applied = useEditorStore((s) => current != null && s.applied[current.index] != null);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -82,7 +83,16 @@ export function EditorToolbar({
   const applyAll = () =>
     void run(async () => {
       const results: QueryResult[] = [];
-      for (const s of statements) results.push(...((await sandbox?.apply(s.text)) ?? []));
+      for (const s of statements) {
+        const started = performance.now();
+        const own = (await sandbox?.apply(s.text)) ?? [];
+        results.push(...own);
+        // как у «Применить»: применённый оператор превью не повторяет
+        if (s.kind !== 'select' && useEditorStore.getState().text === text)
+          useEditorStore
+            .getState()
+            .markApplied(s.index, appliedTrace(s, own, Math.round(performance.now() - started)));
+      }
       notifyApplied(results);
     });
 
@@ -156,6 +166,8 @@ export function EditorToolbar({
           variant={applied || current?.kind === 'select' ? 'outline' : 'default'}
           data-testid="apply-button"
           disabled={busy || !sandbox || statementCount === 0}
+          // не disabled: фокус клавиатуры остаётся на кнопке после применения
+          aria-disabled={applied || undefined}
           onClick={onApplyCurrent}
         >
           {applied ? 'Применено' : 'Применить'} <Kbd>{modKey()} ⏎</Kbd>

@@ -165,29 +165,15 @@ describe('EditorToolbar', () => {
     expect(screen.getByTestId('apply-button')).toHaveAttribute('data-variant', 'default');
   });
 
-  it('после применения «Применено» (outline, активна), правка текста возвращает «Применить»', async () => {
-    // песочница с живым журналом и подпиской, как настоящая
-    let journal: string[] = [];
-    const listeners = new Set<(e: { type: 'changed' }) => void>();
-    const sandbox = {
-      ...fakeSandbox([]),
-      journal: () => journal,
-      subscribe: (l: (e: { type: 'changed' }) => void) => {
-        listeners.add(l);
-        return () => listeners.delete(l);
-      },
-    } as unknown as Sandbox;
+  it('после применения «Применено» (outline, aria-disabled), правка текста возвращает «Применить»', async () => {
     const insert = "insert into author(name) values ('x')";
     act(() => {
       useEditorStore.getState().setText(insert);
       useEditorStore.getState().setCursor(insert.length);
     });
-    const onApplyCurrent = vi.fn(() => {
-      journal = [...journal, insert];
-      for (const l of listeners) l({ type: 'changed' });
-    });
+    const onApplyCurrent = vi.fn(() => useEditorStore.getState().markApplied(0, { sql: insert } as Trace));
     const user = userEvent.setup();
-    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={onApplyCurrent} />);
+    render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={onApplyCurrent} />);
     const button = screen.getByTestId('apply-button');
     expect(button).toHaveTextContent('Применить');
     expect(button).toHaveAttribute('data-variant', 'default');
@@ -195,11 +181,24 @@ describe('EditorToolbar', () => {
     await user.click(button);
     expect(button).toHaveTextContent('Применено');
     expect(button).toHaveAttribute('data-variant', 'outline');
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    // фокус не теряется: кнопка не disabled
     expect(button).toBeEnabled();
 
     act(() => useEditorStore.getState().setText(`${insert} returning *`));
     expect(button).toHaveTextContent(/^Применить/);
     expect(button).toHaveAttribute('data-variant', 'default');
+    expect(button).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('«Применить всё» помечает пишущие операторы применёнными, SELECT нет', async () => {
+    const text = "insert into author(name) values ('x'); select 1";
+    act(() => useEditorStore.getState().setText(text));
+    const sandbox = fakeSandbox([], [{ command: 'INSERT', rowCount: 1, rows: [], fields: [] }]);
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={() => undefined} />);
+    await user.click(screen.getByTestId('apply-all-button'));
+    await waitFor(() => expect(Object.keys(useEditorStore.getState().applied)).toEqual(['0']));
   });
 
   it('Сброс спрашивает подтверждение', async () => {

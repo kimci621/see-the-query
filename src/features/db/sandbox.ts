@@ -21,7 +21,8 @@ export type SandboxEvent =
   | { type: 'status'; status: Sandbox['status'] }
   | { type: 'restarted'; reason: 'timeout' | 'crash' }
   | { type: 'rebuilding' } // loadLesson пересобирает базу: схема на доске устарела, новая придёт с changed
-  | { type: 'changed' }; // после apply/undo/reset/loadLesson: пора обновить доску
+  // после apply/undo/reset/loadLesson: пора обновить доску. apply: изменение принёс «Применить»
+  | { type: 'changed'; apply?: true };
 
 const isDeath = (e: unknown): e is DbException =>
   e instanceof DbException && (e.db.code === SANDBOX_TIMEOUT || e.db.code === SANDBOX_CRASHED);
@@ -253,7 +254,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       guarded(async () => {
         const res = await applyOne(live(), sql);
         journal = [...journal, sql];
-        emit({ type: 'changed' });
+        emit({ type: 'changed', apply: true });
         return res;
       }),
 
