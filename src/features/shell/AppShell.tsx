@@ -8,6 +8,7 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { useLessonSandbox } from '@/features/db/useLessonSandbox';
 import { getLesson } from '@/features/lessons/registry';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 import { BoardPane } from './BoardPane';
 import { CommandMenu } from './CommandMenu';
@@ -45,6 +46,11 @@ export function AppShell() {
   // над теорией или сам откроется при возврате на узкий экран
   // biome-ignore lint/correctness/useExhaustiveDependencies: закрываем именно при смене урока и ширины
   useEffect(() => setLessonsOpen(false), [lessonId, narrow]);
+
+  // Посещение считает оболочка: в режиме фокуса теории (LessonView) нет, а урок открыт
+  useEffect(() => {
+    if (meta) useLessonStore.getState().markVisited(meta.id);
+  }, [meta]);
 
   // Вкладка называется по уроку: так её различают в истории и при переключении окон
   useEffect(() => {

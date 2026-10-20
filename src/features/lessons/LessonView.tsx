@@ -1,7 +1,6 @@
-import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useEffect, useState } from 'react';
+import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useState } from 'react';
 import { Link } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useLessonStore } from '@/stores/lesson';
 import { NewTabLink } from './mdx/Callouts';
 import { mdxComponents } from './mdx/components';
 import { loadLessonContent, neighbours } from './registry';
@@ -31,8 +30,6 @@ function LessonSkeleton() {
 }
 
 export function LessonView({ meta }: { meta: LessonMeta }) {
-  const markVisited = useLessonStore((s) => s.markVisited);
-  useEffect(() => markVisited(meta.id), [meta.id, markVisited]);
   const [end, setEnd] = useState<HTMLDivElement | null>(null);
   useLessonProgress(meta, end);
 

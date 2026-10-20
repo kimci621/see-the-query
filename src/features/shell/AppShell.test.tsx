@@ -26,7 +26,7 @@ beforeAll(async () => {
     await new Promise((resolve) => setTimeout(resolve));
     unmount();
   }
-  // прогрев не должен оставить следов: урок отмечен посещённым
+  // прогрев не должен оставить следов в сторе урока
   useLessonStore.setState(useLessonStore.getInitialState(), true);
   localStorage.clear();
 });
@@ -115,6 +115,14 @@ describe('AppShell', () => {
     renderAt('/l/select-basics');
     await screen.findAllByRole('button', { name: 'На доску' });
     expect(useLessonStore.getState().byId['select-basics']?.visited).toBe(true);
+  });
+
+  it('урок, открытый в режиме фокуса (теории нет), тоже отмечается посещённым', async () => {
+    useLessonStore.setState(useLessonStore.getInitialState(), true);
+    useSettingsStore.setState({ focusMode: true });
+    renderAt('/l/how-to-use');
+    await waitFor(() => expect(useLessonStore.getState().byId['how-to-use']?.visited).toBe(true));
+    expect(screen.queryByRole('heading', { level: 1, name: /Как пользоваться/ })).toBeNull();
   });
 
   it('неизвестный урок: «Урок не найден», правая колонка жива', async () => {
