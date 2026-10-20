@@ -1,4 +1,6 @@
 import { type ReactNode, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Kbd } from '@/components/ui/kbd';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { BoardCanvas } from '@/features/board/BoardCanvas';
 import { BoardStatus } from '@/features/board/BoardStatus';
@@ -7,6 +9,7 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
 import { ResultsPanel } from '@/features/results/ResultsPanel';
 import { Timeline } from '@/features/timeline/Timeline';
+import { modKey } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
@@ -42,6 +45,7 @@ function BoardSlot() {
   useSchemaSync();
   const { status, version } = useSandbox();
   const boardRef = useRef<HTMLDivElement>(null);
+  const focusMode = useSettingsStore((s) => s.focusMode);
   useBoardHotkeys(boardRef);
   return (
     <div
@@ -53,6 +57,21 @@ function BoardSlot() {
     >
       <BoardCanvas />
       <BoardStatus status={status} version={version} />
+      {/* Режим фокуса (спека 3.1): видимый выход, не только ⌘\. В полосе хрома снизу: её кадры камеры держат пустой.
+          Кнопка исчезает вместе с режимом, фокус уходит на доску */}
+      {focusMode && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-background"
+          onClick={() => {
+            useSettingsStore.getState().toggleFocusMode();
+            boardRef.current?.focus();
+          }}
+        >
+          Выйти из режима фокуса <Kbd>{modKey()} \</Kbd>
+        </Button>
+      )}
     </div>
   );
 }

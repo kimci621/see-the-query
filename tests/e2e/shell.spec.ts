@@ -298,3 +298,36 @@ test('⌘K: имена поля и списка, Esc возвращает фок
   await page.keyboard.press('Escape');
   await expect(node).toBeFocused();
 });
+
+// Режим фокуса (P8.17): видимая кнопка выхода в полосе хрома доски, не закрывает контролы и плашку версии
+for (const [width, height] of [
+  [1440, 900],
+  [768, 1024],
+] as const) {
+  test(`${width}x${height}: режим фокуса, кнопка выхода возвращает раскладку`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/l/select-basics');
+    await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+    const exit = page.getByRole('button', { name: /Выйти из режима фокуса/ });
+    await expect(exit).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+Backslash');
+    await expect(exit).toBeVisible();
+    const box = await exit.boundingBox();
+    for (const other of [page.locator('.react-flow__controls'), page.getByTestId('pg-version')]) {
+      const r = await other.boundingBox();
+      if (!box || !r) throw new Error('нет кнопки или хрома');
+      const overlap =
+        box.x < r.x + r.width &&
+        r.x < box.x + box.width &&
+        box.y < r.y + r.height &&
+        r.y < box.y + box.height;
+      expect(overlap).toBe(false);
+    }
+    const shots = process.env.P817_SHOTS;
+    if (shots) await page.screenshot({ path: `${shots}/focus-exit-${width}.png` });
+    await exit.click();
+    await expect(exit).toHaveCount(0);
+    await expect(page.getByTestId('board-area')).toBeFocused();
+    if (width === 1440) await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+  });
+}

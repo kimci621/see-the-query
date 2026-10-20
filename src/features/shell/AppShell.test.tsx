@@ -165,6 +165,22 @@ describe('AppShell', () => {
     expect(screen.getByRole('navigation', { name: 'Уроки' })).toBeInTheDocument();
   });
 
+  it('в режиме фокуса на доске кнопка выхода, клик возвращает раскладку и ставит фокус на доску', async () => {
+    const user = userEvent.setup();
+    renderAt('/l/how-to-use');
+    await screen.findAllByRole('button', { name: 'На доску' });
+    expect(screen.queryByRole('button', { name: /Выйти из режима фокуса/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
+    const exit = within(screen.getByRole('region', { name: 'Доска' })).getByRole('button', {
+      name: /Выйти из режима фокуса/,
+    });
+    await user.click(exit);
+    expect(useSettingsStore.getState().focusMode).toBe(false);
+    expect((await screen.findAllByRole('button', { name: 'На доску' })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Выйти из режима фокуса/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId('board-area')).toHaveFocus();
+  });
+
   it('ниже 80em панели сайдбара нет, уроки открываются в Sheet', async () => {
     mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();
