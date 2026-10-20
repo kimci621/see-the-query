@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import { lessonsByChapter } from '@/features/lessons/registry';
 import { CommandMenu } from './CommandMenu';
 
 function renderMenu(onOpenChange = vi.fn()) {
@@ -14,6 +15,28 @@ function renderMenu(onOpenChange = vi.fn()) {
 }
 
 describe('CommandMenu', () => {
+  it('у поля поиска и списка русские имена', () => {
+    renderMenu();
+    expect(screen.getByRole('combobox', { name: 'Поиск по урокам' })).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Уроки' })).toBeInTheDocument();
+  });
+
+  it('пустой запрос: уроки по группам глав в порядке программы', () => {
+    renderMenu();
+    const chapters = lessonsByChapter();
+    const groups = screen.getAllByRole('group');
+    expect(groups).toHaveLength(chapters.length);
+    chapters.forEach(({ chapter, lessons }, i) => {
+      const group = screen.getByRole('group', { name: `${chapter.number}. ${chapter.title}` });
+      expect(group).toBe(groups[i]);
+      expect(
+        within(group)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(lessons.map((l) => `${l.number}${l.title}`));
+    });
+  });
+
   it('ищет по тегам', async () => {
     renderMenu();
     await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'алиас');

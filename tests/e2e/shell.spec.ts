@@ -277,3 +277,24 @@ test('вкладка результата с клавиатуры: кольцо 
   });
   expect(outline).toEqual({ style: 'solid', width: '2px' });
 });
+
+// ⌘K (P8.17): у поля поиска и списка русские имена, Esc возвращает фокус туда, откуда открыли
+test('⌘K: имена поля и списка, Esc возвращает фокус в редактор и на ноду доски', async ({ page }) => {
+  await page.goto('/l/select-basics');
+  const editor = page.locator('.cm-content');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('combobox', { name: 'Поиск по урокам' })).toBeFocused();
+  await expect(page.getByRole('listbox', { name: 'Уроки' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Поиск по урокам' })).toBeHidden();
+  await expect(editor).toBeFocused();
+
+  const node = page.locator('.react-flow__node[data-id="public.book"]');
+  await node.focus();
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('combobox', { name: 'Поиск по урокам' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(node).toBeFocused();
+});

@@ -38,7 +38,7 @@ export function CommandMenu({
       }}
     >
       <CommandInput placeholder="Урок, тема, ключевое слово SQL..." />
-      <CommandList>
+      <CommandList label="Уроки">
         <CommandEmpty>Ничего не нашлось</CommandEmpty>
         <LessonItems
           onPick={(id) => {
