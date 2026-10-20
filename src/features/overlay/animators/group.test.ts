@@ -203,3 +203,29 @@ describe('groupAnimator: агрегат набегает по строкам', (
     expect(states(5)).toEqual(['kept', 'kept', 'kept', 'unknown']);
   });
 });
+
+describe('groupAnimator: значения в подписи по типу колонки', () => {
+  const trace = aggregateTrace();
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  const stage = {
+    ...trace.stages[1],
+    aggregates: ['min(published_at)'],
+    running: [[null], [day('1958-01-01')], [day('1940-01-01')], [day('1940-01-01')]],
+    output: {
+      columns: [{ name: 'min', type: 'date' }],
+      rows: [{ key: 'g:0', lineage: {}, values: [day('1940-01-01')] }],
+    },
+  } as StageOf<'group'>;
+  const phases = groupAnimator(runUpTo(trace, 1, testCtx()), stage, 1, testCtx());
+
+  it('date в итоге и в набегании без времени', () => {
+    expect(phases.at(-1)?.caption).toBe(`${stage.caption}: min(published_at) = 1940-01-01`);
+    expect(phases[3].caption).toBe('Агрегат без GROUP BY: min(published_at) = 1958-01-01');
+  });
+  it('NULL до первого значения в подписи и счётчике', () => {
+    expect(phases[2].caption).toBe('Агрегат без GROUP BY: min(published_at) = NULL');
+    expect(phases[2].frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'counter', text: 'min(published_at) = NULL' }),
+    );
+  });
+});

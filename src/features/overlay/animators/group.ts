@@ -24,11 +24,13 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   const clean = clearMarks(cur);
 
   const result = rebuildTable(cur, stage.output, undefined, stageRows(stage));
-  const values = stage.output.rows[0]?.values ?? [];
-  // Без GROUP BY итог агрегатов виден прямо в подписи: count(*) = 4
-  const totals = stage.keys.length
-    ? ''
-    : `: ${stage.aggregates.map((a, i) => `${a} = ${formatCell(values[i]).text}`).join(', ')}`;
+  // Без GROUP BY итог агрегатов виден прямо в подписи: count(*) = 4.
+  // Колонки выхода тут ровно агрегаты по порядку, их тип нужен formatCell: min(date) без времени
+  const aggText = (values: unknown[]) =>
+    stage.aggregates
+      .map((a, i) => `${a} = ${formatCell(values[i], stage.output.columns[i]?.type).text}`)
+      .join(', ');
+  const totals = stage.keys.length ? '' : `: ${aggText(stage.output.rows[0]?.values ?? [])}`;
   const collapse: Phase = {
     id: `${stageIndex}:collapse`,
     stageIndex,
@@ -93,7 +95,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
     .filter((_, n) => (counted.length - 1 - n) % step === 0)
     .map((at, n): Phase => {
       const now = runAt.get(stacked.rows[at].key) ?? [];
-      const text = stage.aggregates.map((a, k) => `${a} = ${formatCell(now[k]).text}`).join(', ');
+      const text = aggText(now);
       const t = mapRows(stacked, (r, i) => ({
         state: i > at ? 'normal' : skipped(r) ? 'unknown' : i === at ? 'matched' : 'kept',
       }));
