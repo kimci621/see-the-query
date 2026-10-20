@@ -1,5 +1,17 @@
 import { expect, type Page, test } from '@playwright/test';
 
+// Камера сцены летит за призраком в рабочую зону справа от таблиц и уводит book из кадра.
+// Тесты рефита доски с ней гоняются: проверка ловит book в кадре, только если успела до полёта
+// (флейк на холодном старте). Выключаем «Камера следит»: движется только камера доски
+async function withoutSceneCamera(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'vs-scene',
+      JSON.stringify({ state: { speed: 1, autoplay: true, followCamera: false }, version: 0 }),
+    );
+  });
+}
+
 async function openBookstore(page: Page) {
   await page.goto('/l/select-basics');
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
@@ -122,6 +134,7 @@ const flowTransform = (page: Page, id: string) =>
 test('широкая book свёрнута, колонки запроса видны, select * разворачивает без сдвига соседей', async ({
   page,
 }) => {
+  await withoutSceneCamera(page);
   await openBookstore(page);
   const book = page.getByTestId('table-node-public.book');
   await expect(book.getByTestId('hidden-columns')).toHaveText('+4 колонки');
@@ -197,6 +210,7 @@ test('стартовый кадр на book крупно, ⌘0 вписывае�
 test('how-to-use: свёрнутая book на старте, после select * в кадре, ⌘0 показывает шапки book и author', async ({
   page,
 }) => {
+  await withoutSceneCamera(page);
   await page.goto('/l/how-to-use');
   const book = page.getByTestId('table-node-public.book');
   await expect(book.getByTestId('hidden-columns')).toHaveText('+4 колонки', { timeout: 20_000 });
@@ -209,7 +223,7 @@ test('how-to-use: свёрнутая book на старте, после select *
   });
 
   // развёрнутая book с author на 0.6 по высоте не влезает: кадр держит левый верхний угол, шапки видны.
-  // Камера сцены ушла к итогу, book может быть вне кадра: наводим на центр доски
+  // ⌘0 доска ловит только под курсором: наводим на центр доски
   const box = await page.getByTestId('board-canvas').boundingBox();
   if (!box) throw new Error('нет доски');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -316,6 +330,7 @@ test('table-anatomy: сохранённая камера переживает п
 
 // Камера ученика важнее только старта урока: следующий разворот снова перевписывает кадр (13c)
 test('сохранённая камера не мешает рефиту после старта: select * вписывает book', async ({ page }) => {
+  await withoutSceneCamera(page);
   await openBookstore(page);
   const zoomed = await saveCamera(page, 'select-basics');
 
@@ -331,6 +346,7 @@ test('сохранённая камера не мешает рефиту пос�
 
 // Разворот свёртки меняет ширину ноды: камера перевписывает кадр
 test('select * разворачивает book, и она целиком в кадре', async ({ page }) => {
+  await withoutSceneCamera(page);
   await openBookstore(page);
   await setEditorText(page, 'select * from book');
   const book = page.getByTestId('table-node-public.book');
@@ -338,6 +354,11 @@ test('select * разворачивает book, и она целиком в ка
   await expect
     .poll(async () => (await outsideBoard(page, ['public.book'])).includes('public.book'))
     .toBe(false);
+  // и после сцены: без «Камера следит» кадр доски никто не перебивает
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
+    timeout: 15_000,
+  });
+  expect(await outsideBoard(page, ['public.book'])).not.toContain('public.book');
 });
 
 // Доска следует за набором (P8.12): каретка в конце текста, как при обычном наборе.
