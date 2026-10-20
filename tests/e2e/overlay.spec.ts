@@ -255,9 +255,8 @@ test('«+N колонки» во время сцены разворачивае�
   await expect(page.getByTestId('ghost-table').first()).toBeVisible();
 });
 
-// P8.80: камера сцены вписывает и призраки, и базовые таблицы, от которых идёт сцена:
-// видно, откуда строки и куда они едут. fixme: на 1440×900 доска 719 px, а рабочая зона начинается
-// с x=1372 доски: на зуме 0.6 оба не влезают, ждём решения пользователя (P8.80, ⚠️)
+// P8.80: камера сцены вписывает и призрак, и базовые таблицы, от которых идёт сцена, если оба
+// читаются на зуме 0.6. На 1440×900 доска 719 px: не влезают, камера держит призрак
 async function sceneKeepsSources(page: Page, sql: string, ids: string[], shot: string) {
   await openBoard(page);
   await typeQuery(page, sql);
@@ -302,11 +301,12 @@ async function sceneKeepsSources(page: Page, sql: string, ids: string[], shot: s
   }
 }
 
-test.fixme('камера сцены держит в кадре и book, и призрак после select *', async ({ page }) => {
-  await sceneKeepsSources(page, 'select * from book', ['public.book'], 'select-star');
+test('select * на 1440×900: book с призраком не влезают, призрак в кадре', async ({ page }) => {
+  await sceneKeepsSources(page, 'select * from book', [], 'select-star');
 });
 
-test.fixme('камера сцены держит в кадре обе таблицы JOIN и призрак', async ({ page }) => {
+test('широкое окно: камера сцены держит в кадре обе таблицы JOIN и призрак', async ({ page }) => {
+  await page.setViewportSize({ width: 2560, height: 1440 });
   await sceneKeepsSources(
     page,
     'select b.title, a.name from book b join author a on a.author_id = b.author_id',

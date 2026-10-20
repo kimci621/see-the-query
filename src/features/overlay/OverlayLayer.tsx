@@ -1,7 +1,7 @@
 import { getViewportForBounds, useReactFlow, useStoreApi, ViewportPortal } from '@xyflow/react';
 import { AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
 import { useEffect, useRef } from 'react';
-import { chromeBottom } from '@/features/board/layout';
+import { chromeBottom, FIT_MIN_ZOOM } from '@/features/board/layout';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
@@ -39,6 +39,19 @@ function lessonStart(): boolean {
   const { startQuery, lessonQuery } = useSceneStore.getState();
   const { text } = useEditorStore.getState();
   return startQuery === text && lessonQuery !== text;
+}
+
+type Rect = { x: number; y: number; width: number; height: number };
+
+function union(a: Rect, b: Rect): Rect {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return {
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  };
 }
 
 export function OverlayLayer() {
@@ -110,9 +123,14 @@ export function OverlayLayer() {
     // Снизу полоса под хром доски, как у focusFrame/boardFrame: fitBounds берёт только число
     const { width, height, minZoom, maxZoom } = flowStore.getState();
     const padding = { x: 0.2, top: 0.2, bottom: chromeBottom() };
-    const vp = getViewportForBounds(b, width, height, minZoom, maxZoom, padding);
+    const viewportFor = (r: typeof b) => getViewportForBounds(r, width, height, minZoom, maxZoom, padding);
+    // Исходные таблицы в кадре вместе с призраком, если оба читаются (зум не мельче FIT_MIN_ZOOM):
+    // видно, откуда строки и куда едут. Не влезают - камера только за призраком (P8.80)
+    const sources = trace?.touched.tableIds ?? [];
+    const both = sources.length ? viewportFor(union(b, rf.getNodesBounds(sources))) : null;
+    const vp = both && both.zoom >= FIT_MIN_ZOOM ? both : viewportFor(b);
     void rf.setViewport(vp, { duration: durationSec * 1000 });
-  }, [phase, followCamera, rf, flowStore, durationSec]);
+  }, [phase, followCamera, rf, flowStore, durationSec, trace]);
 
   // Сцена ушла (ошибка, итог без шагов, Esc), а камера стоит там, где был призрак: там пусто.
   // Возвращаем её к таблицам запроса, если сцену вёл пользователь (переход в урок держит его камеру).
