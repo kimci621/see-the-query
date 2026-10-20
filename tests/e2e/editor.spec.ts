@@ -165,7 +165,8 @@ test('после «Применить» превью не повторяет о�
 
 test('«Применить» из урока: один раз на двойной клик, тулбар пишет «Применено» (P8.19)', async ({ page }) => {
   await page.goto('/l/how-to-use');
-  await expect(page.getByTestId('table-node-public.author')).toBeVisible({ timeout: 20_000 });
+  // на старте в кадре book (P8.13), author камера покажет после «Применить»
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
   const block = page.getByTestId('sql-block').filter({ hasText: 'Лев Толстой' });
   await block.getByRole('button', { name: 'Применить' }).dblclick();
   await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 5000 });
