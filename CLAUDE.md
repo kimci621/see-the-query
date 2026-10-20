@@ -88,7 +88,7 @@ Vite, React 19, TypeScript, pnpm, Tailwind v4, shadcn/ui, PGlite (Web Worker), l
 - `pnpm check`: typecheck + Biome + unit-тесты (проекты vitest `node` и `dom`). Обязателен перед каждым коммитом.
 - `pnpm test` / `pnpm test:watch`: только unit-тесты.
 - `pnpm test:content`: тесты контента уроков (проект `content`).
-- `pnpm e2e`: Playwright, сам поднимает dev-сервер на порту 5199. Первый раз: `pnpm exec playwright install chromium`.
+- `pnpm e2e`: Playwright, сам поднимает dev-сервер на порту 5199. Первый раз: `pnpm exec playwright install chromium`. Параллельный прогон из другого дерева: `E2E_PORT=5201 pnpm e2e`, иначе Playwright возьмёт чужой сервер.
 - `pnpm format`: автоформат Biome.
 - `pnpm dlx shadcn@latest add <component>`: добавить компонент shadcn в `src/components/ui`.
 

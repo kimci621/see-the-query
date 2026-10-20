@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Замер fps идёт на прод-сборке: dev-React при CPU ×4 сам съедает кадры (P8.9)
 const PERF = Boolean(process.env.PERF);
-const PORT = PERF ? 5198 : 5199;
+// E2E_PORT: свой порт для параллельного прогона из другого дерева, иначе reuseExistingServer возьмёт чужой сервер (P8.110)
+const PORT = Number(process.env.E2E_PORT) || (PERF ? 5198 : 5199);
 
 export default defineConfig({
   testDir: 'tests/e2e',
