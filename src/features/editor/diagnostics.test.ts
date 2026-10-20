@@ -51,6 +51,23 @@ describe('pgDiagnostic', () => {
     expect(text.slice(d?.from, d?.to)).toBe('==');
   });
 
+  // Лексер Postgres: хвостовые + и - не входят в оператор без ~!@#^&|`?%, `::` - приведение типа
+  it.each([
+    ['select * from t where s=-1', '=-1', '='],
+    ['select a =- s from t', '=- s', '='],
+    ['select a <=- 1 from t', '<=-', '<='],
+    ['select a !=- 1 from t', '!=-', '!=-'],
+    ['select 1 @- 1', '@-', '@-'],
+    ['select a+-1 from t', '+-1', '+'],
+    ['select a::date from t', '::date', '::'],
+    ['select a<>1 from t', '<>1', '<>'],
+    ['select a=/* x */1 from t', '=/*', '='],
+  ])('оператор в %s с позиции %s подчёркнут как %s', (text, at, expected) => {
+    const position = text.indexOf(at) + 1;
+    const d = pgDiagnostic(text, text, { code: '42883', message: 'x', position });
+    expect(text.slice(d?.from, d?.to)).toBe(expected);
+  });
+
   it('без position или без оператора в тексте: null', () => {
     expect(pgDiagnostic('select 1', 'select 1', { code: '23503', message: 'x' })).toBeNull();
     expect(pgDiagnostic('другое', 'select 1', err(1))).toBeNull();

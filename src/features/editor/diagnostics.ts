@@ -8,11 +8,21 @@ export interface EditorDiagnostic {
 
 // Слово под позицией: диагностика подчёркивает лексему, а не один символ.
 // Имя в двойных кавычках целиком, буквы любого алфавита: \w знает только латиницу.
-// Оператор (`==`, `<>`) тоже лексема: иначе подчёркивалось бы слово после него
+// Оператор (`==`, `<>`, `::`) тоже лексема: иначе подчёркивалось бы слово после него
 function wordAt(text: string, at: number): { from: number; to: number } {
   const from = Math.max(0, Math.min(at, Math.max(0, text.length - 1)));
-  const m = /"[^"]*"?|[\p{L}\p{N}_$]+|[-+*/<>=~!@#%^&|`?]+/u.exec(text.slice(from));
-  return m ? { from: from + m.index, to: from + m.index + m[0].length } : { from, to: from + 1 };
+  const m = /"[^"]*"?|[\p{L}\p{N}_$]+|::|[-+*/<>=~!@#%^&|`?]+/u.exec(text.slice(from));
+  if (!m) return { from, to: from + 1 };
+  const length = /^[-+*/<>=~!@#%^&|`?]/.test(m[0]) ? operatorLength(m[0]) : m[0].length;
+  return { from: from + m.index, to: from + m.index + length };
+}
+
+// Длина оператора по лексеру Postgres (scan.l): `--` и `/*` внутри начинают комментарий,
+// хвостовые + и - не входят в оператор без ~!@#^&|`?% (`a=-1` это `=` и `-1`)
+function operatorLength(op: string): number {
+  const comment = op.search(/--|\/\*/);
+  const s = comment > 0 ? op.slice(0, comment) : op;
+  return /[~!@#^&|`?%]/.test(s) ? s.length : s.replace(/(?<=.)[+-]+$/, '').length;
 }
 
 // Ошибка парсинга: position libpg-query 0-based в кодовых точках, редактор считает в UTF-16
