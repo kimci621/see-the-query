@@ -105,3 +105,23 @@ describe('датасет bookstore', () => {
     });
   }, 20000);
 });
+
+describe('датасет empty', () => {
+  it('пустая база: только схема public, ни таблиц, ни последовательностей', () =>
+    withDataset('empty', async (db) => {
+      expect(
+        await one(
+          db,
+          "select count(*)::int from pg_tables where schemaname not in ('pg_catalog', 'information_schema')",
+        ),
+      ).toEqual([[0]]);
+      expect(await one(db, 'select count(*)::int from pg_sequences')).toEqual([[0]]);
+      expect(
+        await one(
+          db,
+          "select nspname::text from pg_namespace where nspname not like 'pg\\_%' and nspname <> 'information_schema'",
+        ),
+      ).toEqual([['public']]);
+      expect(await one(db, 'show search_path')).toEqual([['public']]);
+    }));
+});
