@@ -424,59 +424,13 @@ docs/
 
 ### 5.7 Модель данных Trace
 
-```ts
-type Lineage = Record<string, string | null>; // алиас → ctid, null = нет пары
-type RowKey = string;                          // стабильный ключ из lineage, нужен для layoutId
+Канон модели: `src/features/tracer/types.ts`, сводка с комментариями в контрактах (`docs/superpowers/plans/2026-10-08-00-contracts.md`, раздел 6). Спека задаёт только смысл, поля в ней не дублируются, чтобы не расходиться с кодом.
 
-interface Column { name: string; type: string; source?: { alias: string; column: string } }
-interface Row { key: RowKey; lineage: Lineage; values: unknown[] }
-interface Relation { columns: Column[]; rows: Row[] }
-
-interface StageBase {
-  id: string;
-  sourceRange?: { from: number; to: number }; // кусок SQL для связи с редактором
-  caption: string;                            // «WHERE: осталось 6 из 10»
-  output: Relation;                            // состояние после стадии
-}
-
-type Stage = StageBase & (
-  | { kind: 'scan'; alias: string; table: string }
-  | { kind: 'join'; joinType: 'inner' | 'left' | 'right' | 'full' | 'cross';
-      leftKeys: RowKey[]; rightKeys: RowKey[];
-      pairs: Array<[RowKey | null, RowKey | null]>; onColumns: string[] }
-  | { kind: 'filter'; clause: 'where' | 'having';
-      verdicts: Record<RowKey, true | false | null> }
-  | { kind: 'group'; keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }>;
-      running?: unknown[][] }            // без GROUP BY: значения агрегатов после каждой строки (окно в Postgres)
-  | { kind: 'window'; partitions: Array<{ members: RowKey[] }>; computed: string[] }
-  | { kind: 'project'; kept: string[]; removed: string[]; computed: string[]; renamed: Record<string, string> }
-  | { kind: 'distinct'; stacks: Array<{ winner: RowKey; members: RowKey[] }> }
-  | { kind: 'sort'; order: RowKey[]; sortKeys: string[] }
-  | { kind: 'limit'; kept: RowKey[]; cut: RowKey[] }
-  | { kind: 'setop'; op: 'union' | 'union all' | 'intersect' | 'except'; branches: [Trace, Trace] }
-  | { kind: 'materialize'; name: string; inner: Trace }
-  | { kind: 'recursion'; name: string; iterations: Relation[] }
-  | { kind: 'dml'; op: 'insert' | 'update' | 'delete' | 'merge';
-      inserted: RowKey[]; deleted: RowKey[];
-      updated: Array<{ key: RowKey; before: unknown[]; after: unknown[] }>;
-      cascades: Array<{ table: string; deleted: RowKey[]; updated: RowKey[] }> }
-  | { kind: 'ddl'; diff: SchemaDiff }
-  | { kind: 'error'; sqlstate: string; message: string; detail?: string;
-      constraint?: string; focus?: { table?: string; column?: string; position?: number };
-      group?: { keys: string[]; groups: Array<{ key: RowKey; members: RowKey[] }> } } // 42803: стопки групп
-);
-
-interface Trace {
-  sql: string;
-  statementType: 'select' | 'insert' | 'update' | 'delete' | 'merge' | 'ddl' | 'tcl' | 'other';
-  mode: 'full' | 'final-only';
-  touched: { tables: string[]; columns: string[] };  // для фокуса на доске
-  stages: Stage[];
-  result: Relation | null;                             // эталон от прямого выполнения
-  notices: string[];
-  timingMs: number;
-}
-```
+- `Trace` = оператор, режим (`full` или `final-only` с причиной), затронутые таблицы и колонки для фокуса доски, список стадий, эталонный результат и ошибка прямого выполнения, NOTICE, время.
+- Стадия = кусок SQL, подпись на русском, выход (`Relation`: колонки и строки с `RowKey`) и данные своего вида: `scan`, `join`, `filter`, `group`, `window`, `project`, `distinct`, `sort`, `limit`, `setop`, `materialize`, `recursion`, `subquery`, `dml`, `ddl`, `error`.
+- `RowKey` строится из lineage (алиас → ctid) и стабилен между стадиями: по нему оверлей узнаёт строку (`layoutId`).
+- `dml`: вставленные, удалённые и изменённые строки (пары «до/после» и изменённые колонки), конфликты ON CONFLICT, ветки MERGE, каскады, колонки, которые заполнила база, и счётчики последовательностей.
+- `ddl`: diff схемы до и после. `error`: ошибка Postgres, фокус на доске, строки-попытки и столкнувшиеся существующие строки, стопки групп для 42803.
 
 ### 5.8 Базовая доска
 
