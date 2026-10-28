@@ -7,7 +7,7 @@ import type { Trace, TraceOptions } from './types';
 export type Special = Pick<Trace, 'mode' | 'stages' | 'result' | 'error' | 'fallbackReason'>;
 export type TraceFn = (stmt: ParsedStatement, db: DbClient, opts: TraceOptions) => Promise<Trace>;
 
-const DML = new Set(['InsertStmt', 'UpdateStmt', 'DeleteStmt']);
+const DML = new Set(['InsertStmt', 'UpdateStmt', 'DeleteStmt', 'MergeStmt']);
 
 // Операторы Ф9 маршрутизируются по имени AST-узла, а не по stmt.kind.
 export async function traceSpecial(

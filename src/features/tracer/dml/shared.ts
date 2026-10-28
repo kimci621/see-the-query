@@ -24,6 +24,7 @@ export interface DmlNode {
   whereClause?: Node;
   fromClause?: Node[];
   usingClause?: Node[];
+  mergeWhenClauses?: Array<{ MergeWhenClause: { matchKind: string } }>;
   withClause?: unknown;
   returningClause?: { options?: unknown[]; exprs?: unknown[] };
 }

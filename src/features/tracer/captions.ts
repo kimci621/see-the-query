@@ -52,6 +52,8 @@ export const captions = {
   dmlDelete: (n: number, before: number) => `DELETE: −${rowsWord(n)}, ${before} → ${before - n}`,
   dmlUpsert: (inserted: number, conflicts: number) =>
     `INSERT ... ON CONFLICT: +${rowsWord(inserted)}, конфликтов ${conflicts}`,
+  dmlMerge: (inserted: number, updated: number, deleted: number) =>
+    `MERGE: +${rowsWord(inserted)}, изменено ${updated}, удалено ${deleted}`,
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };

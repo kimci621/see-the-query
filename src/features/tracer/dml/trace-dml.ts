@@ -47,6 +47,13 @@ export async function traceDml(
 
   const target = resolveTarget(opts.schema, body.relation);
   if (!target) return null;
+  if (
+    op === 'merge' &&
+    body.mergeWhenClauses?.some(
+      (item) => item.MergeWhenClause.matchKind === 'MERGE_WHEN_NOT_MATCHED_BY_SOURCE',
+    )
+  )
+    throw new TraceFallback('Пока не анимируется: WHEN NOT MATCHED BY SOURCE');
   if ((op === 'update' || op === 'delete') && hasVolatile(body.whereClause))
     throw new TraceFallback('Пока не анимируется: случайные значения в WHERE');
 
@@ -101,6 +108,7 @@ export async function traceDml(
   const deleted: RowKey[] = [];
   const updated: DmlStage['updated'] = [];
   const added: Row[] = [];
+  const mergeBranches: DmlStage['mergeBranches'] = {};
 
   for (const values of run.value.rows) {
     const oldCtid = values[0] as string | null;
@@ -114,12 +122,16 @@ export async function traceDml(
         .map((column) => column.name);
       updated.push({ key, before: oldValues, after: newValues, changedColumns });
       byKey.set(key, row(target.alias, oldCtid, newValues));
+      if (op === 'merge') mergeBranches[key] = 'matched_update';
     } else if (newCtid !== null) {
       const fresh = row(target.alias, newCtid, newValues);
       inserted.push(fresh.key);
       added.push(fresh);
+      if (op === 'merge') mergeBranches[fresh.key] = 'not_matched_insert';
     } else {
-      deleted.push(keyOf(target.alias, oldCtid as string));
+      const key = keyOf(target.alias, oldCtid as string);
+      deleted.push(key);
+      if (op === 'merge') mergeBranches[key] = 'matched_delete';
     }
   }
 
@@ -154,7 +166,7 @@ export async function traceDml(
     deleted,
     updated,
     conflicts,
-    mergeBranches: {},
+    mergeBranches,
     cascades,
     caption:
       op === 'update'
@@ -163,7 +175,9 @@ export async function traceDml(
           ? captions.dmlDelete(deleted.length, before.rows.length)
           : body.onConflictClause
             ? captions.dmlUpsert(inserted.length, conflicts.length)
-            : captions.dmlInsert(inserted.length, before.rows.length),
+            : op === 'merge'
+              ? captions.dmlMerge(inserted.length, updated.length, deleted.length)
+              : captions.dmlInsert(inserted.length, before.rows.length),
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),
