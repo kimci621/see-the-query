@@ -356,7 +356,7 @@
 - ✅ **P9.2** Датасет `empty`. 2026-10-21.
 - ✅ (2026-10-28) **P9.3** Трассировщик INSERT: RETURNING, DEFAULT / identity, ошибки ограничений с `constraint`.
 - ✅ (2026-10-28) **P9.4** INSERT ... SELECT.
-- ⬜ **P9.5** UPDATE: WHERE (остающиеся строки приглушены) + before/after из `RETURNING old.*, new.*` по старому ctid.
+- ✅ (2026-10-28) **P9.5** UPDATE: WHERE (остающиеся строки приглушены) + before/after из `RETURNING old.*, new.*` по старому ctid.
 - ⬜ **P9.6** DELETE, DELETE ... USING, UPDATE ... FROM.
 - ⬜ **P9.7** Каскады: diff зависимых по FK таблиц до/после.
 - ⬜ **P9.8** ON CONFLICT DO NOTHING / DO UPDATE.

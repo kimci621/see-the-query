@@ -40,13 +40,20 @@ export function touchedOf(
     const resolved = resolveColumn(c, tables, schema);
     if (resolved && !columns.includes(resolved.id)) columns.push(resolved.id);
   }
+  const target = dmlTargetOf(stmt, schema) ?? alteredTableOf(stmt, schema);
+  const targetTable = schema.tables.find((table) => table.id === target);
+  for (const name of targetColumnNames(stmt.ast)) {
+    if (!targetTable?.columns.some((column) => column.name === name)) continue;
+    const id = `${targetTable.id}.${name}`;
+    if (!columns.includes(id)) columns.push(id);
+  }
   return { tableIds, columns, expanded: tableIds.filter((id) => expanded.has(id)) };
 }
 
 // Целевая таблица INSERT/UPDATE/DELETE (relation оператора, не USING/FROM/подзапросы) в текущей схеме.
 // Для остальных операторов и неизвестной таблицы null
 export function dmlTargetOf(stmt: ParsedStatement, schema: SchemaSnapshot | null): string | null {
-  return relationOf(stmt, schema, ['InsertStmt', 'UpdateStmt', 'DeleteStmt']);
+  return relationOf(stmt, schema, ['InsertStmt', 'UpdateStmt', 'DeleteStmt', 'MergeStmt']);
 }
 
 // Таблица ALTER TABLE (и ALTER TABLE ... RENAME COLUMN) в текущей схеме, иначе null
@@ -65,6 +72,38 @@ function relationOf(stmt: ParsedStatement, schema: SchemaSnapshot | null, nodes:
   if (typeof rel?.relname !== 'string') return null;
   const ref = { schema: rel.schemaname ?? null, name: rel.relname, alias: null, from: 0, to: 0 };
   return resolveTable(ref, schema)?.id ?? null;
+}
+
+function targetColumnNames(ast: unknown): string[] {
+  const nodes = ast as Record<string, unknown>;
+  const body =
+    nodes.InsertStmt ?? nodes.UpdateStmt ?? nodes.MergeStmt ?? nodes.AlterTableStmt ?? nodes.RenameStmt;
+  if (!body || typeof body !== 'object') return [];
+  const names = new Set<string>();
+  const addTargets = (value: unknown) => {
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      const target = (item as { ResTarget?: { name?: unknown } }).ResTarget;
+      if (typeof target?.name === 'string') names.add(target.name);
+    }
+  };
+  const dml = body as {
+    cols?: unknown;
+    targetList?: unknown;
+    onConflictClause?: { targetList?: unknown };
+    mergeWhenClauses?: Array<{ MergeWhenClause?: { targetList?: unknown } }>;
+    cmds?: Array<{ AlterTableCmd?: { name?: unknown; def?: { ColumnDef?: { colname?: unknown } } } }>;
+  };
+  addTargets(dml.cols);
+  addTargets(dml.targetList);
+  addTargets(dml.onConflictClause?.targetList);
+  for (const clause of dml.mergeWhenClauses ?? []) addTargets(clause.MergeWhenClause?.targetList);
+  for (const command of dml.cmds ?? []) {
+    const alter = command.AlterTableCmd;
+    if (typeof alter?.name === 'string') names.add(alter.name);
+    if (typeof alter?.def?.ColumnDef?.colname === 'string') names.add(alter.def.ColumnDef.colname);
+  }
+  return [...names];
 }
 
 export function resolveColumn(

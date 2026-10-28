@@ -45,6 +45,10 @@ export const captions = {
   sort: (keys: string[], n: number) => `ORDER BY ${keyList(keys)}: ${rowsWord(n)} по порядку`,
   limit: (label: string, before: number, after: number) => `${label}: осталось ${after} из ${ofRows(before)}`,
   dmlInsert: (n: number, before: number) => `INSERT: +${rowsWord(n)}, ${before} → ${before + n}`,
+  dmlUpdate: (n: number, before: number) =>
+    `UPDATE: изменено ${n} из ${before} ${plural(before, 'строки', 'строк', 'строк')}`,
+  dmlWhere: (op: 'update' | 'delete', n: number, before: number) =>
+    `WHERE: под ${op === 'update' ? 'UPDATE попадут' : 'DELETE попадут'} ${n} из ${before} ${plural(before, 'строки', 'строк', 'строк')}`,
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };

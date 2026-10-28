@@ -1,9 +1,10 @@
 import type { DbClient } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
-import type { Prober } from '../probe';
+import { type Prober, TraceFallback } from '../probe';
 import type { Special, TraceFn } from '../route';
 import type { Row, RowKey, Stage, TraceOptions } from '../types';
+import { hasVolatile } from '../whitelist';
 import { sourceTrace } from './materialize';
 import {
   type DmlNode,
@@ -18,6 +19,7 @@ import {
   userResult,
 } from './shared';
 import { insertColumns, insertErrorExtras } from './source';
+import { whereStages } from './where';
 
 type Op = 'insert' | 'update' | 'delete' | 'merge';
 type DmlStage = Extract<Stage, { kind: 'dml' }>;
@@ -44,11 +46,19 @@ export async function traceDml(
 
   const target = resolveTarget(opts.schema, body.relation);
   if (!target) return null;
+  if ((op === 'update' || op === 'delete') && hasVolatile(body.whereClause))
+    throw new TraceFallback('Пока не анимируется: случайные значения в WHERE');
 
   const stages: Stage[] = [];
   const materialized = op === 'insert' ? await sourceTrace(body, target, db, opts, traceSelect) : null;
   if (materialized) stages.push({ ...materialized, id: `${stages.length}:materialize` });
-  const before = await snapshot(prober, target);
+  const where =
+    op === 'update' || op === 'delete' ? await whereStages(stmt, body, target, prober, opts, op) : null;
+  if (where)
+    stages.push(
+      ...where.stages.map((stage, index) => ({ ...stage, id: `${stages.length + index}:${stage.kind}` })),
+    );
+  const before = where ? where.stages[0].output : await snapshot(prober, target);
   const run = await tryRun(prober, instrument(stmt.ast, nodeName));
   if (!run.ok) {
     const extra = op === 'insert' ? await insertErrorExtras(prober, body, target, run.error) : {};
@@ -115,11 +125,26 @@ export async function traceDml(
     conflicts: [],
     mergeBranches: {},
     cascades: [],
-    caption: captions.dmlInsert(inserted.length, before.rows.length),
+    caption:
+      op === 'update'
+        ? captions.dmlUpdate(updated.length, before.rows.length)
+        : captions.dmlInsert(inserted.length, before.rows.length),
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),
   });
+
+  if (where) {
+    const actual = new Set(op === 'delete' ? deleted : updated.map((item) => item.key));
+    if (where.hit.length !== actual.size || where.hit.some((key) => !actual.has(key)))
+      return {
+        mode: 'final-only',
+        fallbackReason: 'Сверка с прямым выполнением не сошлась',
+        stages: [],
+        result: userResult(run.value, prefix),
+        error: null,
+      };
+  }
 
   return { mode: 'full', stages, result: userResult(run.value, prefix), error: null };
 }

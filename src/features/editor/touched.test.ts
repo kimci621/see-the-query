@@ -41,7 +41,7 @@ const table = (id: string, names: string[], type = 'text'): TableInfo => {
 const SCHEMA: SchemaSnapshot = {
   schemas: ['public', 'shop'],
   tables: [
-    table('public.book', ['book_id', 'title', 'price', 'author_id']),
+    table('public.book', ['book_id', 'title', 'price', 'author_id', 'tags']),
     table('public.author', ['author_id', 'name']),
     table('shop.cart', ['cart_id']),
   ],
@@ -58,6 +58,10 @@ describe('touchedOf', () => {
     const t = touchedOf(stmtOf('select b.title, b.price from book b'), SCHEMA);
     expect(t.tableIds).toEqual(['public.book']);
     expect(t.columns).toEqual(['public.book.title', 'public.book.price']);
+  });
+
+  it('колонка назначения UPDATE остаётся видна на свёрнутой таблице', () => {
+    expect(touchedOf(stmtOf("update book set tags = '{}'"), SCHEMA).columns).toContain('public.book.tags');
   });
 
   it('колонка без квалификатора резолвится, если она ровно в одной таблице запроса', () => {

@@ -49,6 +49,8 @@ export type Stage = StageBase &
         clause: 'where' | 'having';
         verdicts: Record<RowKey, true | false | null>;
         predicateColumns: string[];
+        // WHERE оператора UPDATE/DELETE: строки с false и UNKNOWN остаются в таблице
+        target?: true;
       }
     | {
         kind: 'group';
