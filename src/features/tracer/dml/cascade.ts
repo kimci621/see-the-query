@@ -1,8 +1,7 @@
-import type { FkInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
-import { ident, type Prober, TraceFallback } from '../probe';
-import type { Column, Relation, RowKey } from '../types';
-import type { Target } from './shared';
-import { snapshot } from './shared';
+import type { FkInfo, SchemaSnapshot } from '@/features/db/introspect';
+import { type Prober, TraceFallback } from '../probe';
+import type { Relation, RowKey } from '../types';
+import { snapshot, type Target, targetOf } from './shared';
 
 interface CascadeSnapshot {
   target: Target;
@@ -38,16 +37,6 @@ export function cascadeTargets(
   };
   visit(tableId);
   return found;
-}
-
-function targetOf(table: TableInfo): Target {
-  const alias = table.name;
-  const columns: Column[] = table.columns.map((column) => ({
-    name: column.name,
-    type: column.type,
-    source: { alias, column: column.name },
-  }));
-  return { table, alias, sql: `${ident(table.schema)}.${ident(table.name)}`, columns };
 }
 
 // Снимки до прогона: SET NULL/DEFAULT без PK нельзя честно сопоставить с новой версией строки.

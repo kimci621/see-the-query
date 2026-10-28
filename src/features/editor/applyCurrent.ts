@@ -73,7 +73,7 @@ async function applyStatement(sandbox: Sandbox): Promise<void> {
       useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
     }
     notifyApplied(results);
-    if (stmt.kind === 'ddl') frameAfterDdl(stmt);
+    if (stmt.kind === 'ddl' && !('TruncateStmt' in stmt.ast)) frameAfterDdl(stmt);
     else focusDmlTarget(stmt.text, true);
   } catch (e) {
     notifyDbError(e, stmt.text);

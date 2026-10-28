@@ -36,6 +36,19 @@ export interface Target {
   columns: Column[];
 }
 
+export function targetOf(table: TableInfo, alias = table.name): Target {
+  return {
+    table,
+    alias,
+    sql: `${ident(table.schema)}.${ident(table.name)}`,
+    columns: table.columns.map((column) => ({
+      name: column.name,
+      type: column.type,
+      source: { alias, column: column.name },
+    })),
+  };
+}
+
 export const keyOf = (alias: string, ctid: string): RowKey => rowKeyOf({ [alias]: ctid }, [alias]);
 
 export const row = (alias: string, ctid: string, values: unknown[]): Row => ({
@@ -63,17 +76,7 @@ export async function tryRun(
 export function resolveTarget(schema: SchemaSnapshot, rv: RangeVarNode): Target | null {
   const table = findTable(schema, rv.schemaname, rv.relname);
   if (!table || (table.kind !== 'table' && table.kind !== 'temp')) return null;
-  const alias = rv.alias?.aliasname ?? table.name;
-  return {
-    table,
-    alias,
-    sql: `${ident(table.schema)}.${ident(table.name)}`,
-    columns: table.columns.map((column) => ({
-      name: column.name,
-      type: column.type,
-      source: { alias, column: column.name },
-    })),
-  };
+  return targetOf(table, rv.alias?.aliasname ?? table.name);
 }
 
 // Все строки цели по ctid. Превышение maxRows передаётся в маршрут как ProbeOverflow.

@@ -41,6 +41,7 @@ export function touchedOf(
     if (resolved && !columns.includes(resolved.id)) columns.push(resolved.id);
   }
   const target = dmlTargetOf(stmt, schema) ?? alteredTableOf(stmt, schema);
+  if (target && !tableIds.includes(target)) tableIds.push(target);
   const targetTable = schema.tables.find((table) => table.id === target);
   for (const name of targetColumnNames(stmt.ast)) {
     if (!targetTable?.columns.some((column) => column.name === name)) continue;
@@ -53,6 +54,19 @@ export function touchedOf(
 // Целевая таблица INSERT/UPDATE/DELETE (relation оператора, не USING/FROM/подзапросы) в текущей схеме.
 // Для остальных операторов и неизвестной таблицы null
 export function dmlTargetOf(stmt: ParsedStatement, schema: SchemaSnapshot | null): string | null {
+  if (!schema) return null;
+  const truncate = (
+    stmt.ast as unknown as {
+      TruncateStmt?: { relations?: Array<{ RangeVar?: { relname?: string; schemaname?: string } }> };
+    }
+  ).TruncateStmt?.relations?.[0]?.RangeVar;
+  if (truncate?.relname)
+    return (
+      resolveTable(
+        { schema: truncate.schemaname ?? null, name: truncate.relname, alias: null, from: 0, to: 0 },
+        schema,
+      )?.id ?? null
+    );
   return relationOf(stmt, schema, ['InsertStmt', 'UpdateStmt', 'DeleteStmt', 'MergeStmt']);
 }
 

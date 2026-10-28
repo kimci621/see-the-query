@@ -171,6 +171,7 @@ export const GOLDEN_F9: Array<{ sql: string; stages: string }> = [
     sql: "merge into book b using (values (1, 700.00), (12, 100.00)) as s(id, price) on b.book_id = s.id when matched then update set price = s.price when not matched then insert (title, price) values ('Новая книга', s.price)",
     stages: 'dml:12',
   },
+  { sql: 'truncate review', stages: 'dml:10' },
 ];
 
 // Golden-набор Ф7: JOIN всех видов, GROUP BY, агрегаты, HAVING

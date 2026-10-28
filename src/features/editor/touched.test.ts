@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { initParser, parseSql } from '@/features/sql/parser';
 import { relationsOf } from '@/features/sql/relations';
-import { resolveColumn, touchedOf } from './touched';
+import { dmlTargetOf, resolveColumn, touchedOf } from './touched';
 
 function stmtOf(text: string) {
   const parsed = parseSql(text);
@@ -163,5 +163,11 @@ describe('resolveColumn', () => {
     expect(resolveColumn({ qualifier: 'zzz', name: 'title', from: 0, to: 0 }, tables, SCHEMA)).toBeNull();
     expect(resolveColumn({ qualifier: 'b', name: 'nope', from: 0, to: 0 }, tables, SCHEMA)).toBeNull();
     expect(resolveColumn({ qualifier: 'b', name: 'title', from: 0, to: 0 }, tables, null)).toBeNull();
+  });
+});
+
+describe('dmlTargetOf', () => {
+  it('TRUNCATE фокусирует первую целевую таблицу', () => {
+    expect(dmlTargetOf(stmtOf('truncate book'), SCHEMA)).toBe('public.book');
   });
 });
