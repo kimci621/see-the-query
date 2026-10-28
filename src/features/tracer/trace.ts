@@ -4,6 +4,7 @@ import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
 import type { Prober } from './probe';
 import { createProber, ProbeOverflow, sqlOf, TraceFallback, typeNames } from './probe';
+import { traceSpecial } from './route';
 import { resultKey } from './rowkey';
 import { runCompressed } from './select/compressed';
 import { createSelectCtx, type Ordered, rangeOf, type SelectCtx, stableCanon } from './select/context';
@@ -45,6 +46,10 @@ export async function traceStatement(
     });
   }
 
+  // Операторы Ф9 сами выполняют эталон одним прогоном с расширенным RETURNING.
+  const special = await traceSpecial(stmt, db, prober, opts, traceStatement);
+  if (special !== null && typeof special !== 'string') return finish(special);
+
   // Эталон: оператор как есть. Ошибка Postgres → стадия error
   let reference: QueryResult;
   try {
@@ -74,6 +79,7 @@ export async function traceStatement(
   const finalOnly = (fallbackReason: string) =>
     finish({ mode: 'final-only', fallbackReason, stages: [], result: reference, error: null });
 
+  if (typeof special === 'string') return finalOnly(special);
   const reason = unsupportedReason(stmt);
   if (reason !== null) return finalOnly(reason);
   if (!('SelectStmt' in stmt.ast)) return finalOnly('Пока не анимируется');

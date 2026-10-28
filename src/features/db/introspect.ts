@@ -30,6 +30,7 @@ export interface TableInfo {
   sampleCtids: string[]; // ctid строк sampleRows; у view и matview 'row:<i>'
   sampleXmins?: string[]; // xmin строк sampleRows (только таблицы): по нему доска находит строки «Применить»
   indexes: IndexInfo[];
+  constraints: Array<{ name: string; kind: 'p' | 'u' | 'f' | 'c'; columns: string[] }>; // NOT NULL здесь нет: см. nullable
   comment: string | null;
 }
 export interface FkInfo {
@@ -195,6 +196,11 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
       indexes: indexes
         .filter((i) => i[0] === oid)
         .map(([, n, definition, unique, primary]) => ({ name: n, definition, unique, primary })),
+      constraints: own.map(([, name, type, cols]) => ({
+        name,
+        kind: type as 'p' | 'u' | 'f' | 'c',
+        columns: cols,
+      })),
       comment,
     });
   }

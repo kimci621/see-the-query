@@ -152,6 +152,11 @@ export const GOLDEN: Array<{ sql: string; stages: string }> = [
   },
 ];
 
+// Golden-набор Ф9: DML и DDL
+export const GOLDEN_F9: Array<{ sql: string; stages: string }> = [
+  { sql: "insert into author (name, country) values ('Лев Толстой', 'Россия')", stages: 'dml:7' },
+];
+
 // Golden-набор Ф7: JOIN всех видов, GROUP BY, агрегаты, HAVING
 export const GOLDEN_F7: Array<{ sql: string; stages: string }> = [
   {

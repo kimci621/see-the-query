@@ -31,6 +31,7 @@ const schema: SchemaSnapshot = {
       sampleRows: [],
       sampleCtids: [],
       indexes: [],
+      constraints: [],
       comment: null,
     },
   ],

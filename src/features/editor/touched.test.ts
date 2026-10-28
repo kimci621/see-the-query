@@ -33,6 +33,7 @@ const table = (id: string, names: string[], type = 'text'): TableInfo => {
     sampleRows: [],
     sampleCtids: [],
     indexes: [],
+    constraints: [],
     comment: null,
   };
 };

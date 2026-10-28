@@ -33,6 +33,7 @@ export function table(
     sampleRows: rows,
     sampleCtids: rows.map((_, i) => `(0,${i + 1})`),
     indexes: [],
+    constraints: [],
     comment: null,
   };
 }

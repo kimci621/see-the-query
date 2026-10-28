@@ -59,6 +59,12 @@ describe('introspect на bookstore', () => {
       });
       expect(col('customer', 'email')).toMatchObject({ isUnique: true });
       expect(col('customer', 'bonus')?.checks).toEqual(['CHECK ((bonus >= 0))']);
+      expect(s.tables.find((t) => t.id === 'public.customer')).toMatchObject({
+        constraints: expect.arrayContaining([
+          { name: 'customer_email_key', kind: 'u', columns: ['email'] },
+          { name: 'customer_bonus_check', kind: 'c', columns: ['bonus'] },
+        ]),
+      });
       expect(col('order_item', 'order_id')).toMatchObject({ isPk: true, isUnique: false });
       expect(s.tables.find((t) => t.name === 'order_item')?.indexes).toEqual([
         {

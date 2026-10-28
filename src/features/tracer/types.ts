@@ -100,6 +100,8 @@ export type Stage = StageBase &
         conflicts: Array<{ key: RowKey; action: 'nothing' | 'update' }>;
         mergeBranches: Record<RowKey, 'matched_update' | 'matched_delete' | 'not_matched_insert' | 'skipped'>;
         cascades: Array<{ tableId: string; deleted: RowKey[]; updated: RowKey[] }>;
+        // Колонки, которые заполнила база: DEFAULT, identity, генерируемые
+        defaulted?: string[];
       }
     | { kind: 'ddl'; diff: SchemaDiff }
     | {
@@ -108,6 +110,8 @@ export type Stage = StageBase &
         focus: { tableIds: string[]; columns: string[] };
         // 42803 «must appear»: состав групп, чтобы показать колонку вне GROUP BY в стопке
         group?: { keys: string[]; keyColumns: number[]; groups: Array<{ key: RowKey; members: RowKey[] }> };
+        attempted?: Relation;
+        conflictKeys?: RowKey[];
       }
   );
 

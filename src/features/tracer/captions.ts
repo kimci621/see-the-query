@@ -44,6 +44,7 @@ export const captions = {
     `DISTINCT ON (${keyList(on)}): ${rowsWord(before)} → ${after}, по одной на группу`,
   sort: (keys: string[], n: number) => `ORDER BY ${keyList(keys)}: ${rowsWord(n)} по порядку`,
   limit: (label: string, before: number, after: number) => `${label}: осталось ${after} из ${ofRows(before)}`,
+  dmlInsert: (n: number, before: number) => `INSERT: +${rowsWord(n)}, ${before} → ${before + n}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };
 

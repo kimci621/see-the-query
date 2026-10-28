@@ -30,6 +30,7 @@ function table(name: string, columns: ColumnInfo[]): TableInfo {
     sampleRows: [],
     sampleCtids: [],
     indexes: [],
+    constraints: [],
     comment: null,
   };
 }

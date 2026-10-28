@@ -354,7 +354,7 @@
 
 - ✅ **P9.1** План фазы, согласован. 2026-10-21. Заметка: `2026-10-08-09-dml-ddl.md` сверен с кодом Ф5-Ф8 и согласован 2026-10-21; правки спеки 3.9, 4, 5.6, 6.2, 6.3 внесены.
 - ✅ **P9.2** Датасет `empty`. 2026-10-21.
-- ⬜ **P9.3** Трассировщик INSERT: RETURNING, DEFAULT / identity, ошибки ограничений с `constraint`.
+- ✅ (2026-10-28) **P9.3** Трассировщик INSERT: RETURNING, DEFAULT / identity, ошибки ограничений с `constraint`.
 - ⬜ **P9.4** INSERT ... SELECT.
 - ⬜ **P9.5** UPDATE: WHERE (остающиеся строки приглушены) + before/after из `RETURNING old.*, new.*` по старому ctid.
 - ⬜ **P9.6** DELETE, DELETE ... USING, UPDATE ... FROM.

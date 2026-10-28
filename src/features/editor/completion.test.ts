@@ -27,6 +27,7 @@ const table = (id: string, names: string[]): TableInfo => {
     sampleRows: [],
     sampleCtids: [],
     indexes: [],
+    constraints: [],
     comment: null,
   };
 };

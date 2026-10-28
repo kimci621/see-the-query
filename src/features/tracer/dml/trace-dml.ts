@@ -1,0 +1,122 @@
+import type { DbClient } from '@/features/db/types';
+import type { ParsedStatement } from '@/features/sql/types';
+import { captions } from '../captions';
+import type { Prober } from '../probe';
+import type { Special, TraceFn } from '../route';
+import type { Row, RowKey, Stage, TraceOptions } from '../types';
+import {
+  type DmlNode,
+  errorFocus,
+  instrument,
+  keyOf,
+  resolveTarget,
+  row,
+  sameValue,
+  snapshot,
+  tryRun,
+  userResult,
+} from './shared';
+import { insertColumns, insertErrorExtras } from './source';
+
+type Op = 'insert' | 'update' | 'delete' | 'merge';
+type DmlStage = Extract<Stage, { kind: 'dml' }>;
+
+const OPS: Record<string, Op> = {
+  InsertStmt: 'insert',
+  UpdateStmt: 'update',
+  DeleteStmt: 'delete',
+  MergeStmt: 'merge',
+};
+
+// INSERT / UPDATE / DELETE / MERGE выполняются один раз с расширенным RETURNING.
+export async function traceDml(
+  stmt: ParsedStatement,
+  _db: DbClient,
+  prober: Prober,
+  opts: TraceOptions,
+  _traceSelect: TraceFn,
+): Promise<Special | null> {
+  const nodeName = Object.keys(stmt.ast)[0];
+  const op = OPS[nodeName];
+  const body = (stmt.ast as unknown as Record<string, DmlNode>)[nodeName];
+  if (!op || body.withClause) return null;
+
+  const target = resolveTarget(opts.schema, body.relation);
+  if (!target) return null;
+
+  const stages: Stage[] = [];
+  const before = await snapshot(prober, target);
+  const run = await tryRun(prober, instrument(stmt.ast, nodeName));
+  if (!run.ok) {
+    const extra = op === 'insert' ? await insertErrorExtras(prober, body, target, run.error) : {};
+    stages.push({
+      id: `${stages.length}:error`,
+      kind: 'error',
+      error: run.error,
+      focus: errorFocus(run.error, target, opts.schema),
+      caption: captions.error(run.error.code, run.error.message),
+      output: { columns: [], rows: [] },
+      ...extra,
+    });
+    return {
+      mode: 'final-only',
+      fallbackReason: 'Запрос завершился ошибкой',
+      stages,
+      result: null,
+      error: run.error,
+    };
+  }
+
+  const count = target.columns.length;
+  const prefix = 2 + 2 * count;
+  const byKey = new Map(before.rows.map((item) => [item.key, item]));
+  const inserted: RowKey[] = [];
+  const deleted: RowKey[] = [];
+  const updated: DmlStage['updated'] = [];
+  const added: Row[] = [];
+
+  for (const values of run.value.rows) {
+    const oldCtid = values[0] as string | null;
+    const newCtid = values[1] as string | null;
+    const oldValues = values.slice(2, 2 + count);
+    const newValues = values.slice(2 + count, 2 + 2 * count);
+    if (oldCtid !== null && newCtid !== null) {
+      const key = keyOf(target.alias, oldCtid);
+      const changedColumns = target.columns
+        .filter((_, index) => !sameValue(oldValues[index], newValues[index]))
+        .map((column) => column.name);
+      updated.push({ key, before: oldValues, after: newValues, changedColumns });
+      byKey.set(key, row(target.alias, oldCtid, newValues));
+    } else if (newCtid !== null) {
+      const fresh = row(target.alias, newCtid, newValues);
+      inserted.push(fresh.key);
+      added.push(fresh);
+    } else {
+      deleted.push(keyOf(target.alias, oldCtid as string));
+    }
+  }
+
+  const given = insertColumns(body, target);
+  const defaulted =
+    op === 'insert'
+      ? target.columns.map((column) => column.name).filter((column) => !given.includes(column))
+      : [];
+  stages.push({
+    id: `${stages.length}:dml`,
+    kind: 'dml',
+    op,
+    tableId: target.table.id,
+    inserted,
+    deleted,
+    updated,
+    conflicts: [],
+    mergeBranches: {},
+    cascades: [],
+    caption: captions.dmlInsert(inserted.length, before.rows.length),
+    output: { columns: target.columns, rows: [...byKey.values(), ...added] },
+    sourceRange: { from: stmt.from, to: stmt.to },
+    ...(defaulted.length ? { defaulted } : {}),
+  });
+
+  return { mode: 'full', stages, result: userResult(run.value, prefix), error: null };
+}
