@@ -172,6 +172,7 @@ export const GOLDEN_F9: Array<{ sql: string; stages: string }> = [
     stages: 'dml:12',
   },
   { sql: 'truncate review', stages: 'dml:10' },
+  { sql: 'alter table author add column email text', stages: 'ddl:0' },
 ];
 
 // Golden-набор Ф7: JOIN всех видов, GROUP BY, агрегаты, HAVING

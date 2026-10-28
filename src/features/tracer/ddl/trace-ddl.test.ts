@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest';
+import { inPreview, withDataset } from '../../../../tests/helpers/db';
+import { stageOf, traceSql } from '../../../../tests/helpers/trace';
+
+describe('трассировка DDL', () => {
+  it('CREATE TABLE: добавленная таблица, колонки и PK', () =>
+    withDataset('empty', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'create table author (author_id bigint generated always as identity primary key, name text not null)',
+        );
+        const ddl = stageOf(trace, 'ddl');
+        expect(ddl.diff.addedTables).toEqual(['public.author']);
+        expect(ddl.diff.addedConstraints).toContainEqual({
+          tableId: 'public.author',
+          name: 'author_pkey',
+          kind: 'p',
+          columns: ['author_id'],
+        });
+        expect(ddl.diff.before.tables).toHaveLength(0);
+      }),
+    ));
+
+  it('ALTER TABLE ADD COLUMN', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'alter table author add column email text');
+        expect(stageOf(trace, 'ddl').diff.addedColumns).toEqual([
+          { tableId: 'public.author', column: 'email' },
+        ]);
+      }),
+    ));
+
+  it('RENAME COLUMN: из AST, не drop+add', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'alter table author rename column name to full_name');
+        const ddl = stageOf(trace, 'ddl');
+        expect(ddl.diff.renamedColumns).toEqual([
+          { tableId: 'public.author', from: 'name', to: 'full_name' },
+        ]);
+        expect(ddl.diff.droppedColumns).toHaveLength(0);
+      }),
+    ));
+
+  it('CREATE INDEX и CREATE VIEW идут как ddl', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'create index on book (price)');
+        expect(trace.statementType).toBe('ddl');
+        expect(stageOf(trace, 'ddl').diff.addedIndexes).toHaveLength(1);
+      }),
+    ));
+
+  it('ADD CONSTRAINT CHECK с конфликтными строками: ошибка, нарушители видны', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'alter table employee add constraint salary_check check (salary <= 180000)',
+        );
+        const error = stageOf(trace, 'error');
+        expect(error.error.code).toBe('23514');
+        expect(error.conflictKeys).toContain('employee=(0,1)');
+      }),
+    ));
+});

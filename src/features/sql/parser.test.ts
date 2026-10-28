@@ -67,6 +67,8 @@ describe('parseSql', () => {
       ['create table t (id int)', 'ddl'],
       ['drop table t', 'ddl'],
       ['alter table t add column c int', 'ddl'],
+      ['create index on t (c)', 'ddl'],
+      ['create view v as select 1', 'ddl'],
       ['begin', 'tcl'],
       ['commit', 'tcl'],
     ] as const;

@@ -56,6 +56,7 @@ export const captions = {
     `MERGE: +${rowsWord(inserted)}, изменено ${updated}, удалено ${deleted}`,
   dmlTruncate: (table: string, before: number) =>
     `TRUNCATE ${table}: таблица пуста, было ${rowsWord(before)}`,
+  ddl: () => 'DDL: схема обновлена',
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };

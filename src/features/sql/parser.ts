@@ -68,7 +68,8 @@ function kindOf(node: Node): StatementKind {
   if (key === 'DeleteStmt') return 'delete';
   if (key === 'MergeStmt') return 'merge';
   if (key === 'TransactionStmt') return 'tcl';
-  if (/^(Create|Alter|Drop|Truncate|Rename|Comment|Refresh|Lock|Check|Cluster)/.test(key)) return 'ddl';
+  if (/^(Create|Alter|Drop|Truncate|Rename|Comment|Refresh|Lock|Check|Cluster|Index|View)/.test(key))
+    return 'ddl';
   return 'other';
 }
 
