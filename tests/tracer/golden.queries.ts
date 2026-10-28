@@ -163,6 +163,10 @@ export const GOLDEN_F9: Array<{ sql: string; stages: string }> = [
   { sql: 'update book set tags = tags', stages: 'scan:11 > dml:11' },
   { sql: 'delete from review where rating < 4', stages: 'scan:10 > filter:2 > dml:10' },
   { sql: 'delete from orders where order_id = 1', stages: 'scan:8 > filter:1 > dml:8' },
+  {
+    sql: "insert into customer (name, email, bonus, created_at) values ('Анна', 'anna@example.com', 200, now()) on conflict (email) do update set bonus = customer.bonus + excluded.bonus",
+    stages: 'dml:6',
+  },
 ];
 
 // Golden-набор Ф7: JOIN всех видов, GROUP BY, агрегаты, HAVING

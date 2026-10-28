@@ -50,6 +50,8 @@ export const captions = {
   dmlWhere: (op: 'update' | 'delete', n: number, before: number) =>
     `WHERE: под ${op === 'update' ? 'UPDATE попадут' : 'DELETE попадут'} ${n} из ${before} ${plural(before, 'строки', 'строк', 'строк')}`,
   dmlDelete: (n: number, before: number) => `DELETE: −${rowsWord(n)}, ${before} → ${before - n}`,
+  dmlUpsert: (inserted: number, conflicts: number) =>
+    `INSERT ... ON CONFLICT: +${rowsWord(inserted)}, конфликтов ${conflicts}`,
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };

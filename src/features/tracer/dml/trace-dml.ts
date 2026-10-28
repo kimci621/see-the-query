@@ -19,7 +19,7 @@ import {
   tryRun,
   userResult,
 } from './shared';
-import { insertColumns, insertErrorExtras } from './source';
+import { collidingKeys, conflictColumnSets, insertColumns, insertErrorExtras } from './source';
 import { whereStages } from './where';
 
 type Op = 'insert' | 'update' | 'delete' | 'merge';
@@ -62,6 +62,17 @@ export async function traceDml(
   const before = where ? where.stages[0].output : await snapshot(prober, target);
   const cascadeBefore =
     op === 'delete' || op === 'update' ? await captureCascades(target.table.id, opts.schema, prober, op) : [];
+  const collisionKeys = body.onConflictClause
+    ? [
+        ...new Set(
+          (
+            await Promise.all(
+              conflictColumnSets(body, target).map((columns) => collidingKeys(prober, body, target, columns)),
+            )
+          ).flat(),
+        ),
+      ]
+    : [];
   const run = await tryRun(prober, instrument(stmt.ast, nodeName));
   if (!run.ok) {
     const extra = op === 'insert' ? await insertErrorExtras(prober, body, target, run.error) : {};
@@ -117,6 +128,11 @@ export async function traceDml(
     op === 'insert'
       ? target.columns.map((column) => column.name).filter((column) => !given.includes(column))
       : [];
+  const conflicts: DmlStage['conflicts'] = body.onConflictClause
+    ? body.onConflictClause.action === 'ONCONFLICT_UPDATE'
+      ? updated.map((item) => ({ key: item.key, action: 'update' }))
+      : collisionKeys.map((key) => ({ key, action: 'nothing' }))
+    : [];
   let cascades: DmlStage['cascades'];
   try {
     cascades = await cascadeDiff(prober, cascadeBefore);
@@ -137,7 +153,7 @@ export async function traceDml(
     inserted,
     deleted,
     updated,
-    conflicts: [],
+    conflicts,
     mergeBranches: {},
     cascades,
     caption:
@@ -145,7 +161,9 @@ export async function traceDml(
         ? captions.dmlUpdate(updated.length, before.rows.length)
         : op === 'delete'
           ? captions.dmlDelete(deleted.length, before.rows.length)
-          : captions.dmlInsert(inserted.length, before.rows.length),
+          : body.onConflictClause
+            ? captions.dmlUpsert(inserted.length, conflicts.length)
+            : captions.dmlInsert(inserted.length, before.rows.length),
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),
