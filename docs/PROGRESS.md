@@ -358,7 +358,7 @@
 - ✅ (2026-10-28) **P9.4** INSERT ... SELECT.
 - ✅ (2026-10-28) **P9.5** UPDATE: WHERE (остающиеся строки приглушены) + before/after из `RETURNING old.*, new.*` по старому ctid.
 - ✅ (2026-10-28) **P9.6** DELETE, DELETE ... USING, UPDATE ... FROM.
-- ⬜ **P9.7** Каскады: diff зависимых по FK таблиц до/после.
+- ✅ (2026-10-28) **P9.7** Каскады: diff зависимых по FK таблиц до/после.
 - ⬜ **P9.8** ON CONFLICT DO NOTHING / DO UPDATE.
 - ⬜ **P9.9** MERGE.
 - ⬜ **P9.10** TRUNCATE.

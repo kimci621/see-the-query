@@ -5,6 +5,7 @@ import { type Prober, TraceFallback } from '../probe';
 import type { Special, TraceFn } from '../route';
 import type { Row, RowKey, Stage, TraceOptions } from '../types';
 import { hasVolatile } from '../whitelist';
+import { captureCascades, cascadeDiff } from './cascade';
 import { sourceTrace } from './materialize';
 import {
   type DmlNode,
@@ -59,6 +60,8 @@ export async function traceDml(
       ...where.stages.map((stage, index) => ({ ...stage, id: `${stages.length + index}:${stage.kind}` })),
     );
   const before = where ? where.stages[0].output : await snapshot(prober, target);
+  const cascadeBefore =
+    op === 'delete' || op === 'update' ? await captureCascades(target.table.id, opts.schema, prober, op) : [];
   const run = await tryRun(prober, instrument(stmt.ast, nodeName));
   if (!run.ok) {
     const extra = op === 'insert' ? await insertErrorExtras(prober, body, target, run.error) : {};
@@ -114,6 +117,18 @@ export async function traceDml(
     op === 'insert'
       ? target.columns.map((column) => column.name).filter((column) => !given.includes(column))
       : [];
+  let cascades: DmlStage['cascades'];
+  try {
+    cascades = await cascadeDiff(prober, cascadeBefore);
+  } catch {
+    return {
+      mode: 'final-only',
+      fallbackReason: 'Проба каскада не удалась',
+      stages: [],
+      result: userResult(run.value, prefix),
+      error: null,
+    };
+  }
   stages.push({
     id: `${stages.length}:dml`,
     kind: 'dml',
@@ -124,7 +139,7 @@ export async function traceDml(
     updated,
     conflicts: [],
     mergeBranches: {},
-    cascades: [],
+    cascades,
     caption:
       op === 'update'
         ? captions.dmlUpdate(updated.length, before.rows.length)
