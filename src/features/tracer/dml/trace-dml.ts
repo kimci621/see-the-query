@@ -4,6 +4,7 @@ import { captions } from '../captions';
 import type { Prober } from '../probe';
 import type { Special, TraceFn } from '../route';
 import type { Row, RowKey, Stage, TraceOptions } from '../types';
+import { sourceTrace } from './materialize';
 import {
   type DmlNode,
   errorFocus,
@@ -31,10 +32,10 @@ const OPS: Record<string, Op> = {
 // INSERT / UPDATE / DELETE / MERGE выполняются один раз с расширенным RETURNING.
 export async function traceDml(
   stmt: ParsedStatement,
-  _db: DbClient,
+  db: DbClient,
   prober: Prober,
   opts: TraceOptions,
-  _traceSelect: TraceFn,
+  traceSelect: TraceFn,
 ): Promise<Special | null> {
   const nodeName = Object.keys(stmt.ast)[0];
   const op = OPS[nodeName];
@@ -45,6 +46,8 @@ export async function traceDml(
   if (!target) return null;
 
   const stages: Stage[] = [];
+  const materialized = op === 'insert' ? await sourceTrace(body, target, db, opts, traceSelect) : null;
+  if (materialized) stages.push({ ...materialized, id: `${stages.length}:materialize` });
   const before = await snapshot(prober, target);
   const run = await tryRun(prober, instrument(stmt.ast, nodeName));
   if (!run.ok) {
