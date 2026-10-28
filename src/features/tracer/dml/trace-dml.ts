@@ -128,7 +128,9 @@ export async function traceDml(
     caption:
       op === 'update'
         ? captions.dmlUpdate(updated.length, before.rows.length)
-        : captions.dmlInsert(inserted.length, before.rows.length),
+        : op === 'delete'
+          ? captions.dmlDelete(deleted.length, before.rows.length)
+          : captions.dmlInsert(inserted.length, before.rows.length),
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),

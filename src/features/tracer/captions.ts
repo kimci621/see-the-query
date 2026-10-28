@@ -49,6 +49,7 @@ export const captions = {
     `UPDATE: изменено ${n} из ${before} ${plural(before, 'строки', 'строк', 'строк')}`,
   dmlWhere: (op: 'update' | 'delete', n: number, before: number) =>
     `WHERE: под ${op === 'update' ? 'UPDATE попадут' : 'DELETE попадут'} ${n} из ${before} ${plural(before, 'строки', 'строк', 'строк')}`,
+  dmlDelete: (n: number, before: number) => `DELETE: −${rowsWord(n)}, ${before} → ${before - n}`,
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };

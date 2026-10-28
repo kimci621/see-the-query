@@ -161,6 +161,7 @@ export const GOLDEN_F9: Array<{ sql: string; stages: string }> = [
   },
   { sql: 'update book set price = price * 0.9 where price > 800', stages: 'scan:11 > filter:4 > dml:11' },
   { sql: 'update book set tags = tags', stages: 'scan:11 > dml:11' },
+  { sql: 'delete from review where rating < 4', stages: 'scan:10 > filter:2 > dml:10' },
 ];
 
 // Golden-набор Ф7: JOIN всех видов, GROUP BY, агрегаты, HAVING

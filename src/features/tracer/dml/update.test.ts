@@ -68,4 +68,17 @@ describe('трассировка UPDATE', () => {
         expect((after as number) - (before as number)).toBe(count);
       }),
     ));
+
+  it('UPDATE ... FROM: одна строка цели', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          "update book set price = price * 0.5 from author a where book.author_id = a.author_id and a.country = 'Бразилия'",
+        );
+        expect(trace.mode).toBe('full');
+        expect(trace.stages.map((stage) => stage.kind)).toEqual(['scan', 'scan', 'join', 'filter', 'dml']);
+        expect(stageOf(trace, 'dml').updated).toHaveLength(1);
+      }),
+    ));
 });
