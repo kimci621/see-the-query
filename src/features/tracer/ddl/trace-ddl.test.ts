@@ -44,6 +44,27 @@ describe('трассировка DDL', () => {
       }),
     ));
 
+  it('RENAME TABLE: из AST, не drop+add', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'alter table author rename to writer');
+        const ddl = stageOf(trace, 'ddl');
+        expect(ddl.diff.renamedTables).toEqual([{ from: 'public.author', to: 'public.writer' }]);
+        expect(ddl.diff.addedTables).toEqual([]);
+        expect(ddl.diff.droppedTables).toEqual([]);
+      }),
+    ));
+
+  it('ALTER COLUMN TYPE: старый и новый типы', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'alter table author alter column born_year type bigint');
+        expect(stageOf(trace, 'ddl').diff.alteredColumns).toEqual([
+          { tableId: 'public.author', column: 'born_year', before: 'integer', after: 'bigint' },
+        ]);
+      }),
+    ));
+
   it('CREATE INDEX и CREATE VIEW идут как ddl', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
@@ -63,6 +84,23 @@ describe('трассировка DDL', () => {
         const error = stageOf(trace, 'error');
         expect(error.error.code).toBe('23514');
         expect(error.conflictKeys).toContain('employee=(0,1)');
+      }),
+    ));
+
+  it('UNIQUE и NOT NULL показывают конфликтующие строки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        await db.query('create temp table t (x int)');
+        await db.query('insert into t values (1), (1), (null)');
+        const unique = stageOf(
+          await traceSql(db, 'alter table t add constraint t_x_key unique (x)'),
+          'error',
+        );
+        expect(unique.error.code).toBe('23505');
+        expect(unique.conflictKeys).toEqual(['t=(0,1)', 't=(0,2)']);
+        const required = stageOf(await traceSql(db, 'alter table t alter column x set not null'), 'error');
+        expect(required.error.code).toBe('23502');
+        expect(required.conflictKeys).toEqual(['t=(0,3)']);
       }),
     ));
 });

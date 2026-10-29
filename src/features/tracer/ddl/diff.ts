@@ -22,10 +22,17 @@ const constraints = (schema: SchemaSnapshot) =>
 export function diffSchemas(before: SchemaSnapshot, after: SchemaSnapshot, renames: Renames): SchemaDiff {
   const beforeTables = new Map(before.tables.map((table) => [table.id, table]));
   const afterTables = new Map(after.tables.map((table) => [table.id, table]));
-  const addedTables = after.tables.map((table) => table.id).filter((id) => !beforeTables.has(id));
-  const droppedTables = before.tables.map((table) => table.id).filter((id) => !afterTables.has(id));
+  const renamedFrom = new Set(renames.tables.map((item) => item.from));
+  const renamedTo = new Set(renames.tables.map((item) => item.to));
+  const addedTables = after.tables
+    .map((table) => table.id)
+    .filter((id) => !beforeTables.has(id) && !renamedTo.has(id));
+  const droppedTables = before.tables
+    .map((table) => table.id)
+    .filter((id) => !afterTables.has(id) && !renamedFrom.has(id));
   const addedColumns: SchemaDiff['addedColumns'] = [];
   const droppedColumns: SchemaDiff['droppedColumns'] = [];
+  const alteredColumns: SchemaDiff['alteredColumns'] = [];
   for (const [id, oldTable] of beforeTables) {
     const newTable = afterTables.get(id);
     if (!newTable) continue;
@@ -38,6 +45,11 @@ export function diffSchemas(before: SchemaSnapshot, after: SchemaSnapshot, renam
     for (const column of oldTable.columns)
       if (!newNames.has(column.name) && !renamed.some((item) => item.from === column.name))
         droppedColumns.push({ tableId: id, column: column.name });
+    for (const column of oldTable.columns) {
+      const next = newTable.columns.find((item) => item.name === column.name);
+      if (next && next.type !== column.type)
+        alteredColumns.push({ tableId: id, column: column.name, before: column.type, after: next.type });
+    }
   }
   const beforeConstraints = constraints(before);
   const afterConstraints = constraints(after);
@@ -54,7 +66,7 @@ export function diffSchemas(before: SchemaSnapshot, after: SchemaSnapshot, renam
     addedColumns,
     droppedColumns,
     renamedColumns: renames.columns,
-    alteredColumns: [],
+    alteredColumns,
     addedConstraints: afterConstraints.filter((item) => !oldConstraints.has(key(item))),
     droppedConstraints: beforeConstraints
       .filter((item) => !newConstraints.has(key(item)))
