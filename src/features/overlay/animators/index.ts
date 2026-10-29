@@ -1,11 +1,13 @@
 import type { Stage } from '@/features/tracer/types';
 import type { Animator } from '../types';
 import { distinctAnimator } from './distinct';
+import { dmlAnimator } from './dml';
 import { errorAnimator } from './error';
 import { filterAnimator } from './filter';
 import { groupAnimator } from './group';
 import { joinAnimator } from './join';
 import { limitAnimator } from './limit';
+import { materializeAnimator } from './materialize';
 import { projectAnimator } from './project';
 import { scanAnimator } from './scan';
 import { sortAnimator } from './sort';
@@ -20,5 +22,7 @@ export const ANIMATORS: { [K in Stage['kind']]?: Animator<Extract<Stage, { kind:
   distinct: distinctAnimator,
   sort: sortAnimator,
   limit: limitAnimator,
+  dml: dmlAnimator,
+  materialize: materializeAnimator,
   error: errorAnimator,
 };

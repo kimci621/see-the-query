@@ -28,6 +28,8 @@
 .vs-col--highlight, .vs-col--key { background: color-mix(in oklab, var(--match) 20%, transparent); }
 .vs-col--computed, .vs-col--added { background: color-mix(in oklab, var(--new) 18%, transparent); }
 .vs-null { font-style: italic; color: var(--muted-foreground); outline: 1px dashed var(--null); outline-offset: -4px; border-radius: 4px; }
+.vs-cell--default::after { content: 'default'; margin-left: 0.25rem; color: var(--muted-foreground); font-size: 0.625rem; }
+.vs-cell--changed { background: color-mix(in oklab, var(--changed) 28%, transparent); }
 .vs-folded { font-family: var(--font-sans, ui-sans-serif); color: var(--muted-foreground); }
 .vs-ghost-hidden { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; color: var(--muted-foreground); font-style: italic; }
 .vs-scanner { position: absolute; left: 0; top: 0; height: 2px; background: var(--match); box-shadow: 0 0 8px var(--match); }

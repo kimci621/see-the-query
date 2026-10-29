@@ -28,6 +28,7 @@ export interface GhostRow {
   group?: number;
   badge?: string;
   cellNotes?: Record<number, string>;
+  cellMarks?: Record<number, 'default' | 'changed'>;
 }
 
 export interface GhostTable {

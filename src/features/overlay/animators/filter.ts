@@ -66,6 +66,24 @@ export const filterAnimator: Animator<StageOf<'filter'>> = (prev, stage, stageIn
       ? `${clause}: зелёные прошли, красные нет, серые дали UNKNOWN и тоже уходят`
       : `${clause}: зелёные прошли условие, красные нет`;
 
+  if (stage.target)
+    return [
+      {
+        id: `${stageIndex}:check`,
+        stageIndex,
+        caption: `${clause}: проверяем условие для каждой ${item}`,
+        durationMs: 500,
+        frame: check,
+      },
+      {
+        id: `${stageIndex}:verdicts`,
+        stageIndex,
+        caption: `${verdictCaption}; остальные строки остаются на месте`,
+        durationMs: 900,
+        frame: verdicts,
+      },
+    ];
+
   return [
     {
       id: `${stageIndex}:check`,

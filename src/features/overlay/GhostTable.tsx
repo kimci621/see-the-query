@@ -58,7 +58,7 @@ const GhostRowView = memo(function GhostRowView({
         return (
           <div
             key={keys[ci]}
-            className={`vs-cell vs-col--${c.state}${kind === 'null' ? ' vs-null' : ''}`}
+            className={`vs-cell vs-col--${c.state}${kind === 'null' ? ' vs-null' : ''}${row.cellMarks?.[ci] ? ` vs-cell--${row.cellMarks[ci]}` : ''}`}
             style={{
               width: widths[ci],
               lineHeight: `${ROW_H}px`,

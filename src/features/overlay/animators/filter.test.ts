@@ -78,6 +78,13 @@ describe('filterAnimator', () => {
     );
   });
 
+  it('WHERE DML не убирает строки, которые не попали в UPDATE или DELETE', () => {
+    const p = filterAnimator(afterScan(), { ...stage, target: true }, 1, testCtx());
+    expect(p.map((item) => item.id)).toEqual(['1:check', '1:verdicts']);
+    expect(p[1].frame.tables[0].rows).toHaveLength(5);
+    expect(p[1].frame.tables[0].rows.find((row) => row.key === 'b=(0,3)')?.state).toBe('dropped');
+  });
+
   it('без рабочей таблицы ничего не ломает', () => {
     const p = filterAnimator({ tables: [], decorations: [] }, stage, 1, testCtx());
     expect(p).toHaveLength(1);
