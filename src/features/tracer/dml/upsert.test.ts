@@ -13,6 +13,9 @@ describe('ON CONFLICT', () => {
         const dml = stageOf(trace, 'dml');
         expect(dml.inserted).toHaveLength(0);
         expect(dml.conflicts).toEqual([{ key: 'customer=(0,1)', action: 'nothing' }]);
+        expect(dml.source?.columns.map((column) => column.name)).toEqual(['name', 'email', 'created_at']);
+        expect(dml.source?.rows).toHaveLength(1);
+        expect(dml.source?.rows[0].values.slice(0, 2)).toEqual(['Анна', 'anna@example.com']);
       }),
     ));
 

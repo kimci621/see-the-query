@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import { runUpTo } from '../__fixtures__/runUpTo';
-import { groupTrace, joinTrace, testCtx } from '../__fixtures__/traces';
+import { bookScan, fullPipelineTrace, groupTrace, joinTrace, testCtx } from '../__fixtures__/traces';
 import { currentTable } from '../frame';
 import type { StageOf } from '../types';
 import { errorAnimator } from './error';
@@ -101,6 +101,48 @@ describe('errorAnimator', () => {
       ctx,
     );
     expect(phases).toEqual([]);
+  });
+
+  it('23xxx: попытка помечена ошибкой, затронутая колонка красная', () => {
+    const [phase] = errorAnimator(
+      { tables: [], decorations: [] },
+      {
+        ...errorStage('23514', ['public.book.price'], 'new row violates check constraint'),
+        attempted: bookScan().output,
+      },
+      0,
+      ctx,
+    );
+    const t = phase.frame.tables.find((item) => item.id === 'a:public.book');
+    expect(t?.rows.every((row) => row.state === 'unknown')).toBe(true);
+    expect(t?.columns.find((column) => column.name === 'price')?.state).toBe('error');
+  });
+
+  it('23xxx: конфликтующая строка обведена, FK показывает опасную стрелку', () => {
+    const current = runUpTo(fullPipelineTrace(), 1, ctx);
+    const [phase] = errorAnimator(
+      current,
+      {
+        ...errorStage('23503', ['public.book.author_id'], 'foreign key violation'),
+        focus: { tableIds: ['public.book', 'public.author'], columns: ['public.book.author_id'] },
+        conflictKeys: ['b=(0,1)'],
+      },
+      1,
+      {
+        ...ctx,
+        nodeRect: (id) =>
+          id === 'public.book'
+            ? { x: 0, y: 0, width: 260, height: 400 }
+            : id === 'public.author'
+              ? { x: 400, y: 0, width: 260, height: 400 }
+              : null,
+      },
+    );
+    const conflict = phase.frame.tables.flatMap((table) => table.rows).find((row) => row.key === 'b=(0,1)');
+    expect(conflict?.state).toBe('conflict');
+    expect(phase.frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'arrow', tone: 'danger' }),
+    );
   });
 });
 

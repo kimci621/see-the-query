@@ -18,6 +18,7 @@
 .vs-row--new { background: color-mix(in oklab, var(--new) 18%, transparent); }
 .vs-row--changed { background: color-mix(in oklab, var(--changed) 22%, transparent); }
 .vs-row--deleted { background: color-mix(in oklab, var(--deleted) 18%, transparent); }
+.vs-row--conflict { outline: 2px solid var(--dropped); outline-offset: -2px; }
 /* Зачёркивание на ячейках: спозиционированные абсолютно, они не наследуют его от строки */
 .vs-row--dropped .vs-cell, .vs-row--deleted .vs-cell { text-decoration: line-through; }
 .vs-row[style*='--vs-group'] { box-shadow: inset 3px 0 0 var(--vs-group); }

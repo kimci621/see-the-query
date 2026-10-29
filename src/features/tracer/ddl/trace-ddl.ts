@@ -2,7 +2,7 @@ import { introspect } from '@/features/db/introspect';
 import type { DbClient } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
-import { keyOf, resolveTarget, tryRun } from '../dml/shared';
+import { errorFocus, keyOf, resolveTarget, tryRun } from '../dml/shared';
 import { ident, type Prober, sqlOf } from '../probe';
 import type { Special } from '../route';
 import type { Stage, TraceOptions } from '../types';
@@ -28,7 +28,17 @@ function renamesOf(stmt: ParsedStatement, schema: TraceOptions['schema']): Renam
   return { columns: [], tables: [{ from: table.id, to: `${table.schema}.${body.newname}` }] };
 }
 
-async function checkViolations(stmt: ParsedStatement, prober: Prober, opts: TraceOptions): Promise<string[]> {
+interface ViolationCheck {
+  keys: string[];
+  target: ReturnType<typeof resolveTarget>;
+  columns: string[];
+}
+
+async function checkViolations(
+  stmt: ParsedStatement,
+  prober: Prober,
+  opts: TraceOptions,
+): Promise<ViolationCheck> {
   const body = (
     stmt.ast as unknown as {
       AlterTableStmt?: {
@@ -50,25 +60,32 @@ async function checkViolations(stmt: ParsedStatement, prober: Prober, opts: Trac
     }
   ).AlterTableStmt;
   const command = body?.cmds?.[0]?.AlterTableCmd;
-  if (!command || !body?.relation) return [];
+  if (!command || !body?.relation) return { keys: [], target: null, columns: [] };
   const target = resolveTarget(opts.schema, body.relation);
-  if (!target) return [];
+  if (!target) return { keys: [], target: null, columns: [] };
   const alias = ident(target.alias);
   const constraint = command.def?.Constraint;
+  let columns: string[] = [];
   let sql: string | null = null;
   if (constraint?.contype === 'CONSTR_CHECK' && constraint.raw_expr)
     sql = `SELECT ${alias}.ctid::text FROM ${target.sql} AS ${alias} WHERE NOT (${sqlOf(constraint.raw_expr as never)}) ORDER BY ${alias}.ctid`;
   if (constraint?.contype === 'CONSTR_UNIQUE') {
-    const columns = (constraint.keys ?? []).flatMap((item) => (item.String?.sval ? [item.String.sval] : []));
+    columns = (constraint.keys ?? []).flatMap((item) => (item.String?.sval ? [item.String.sval] : []));
     const names = columns.map((column) => `${alias}.${ident(column)}`);
     if (names.length)
       sql = `SELECT ${alias}.ctid::text FROM ${target.sql} AS ${alias} WHERE (${names.join(', ')}) IN (SELECT ${columns.map(ident).join(', ')} FROM ${target.sql} GROUP BY ${columns.map(ident).join(', ')} HAVING count(*) > 1) ORDER BY ${alias}.ctid`;
   }
-  if (command.subtype === 'AT_SetNotNull' && command.name)
+  if (command.subtype === 'AT_SetNotNull' && command.name) {
+    columns = [command.name];
     sql = `SELECT ${alias}.ctid::text FROM ${target.sql} AS ${alias} WHERE ${alias}.${ident(command.name)} IS NULL ORDER BY ${alias}.ctid`;
-  if (!sql) return [];
+  }
+  if (!sql) return { keys: [], target, columns };
   const run = await tryRun(prober, sql);
-  return run.ok ? run.value.rows.map(([ctid]) => keyOf(target.alias, ctid as string)) : [];
+  return {
+    keys: run.ok ? run.value.rows.map(([ctid]) => keyOf(target.alias, ctid as string)) : [],
+    target,
+    columns,
+  };
 }
 
 export async function traceDdl(
@@ -77,17 +94,28 @@ export async function traceDdl(
   prober: Prober,
   opts: TraceOptions,
 ): Promise<Special> {
-  const conflictKeys = await checkViolations(stmt, prober, opts);
+  const violations = await checkViolations(stmt, prober, opts);
   const run = await tryRun(prober, stmt.text);
   if (!run.ok) {
+    const focus = violations.target
+      ? errorFocus(run.error, violations.target, opts.schema)
+      : { tableIds: [], columns: [] };
     const stage: Stage = {
       id: '0:error',
       kind: 'error',
       error: run.error,
-      focus: { tableIds: [], columns: [] },
+      focus: {
+        tableIds: focus.tableIds,
+        columns: [
+          ...new Set([
+            ...focus.columns,
+            ...violations.columns.map((column) => `${violations.target?.table.id}.${column}`),
+          ]),
+        ],
+      },
       caption: captions.error(run.error.code, run.error.message),
       output: { columns: [], rows: [] },
-      ...(conflictKeys.length ? { conflictKeys } : {}),
+      ...(violations.keys.length ? { conflictKeys: violations.keys } : {}),
     };
     return {
       mode: 'final-only',

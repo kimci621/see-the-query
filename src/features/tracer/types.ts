@@ -104,6 +104,8 @@ export type Stage = StageBase &
         cascades: Array<{ tableId: string; deleted: RowKey[]; updated: RowKey[] }>;
         // Колонки, которые заполнила база: DEFAULT, identity, генерируемые
         defaulted?: string[];
+        // Входящие значения ON CONFLICT, когда у INSERT нет отдельной стадии materialize
+        source?: Relation;
       }
     | { kind: 'ddl'; diff: SchemaDiff }
     | {

@@ -19,7 +19,13 @@ import {
   tryRun,
   userResult,
 } from './shared';
-import { collidingKeys, conflictColumnSets, insertColumns, insertErrorExtras } from './source';
+import {
+  collidingKeys,
+  conflictColumnSets,
+  insertColumns,
+  insertErrorExtras,
+  sourceRelation,
+} from './source';
 import { whereStages } from './where';
 
 type Op = 'insert' | 'update' | 'delete' | 'merge';
@@ -60,6 +66,10 @@ export async function traceDml(
   const stages: Stage[] = [];
   const materialized = op === 'insert' ? await sourceTrace(body, target, db, opts, traceSelect) : null;
   if (materialized) stages.push({ ...materialized, id: `${stages.length}:materialize` });
+  const source =
+    op === 'insert' && body.onConflictClause && !materialized
+      ? await sourceRelation(prober, body, target)
+      : undefined;
   const where =
     op === 'update' || op === 'delete' ? await whereStages(stmt, body, target, prober, opts, op) : null;
   if (where)
@@ -181,6 +191,7 @@ export async function traceDml(
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),
+    ...(source ? { source } : {}),
   });
 
   if (where) {

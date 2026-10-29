@@ -19,7 +19,12 @@ import {
 import type { GhostColumn, GhostRow, GhostTable } from './types';
 
 // Прозрачность строки по состоянию: через animate, иначе inline opacity motion перебьёт CSS
-const STATE_OPACITY: Partial<Record<GhostRow['state'], number>> = { cut: 0.35, unknown: 0.8 };
+const STATE_OPACITY: Partial<Record<GhostRow['state'], number>> = {
+  cut: 0.35,
+  dropped: 0.45,
+  unknown: 0.8,
+  deleted: 0.45,
+};
 
 const GhostRowView = memo(function GhostRowView({
   row,
@@ -49,7 +54,7 @@ const GhostRowView = memo(function GhostRowView({
           ? { ['--vs-group' as string]: `var(--group-${(row.group % 8) + 1})` }
           : {}),
       }}
-      initial={{ opacity: 0, y: rowTop(index) }}
+      initial={{ opacity: 0, y: rowTop(index) + (row.state === 'new' ? ROW_H : 0) }}
       animate={{ opacity: STATE_OPACITY[row.state] ?? 1, y: rowTop(index) }}
       exit={{ opacity: 0, y: rowTop(index) + ROW_H / 2 }}
     >
@@ -66,7 +71,13 @@ const GhostRowView = memo(function GhostRowView({
             }}
             title={row.cellNotes?.[ci]}
           >
-            {text}
+            {row.cellMarks?.[ci] === 'changed' ? (
+              <motion.span key={text} initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }}>
+                {text}
+              </motion.span>
+            ) : (
+              text
+            )}
           </div>
         );
       })}

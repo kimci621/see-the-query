@@ -12,7 +12,8 @@ export type RowState =
   | 'changed'
   | 'deleted'
   | 'cut'
-  | 'matched';
+  | 'matched'
+  | 'conflict';
 
 export interface GhostColumn {
   name: string;

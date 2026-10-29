@@ -84,6 +84,7 @@ describe('трассировка DDL', () => {
         const error = stageOf(trace, 'error');
         expect(error.error.code).toBe('23514');
         expect(error.conflictKeys).toContain('employee=(0,1)');
+        expect(error.focus.tableIds).toContain('public.employee');
       }),
     ));
 
@@ -98,9 +99,11 @@ describe('трассировка DDL', () => {
         );
         expect(unique.error.code).toBe('23505');
         expect(unique.conflictKeys).toEqual(['t=(0,1)', 't=(0,2)']);
+        expect(unique.focus.columns).toContain('pg_temp.t.x');
         const required = stageOf(await traceSql(db, 'alter table t alter column x set not null'), 'error');
         expect(required.error.code).toBe('23502');
         expect(required.conflictKeys).toEqual(['t=(0,3)']);
+        expect(required.focus.columns).toContain('pg_temp.t.x');
       }),
     ));
 });

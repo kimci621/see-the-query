@@ -1,12 +1,15 @@
 import { explainError } from '@/features/errors/explain';
 import { currentTable, mapColumns, shownIndices, withTable } from '../frame';
 import type { Animator, GhostTable, Phase, StageOf } from '../types';
+import { constraintErrorAnimator } from './constraint-error';
 import { groupAnimator } from './group';
 
 // 42803 «column … must appear»: строки в стопках групп, колонка вне GROUP BY красная.
 // Без состава групп: призрак таблицы у её ноды на доске с той же красной колонкой.
 // У остальных ошибок (и у 42803 без найденной колонки) сцены нет: всё объясняет панель «Сообщения»
 export const errorAnimator: Animator<StageOf<'error'>> = (prev, stage, stageIndex, ctx) => {
+  if (stage.error.code.startsWith('23') || stage.attempted || stage.conflictKeys)
+    return constraintErrorAnimator(prev, stage, stageIndex, ctx);
   const table = ctx.schema.tables.find((t) => t.id === stage.focus.tableIds[0]);
   const column = stage.error.message.match(/column "(?:[^"]*\.)?([^".]+)" must appear/)?.[1];
   if (stage.error.code !== '42803' || !table || stage.focus.columns.join() !== `${table.id}.${column}`)
