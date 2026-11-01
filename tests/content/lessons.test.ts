@@ -2,11 +2,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { CHAPTERS } from '@content/chapters';
+import { compile } from '@mdx-js/mdx';
+import remarkFrontmatter from 'remark-frontmatter';
+import remarkGfm from 'remark-gfm';
 import { describe, expect, it } from 'vitest';
 import { normalizeTableId } from '@/features/board/model';
 import type { DbClient } from '@/features/db/types';
 import { CALLOUT_KINDS } from '@/features/lessons/mdx/Callouts';
 import { mdxComponents } from '@/features/lessons/mdx/components';
+import { remarkNesting } from '@/features/lessons/mdx/remark-nesting';
 import { collectLessonsMeta } from '../../plugins/lessons-meta';
 import { withDataset } from '../helpers/db';
 import {
@@ -102,6 +106,13 @@ describe.each(LESSONS.map((meta) => [meta.id, meta] as const))('урок %s', (_
     expect(tags.filter((t) => !MDX_TAGS.has(t))).toEqual([]);
     const kinds = [...text.matchAll(/<Callout kind="([^"]*)"/g)].map((m) => m[1] ?? '');
     expect(kinds.filter((k) => !(CALLOUT_KINDS as string[]).includes(k))).toEqual([]);
+  });
+
+  it('компоненты Nesting содержат корректный путь', async () => {
+    await compile(
+      { path: meta.path, value: source },
+      { remarkPlugins: [remarkFrontmatter, remarkGfm, remarkNesting] },
+    );
   });
 
   it('примеры выполняются и сходятся с ожиданиями', async () => {

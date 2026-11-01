@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm';
 import { defineConfig, type Plugin } from 'vite';
 import { lessonsMeta } from './plugins/lessons-meta.ts';
 import { rehypeCodeMeta } from './src/features/lessons/mdx/rehype-code-meta.ts';
+import { remarkNesting } from './src/features/lessons/mdx/remark-nesting.ts';
 
 // libpg-query (emscripten) ищет libpg-query.wasm рядом со своим чанком, а Vite его не выпускает.
 // В собранном бандле он запрашивает /libpg-query.wasm от корня сайта: кладём файл туда.
@@ -41,7 +42,10 @@ export default defineConfig({
     lessonsMeta(),
     {
       enforce: 'pre',
-      ...mdx({ remarkPlugins: [remarkFrontmatter, remarkGfm], rehypePlugins: [rehypeCodeMeta] }),
+      ...mdx({
+        remarkPlugins: [remarkFrontmatter, remarkGfm, remarkNesting],
+        rehypePlugins: [rehypeCodeMeta],
+      }),
     },
     react({ include: /\.(mdx|js|jsx|ts|tsx)$/ }),
     libpgQueryWasm(),
