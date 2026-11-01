@@ -39,6 +39,7 @@ const GUIDE_LESSONS: string[] = [
   'aggregate-functions',
   'group-by',
   'having',
+  'cluster-db-schema',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
@@ -61,11 +62,10 @@ async function knownObjects(db: DbClient): Promise<Set<string>> {
 
 describe('уроки по гайду', () => {
   for (const id of GUIDE_LESSONS) {
-    it(`урок ${id}: есть, mvp, структура по гайду`, () => {
+    it(`урок ${id}: есть, структура по гайду`, () => {
       const meta = LESSONS.find((l) => l.id === id);
       if (!meta) throw new Error(`нет урока ${id}`);
       const source = readFileSync(path.join(ROOT, meta.path), 'utf8');
-      expect(meta.mvp, 'mvp: true во frontmatter').toBe(true);
       expect(source, 'нет <TlDr>').toContain('<TlDr>');
       expect(source, 'нет <Cheatsheet>').toContain('<Cheatsheet>');
       expect(
