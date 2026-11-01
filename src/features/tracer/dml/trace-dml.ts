@@ -1,4 +1,5 @@
 import type { DbClient } from '@/features/db/types';
+import { DbException } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
 import { type Prober, TraceFallback } from '../probe';
@@ -7,6 +8,7 @@ import type { Row, RowKey, Stage, TraceOptions } from '../types';
 import { hasVolatile } from '../whitelist';
 import { captureCascades, cascadeDiff } from './cascade';
 import { sourceTrace } from './materialize';
+import { sequenceValues } from './sequences';
 import {
   type DmlNode,
   errorFocus,
@@ -90,6 +92,7 @@ export async function traceDml(
         ),
       ]
     : [];
+  const sequenceBefore = op === 'insert' || op === 'merge' ? await sequenceValues(prober, target) : null;
   const run = await tryRun(prober, instrument(stmt.ast, nodeName));
   if (!run.ok) {
     const extra = op === 'insert' ? await insertErrorExtras(prober, body, target, run.error) : {};
@@ -109,6 +112,20 @@ export async function traceDml(
       result: null,
       error: run.error,
     };
+  }
+
+  let sequences: DmlStage['sequences'];
+  if (sequenceBefore?.size) {
+    try {
+      const after = await sequenceValues(prober, target);
+      sequences = [...sequenceBefore].flatMap(([column, before]) => {
+        const value = after.get(column);
+        return value !== undefined && value !== before ? [{ column, before, after: value }] : [];
+      });
+    } catch (error) {
+      if (!(error instanceof DbException) || error.db.code.startsWith('VS') || opts.signal?.aborted)
+        throw error;
+    }
   }
 
   const count = target.columns.length;
@@ -191,6 +208,7 @@ export async function traceDml(
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),
+    ...(sequences?.length ? { sequences } : {}),
     ...(source ? { source } : {}),
   });
 

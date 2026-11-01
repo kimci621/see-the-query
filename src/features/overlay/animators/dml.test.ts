@@ -21,6 +21,21 @@ const stage = (overrides: Partial<StageOf<'dml'>> = {}): StageOf<'dml'> => ({
 });
 
 describe('dmlAnimator', () => {
+  it('показывает счётчик последовательности до и после вставки', () => {
+    const phases = dmlAnimator(
+      { tables: [], decorations: [] },
+      stage({ sequences: [{ column: 'book_id', before: 6, after: 8 }] }),
+      0,
+      testCtx(),
+    );
+    expect(phases[0].frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'counter', text: 'book_id: 6' }),
+    );
+    expect(phases.at(-1)?.frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'counter', text: 'book_id: 6 → 8' }),
+    );
+  });
+
   it('INSERT строит призрак на цели и помечает новую строку с DEFAULT', () => {
     const [phase] = dmlAnimator({ tables: [], decorations: [] }, stage(), 0, testCtx());
     expect(phase.frame.tables[0]).toMatchObject({ id: 't:public.book', x: 0, y: 0 });

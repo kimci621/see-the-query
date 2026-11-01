@@ -1,5 +1,6 @@
 import { rem } from '@/features/board/layout';
 import { currentTable, rebuildTable, withTable } from '../frame';
+import { cellLeft } from '../geometry';
 import type { Animator, Decoration, GhostRow, GhostTable, Phase, StageOf } from '../types';
 
 function targetBase(
@@ -192,6 +193,33 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
         final,
       ]
     : [final];
+  if (stage.sequences?.length) {
+    const counters = (after: boolean): Decoration[] =>
+      (stage.sequences ?? []).map((sequence, index) => ({
+        kind: 'counter',
+        id: `${stageIndex}:sequence:${index}`,
+        x:
+          marked.x +
+          cellLeft(
+            marked,
+            Math.max(
+              0,
+              marked.columns.findIndex((column) => column.name === sequence.column),
+            ),
+          ),
+        y: marked.y - rem(2 * (index + 1)),
+        text: `${sequence.column}: ${sequence.before ?? 'не использована'}${after ? ` → ${sequence.after ?? 'не использована'}` : ''}`,
+      }));
+    const initial = { ...marked, rows: marked.rows.filter((row) => !inserted.has(row.key)) };
+    phases.unshift({
+      id: `${stageIndex}:sequence-before`,
+      stageIndex,
+      caption: stage.caption,
+      durationMs: 450,
+      frame: withTable({ ...prev, decorations: [...decorations, ...counters(false)] }, initial),
+    });
+    final.frame = { ...final.frame, decorations: [...final.frame.decorations, ...counters(true)] };
+  }
   if (incoming && incoming !== current)
     phases.unshift({
       id: `${stageIndex}:conflict-source`,

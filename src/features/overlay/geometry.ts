@@ -114,9 +114,14 @@ export function frameBounds(frame: Frame): { x: number; y: number; width: number
     maxX = Math.max(maxX, t.x + ghostWidth(t));
     maxY = Math.max(maxY, t.y + ghostHeight(t));
   }
-  // Счётчики «было → стало» стоят справа от таблицы: кадр держит их целиком
+  // Кадр вмещает счётчики справа от таблицы и над ней
   for (const d of frame.decorations) {
-    if (d.kind === 'counter') maxX = Math.max(maxX, d.x + counterWidth(d.text));
+    if (d.kind === 'counter') {
+      minX = Math.min(minX, d.x);
+      minY = Math.min(minY, d.y);
+      maxX = Math.max(maxX, d.x + counterWidth(d.text));
+      maxY = Math.max(maxY, d.y + rem(2));
+    }
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }

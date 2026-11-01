@@ -100,6 +100,16 @@ describe('geometry', () => {
     expect((b?.x ?? 0) + (b?.width ?? 0)).toBeGreaterThan(100 + ghostWidth(t) + 16 + 5 * 7);
   });
 
+  it('frameBounds вмещает счётчик над таблицей', () => {
+    const t = table();
+    const bounds = frameBounds({
+      tables: [t],
+      decorations: [{ kind: 'counter', id: 'c', x: 100, y: 18, text: 'id: 6' }],
+    });
+    expect(bounds?.y).toBe(18);
+    expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBe(50 + ghostHeight(t));
+  });
+
   it('frameBounds берёт camera, если она задана', () => {
     const camera = { x: 1, y: 2, width: 3, height: 4 };
     expect(frameBounds({ tables: [table()], decorations: [], camera })).toEqual(camera);
