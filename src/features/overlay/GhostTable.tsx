@@ -4,6 +4,7 @@ import { formatCell } from '@/features/board/format';
 import { STUB_WIDTH } from '@/features/board/layout';
 import { plural } from '@/lib/plural';
 import {
+  COL_WIDTH,
   COLHEAD_HEIGHT,
   cellLeft,
   columnKeys,
@@ -58,29 +59,39 @@ const GhostRowView = memo(function GhostRowView({
       animate={{ opacity: STATE_OPACITY[row.state] ?? 1, y: rowTop(index) }}
       exit={{ opacity: 0, y: rowTop(index) + ROW_H / 2 }}
     >
-      {columns.map((c, ci) => {
-        const { text, kind } = formatCell(row.values[ci], c.type);
-        return (
-          <div
-            key={keys[ci]}
-            className={`vs-cell vs-col--${c.state}${kind === 'null' ? ' vs-null' : ''}${row.cellMarks?.[ci] ? ` vs-cell--${row.cellMarks[ci]}` : ''}`}
-            style={{
-              width: widths[ci],
-              lineHeight: `${ROW_H}px`,
-              transform: `translateX(${lefts[ci]}px)`,
-            }}
-            title={row.cellNotes?.[ci]}
-          >
-            {row.cellMarks?.[ci] === 'changed' ? (
-              <motion.span key={text} initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }}>
-                {text}
-              </motion.span>
-            ) : (
-              text
-            )}
-          </div>
-        );
-      })}
+      <AnimatePresence initial={false}>
+        {columns.map((c, ci) => {
+          const { text, kind } = formatCell(row.values[ci], c.type);
+          return (
+            <motion.div
+              key={keys[ci]}
+              className={`vs-cell vs-col--${c.state}${kind === 'null' ? ' vs-null' : ''}${row.cellMarks?.[ci] ? ` vs-cell--${row.cellMarks[ci]}` : ''}`}
+              style={{
+                width: widths[ci],
+                lineHeight: `${ROW_H}px`,
+              }}
+              initial={
+                c.state === 'added' ? { opacity: 0, x: lefts[ci] + (c.fadeIn ? 0 : COL_WIDTH) } : false
+              }
+              animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.35 : 1, x: lefts[ci] }}
+              exit={{ opacity: 0 }}
+              title={row.cellNotes?.[ci]}
+            >
+              {row.cellMarks?.[ci] === 'changed' ? (
+                <motion.span
+                  key={text}
+                  initial={{ opacity: 0, scaleY: 0 }}
+                  animate={{ opacity: 1, scaleY: 1 }}
+                >
+                  {text}
+                </motion.span>
+              ) : (
+                text
+              )}
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
       {icon ? (
         <span className="vs-row-icon" aria-label={icon.label} role="img">
           {icon.icon}
@@ -111,19 +122,25 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
         {table.title}
       </div>
       <div className="vs-ghost-head" style={{ top: TITLE_HEIGHT, height: COLHEAD_HEIGHT }}>
-        {table.columns.map((c, ci) => (
-          <div
-            key={keys[ci]}
-            className={`vs-colhead vs-col--${c.state}`}
-            style={{
-              width: widths[ci],
-              lineHeight: `${COLHEAD_HEIGHT}px`,
-              transform: `translateX(${lefts[ci]}px)`,
-            }}
-          >
-            {c.name}
-          </div>
-        ))}
+        <AnimatePresence initial={false}>
+          {table.columns.map((c, ci) => (
+            <motion.div
+              key={keys[ci]}
+              className={`vs-colhead vs-col--${c.state}`}
+              style={{
+                width: widths[ci],
+                lineHeight: `${COLHEAD_HEIGHT}px`,
+              }}
+              initial={
+                c.state === 'added' ? { opacity: 0, x: lefts[ci] + (c.fadeIn ? 0 : COL_WIDTH) } : false
+              }
+              animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.35 : 1, x: lefts[ci] }}
+              exit={{ opacity: 0 }}
+            >
+              {c.name}
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {table.folds?.map((f, i) => (
           <div
             key={f.at}

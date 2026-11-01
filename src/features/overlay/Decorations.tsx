@@ -1,5 +1,7 @@
+import { Database, MessageSquare, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { rem } from '@/features/board/layout';
+import { GROUP_LABEL, GROUP_PADDING } from '@/features/board/model';
 import { ghostWidth, ROW_H, rowAnchor, rowTop } from './geometry';
 import type { Decoration, Frame, GhostTable } from './types';
 
@@ -48,6 +50,35 @@ function DecorationView({ d, frame }: { d: Decoration; frame: Frame }) {
           {d.text}
         </motion.div>
       );
+    case 'schema':
+      return (
+        <motion.div
+          data-testid="deco-schema"
+          className="vs-schema"
+          style={{ width: d.width, height: d.height }}
+          initial={{ opacity: 0, x: d.x, y: d.y }}
+          animate={{ opacity: 1, x: d.x, y: d.y }}
+        >
+          <div style={{ height: GROUP_LABEL, lineHeight: `${GROUP_LABEL}px`, paddingLeft: GROUP_PADDING }}>
+            {d.name}
+          </div>
+        </motion.div>
+      );
+    case 'ddl-label': {
+      const Icon =
+        d.variant === 'index' ? Database : d.variant === 'constraint' ? ShieldCheck : MessageSquare;
+      return (
+        <motion.div
+          data-testid="deco-ddl-label"
+          className="vs-ddl-label"
+          initial={{ opacity: 0, x: d.x + rem(1), y: d.y }}
+          animate={{ opacity: 1, x: d.x, y: d.y }}
+        >
+          <Icon size="1em" aria-hidden />
+          {d.text}
+        </motion.div>
+      );
+    }
     case 'bracket': {
       const t = findTable(frame, d.table);
       if (!t) return null;
@@ -94,7 +125,7 @@ function SvgLayer({ frame }: { frame: Frame }) {
     }
     if (d.kind === 'arrow') {
       return [
-        <line
+        <motion.line
           key={d.id}
           data-testid="deco-arrow"
           className={`vs-arrow vs-arrow--${d.tone}`}
@@ -103,6 +134,8 @@ function SvgLayer({ frame }: { frame: Frame }) {
           x2={d.to.x}
           y2={d.to.y}
           markerEnd="url(#vs-arrowhead)"
+          initial={false}
+          animate={{ opacity: d.opacity ?? 1 }}
         />,
       ];
     }

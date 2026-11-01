@@ -103,7 +103,7 @@ export function counterWidth(text: string): number {
 
 export function frameBounds(frame: Frame): { x: number; y: number; width: number; height: number } | null {
   if (frame.camera) return frame.camera;
-  if (frame.tables.length === 0) return null;
+  if (frame.tables.length === 0 && !frame.decorations.some((d) => d.kind === 'schema')) return null;
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
@@ -116,11 +116,17 @@ export function frameBounds(frame: Frame): { x: number; y: number; width: number
   }
   // Кадр вмещает счётчики справа от таблицы и над ней
   for (const d of frame.decorations) {
-    if (d.kind === 'counter') {
+    if (d.kind === 'counter' || d.kind === 'ddl-label') {
       minX = Math.min(minX, d.x);
       minY = Math.min(minY, d.y);
-      maxX = Math.max(maxX, d.x + counterWidth(d.text));
+      maxX = Math.max(maxX, d.x + counterWidth(d.text) + (d.kind === 'ddl-label' ? rem(2) : 0));
       maxY = Math.max(maxY, d.y + rem(2));
+    }
+    if (d.kind === 'schema') {
+      minX = Math.min(minX, d.x);
+      minY = Math.min(minY, d.y);
+      maxX = Math.max(maxX, d.x + d.width);
+      maxY = Math.max(maxY, d.y + d.height);
     }
   }
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };

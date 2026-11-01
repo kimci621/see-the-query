@@ -37,6 +37,8 @@
 .vs-scissors { position: absolute; left: 0; top: 0; border-top: 2px dashed var(--dropped); }
 .vs-scissors span { position: absolute; left: 0; top: -0.75rem; font-size: 1rem; }
 .vs-counter { position: absolute; left: 0; top: 0; padding: 0.125rem 0.5rem; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.vs-schema { position: absolute; left: 0; top: 0; border: 2px dashed var(--border); border-radius: 0.75rem; background: color-mix(in oklab, var(--muted) 20%, transparent); color: var(--muted-foreground); font: 500 0.75rem var(--font-mono); }
+.vs-ddl-label { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; border-radius: 0.375rem; background: var(--secondary); color: var(--secondary-foreground); font: 500 0.75rem var(--font-sans); white-space: nowrap; }
 .vs-bracket { position: absolute; left: 0; top: 0; width: 0.75rem; border: 2px solid var(--vs-group); border-right: none; border-radius: 6px 0 0 6px; font-size: 0.625rem; }
 .vs-svg-layer { position: absolute; left: 0; top: 0; color: var(--match); }
 .vs-pair-line { fill: none; stroke: var(--match); stroke-width: 2; }

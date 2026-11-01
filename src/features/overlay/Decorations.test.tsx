@@ -15,6 +15,23 @@ const t = {
 const a = { ...t, id: 't:a', x: 400, rows: [{ key: 'a=(0,1)', values: [1], state: 'normal' as const }] };
 
 describe('Decorations', () => {
+  it('рисует пустую схему и значок индекса', () => {
+    render(
+      <Decorations
+        frame={{
+          tables: [],
+          decorations: [
+            { kind: 'schema', id: 's', name: 'shop', x: 10, y: 20, width: 320, height: 160 },
+            { kind: 'ddl-label', id: 'i', variant: 'index', text: 'author_name_idx', x: 350, y: 20 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('deco-schema').textContent).toBe('shop');
+    expect(screen.getByTestId('deco-ddl-label').textContent).toBe('author_name_idx');
+    expect(screen.getByTestId('deco-ddl-label').querySelector('svg')).not.toBeNull();
+  });
+
   it('рисует сканер, ножницы, счётчик и линию пары', () => {
     const frame: Frame = {
       tables: [t, a],

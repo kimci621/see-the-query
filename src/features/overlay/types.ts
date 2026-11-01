@@ -20,6 +20,8 @@ export interface GhostColumn {
   type?: string;
   source?: Column['source']; // откуда колонка: различает одноимённые колонки JOIN
   state: 'normal' | 'highlight' | 'removed' | 'computed' | 'key' | 'added' | 'error';
+  fading?: boolean;
+  fadeIn?: boolean;
 }
 
 export interface GhostRow {
@@ -62,6 +64,15 @@ export type Decoration =
   | { kind: 'scanner'; table: string; rowIndex: number }
   | { kind: 'scissors'; table: string; afterRow: number }
   | { kind: 'counter'; id: string; x: number; y: number; text: string }
+  | { kind: 'schema'; id: string; name: string; x: number; y: number; width: number; height: number }
+  | {
+      kind: 'ddl-label';
+      id: string;
+      x: number;
+      y: number;
+      text: string;
+      variant: 'constraint' | 'index' | 'comment';
+    }
   | { kind: 'bracket'; table: string; fromRow: number; toRow: number; color: number; label?: string }
   | {
       kind: 'arrow';
@@ -69,6 +80,7 @@ export type Decoration =
       from: { x: number; y: number };
       to: { x: number; y: number };
       tone: 'info' | 'danger';
+      opacity?: number;
     };
 
 export interface Frame {

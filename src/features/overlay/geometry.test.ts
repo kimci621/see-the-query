@@ -110,6 +110,35 @@ describe('geometry', () => {
     expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBe(50 + ghostHeight(t));
   });
 
+  it('frameBounds вмещает пустую рамку схемы без таблиц', () => {
+    expect(
+      frameBounds({
+        tables: [],
+        decorations: [
+          { kind: 'schema', id: 'schema:shop', name: 'shop', x: 10, y: 20, width: 320, height: 160 },
+        ],
+      }),
+    ).toEqual({ x: 10, y: 20, width: 320, height: 160 });
+  });
+
+  it('frameBounds оставляет место для значка рядом с подписью индекса', () => {
+    const t = table();
+    const label = {
+      kind: 'ddl-label' as const,
+      id: 'index',
+      variant: 'index' as const,
+      x: 500,
+      y: 50,
+      text: 'idx',
+    };
+    const badge = frameBounds({ tables: [t], decorations: [label] });
+    const text = frameBounds({
+      tables: [t],
+      decorations: [{ kind: 'counter', id: 'c', x: 500, y: 50, text: 'idx' }],
+    });
+    expect(badge?.width).toBeGreaterThan(text?.width ?? 0);
+  });
+
   it('frameBounds берёт camera, если она задана', () => {
     const camera = { x: 1, y: 2, width: 3, height: 4 };
     expect(frameBounds({ tables: [table()], decorations: [], camera })).toEqual(camera);

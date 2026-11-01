@@ -1,5 +1,6 @@
 import type { Stage } from '@/features/tracer/types';
 import type { Animator } from '../types';
+import { ddlAnimator } from './ddl';
 import { distinctAnimator } from './distinct';
 import { dmlAnimator } from './dml';
 import { errorAnimator } from './error';
@@ -23,6 +24,7 @@ export const ANIMATORS: { [K in Stage['kind']]?: Animator<Extract<Stage, { kind:
   sort: sortAnimator,
   limit: limitAnimator,
   dml: dmlAnimator,
+  ddl: ddlAnimator,
   materialize: materializeAnimator,
   error: errorAnimator,
 };
