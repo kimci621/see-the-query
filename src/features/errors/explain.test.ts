@@ -51,12 +51,44 @@ const CASES: Record<string, string> = {
   subquery: 'select (select title from book) as t',
   identityInsert: `insert into author (author_id, name) values (1, 'X')`,
   identityUpdate: 'update author set author_id = 100 where author_id = 1',
+  dependentDrop: 'drop table author',
+  referencedTruncate: 'truncate author',
+  restrictDelete: 'delete from restrict_parent where id = 1',
+  invalidConflict: "insert into author (name) values ('X') on conflict (name) do nothing",
+  nonuniqueReference: 'create table bad_fk (x text references author(name))',
+  missingSchema: 'create table missing_schema.new_table (id int)',
+  duplicateSchema: 'create schema public',
+  wrongObject: 'drop view author',
+  unusedSequence: "select currval('unused_seq')",
+  duplicateColumn: 'alter table author add column name text',
+  missingConstraint: 'alter table author drop constraint missing_constraint',
+  multiplePrimary: 'alter table author add primary key (name)',
+  duplicateConstraint: 'alter table customer add constraint customer_bonus_check check (bonus >= 0)',
+  numericOverflow: 'select 1000::numeric(3, 0)',
+  stringOverflow: "insert into short_text values ('abcd')",
+  setNotNull: 'alter table book alter column price set not null',
+  generatedInsert: 'insert into generated_values (a, b) values (1, 2)',
+  generatedUpdate: 'update generated_values set b = 1',
+  upsertTwice: 'insert into unique_values values (1), (1) on conflict (id) do update set id = excluded.id',
+  mergeTwice:
+    'merge into unique_values t using (values (1), (1)) s(id) on t.id = s.id when matched then update set id = s.id',
 };
 
 beforeAll(async () => {
   await initParser();
   await withDataset('bookstore', async (db) => {
     schema = await introspect(db);
+    await db.exec(`
+      create temp table restrict_parent (id int primary key);
+      create temp table restrict_child (id int references restrict_parent(id) on delete restrict);
+      insert into restrict_parent values (1);
+      insert into restrict_child values (1);
+      create temp sequence unused_seq;
+      create temp table short_text (value varchar(2));
+      create temp table generated_values (a int, b int generated always as (a * 2) stored);
+      create temp table unique_values (id int primary key);
+      insert into unique_values values (1);
+    `);
     for (const [name, sql] of Object.entries(CASES)) {
       await inPreview(db, () =>
         db.query(sql).then(
@@ -71,25 +103,103 @@ beforeAll(async () => {
 const explain = (name: string) => explainError(errors.get(name) as DbError, { sql: CASES[name], schema });
 
 describe('explainError', () => {
-  it('покрывает 16 SQLSTATE настоящими ошибками', () => {
+  it('покрывает 31 SQLSTATE настоящими ошибками', () => {
     expect([...new Set([...errors.values()].map((e) => e.code))].sort()).toEqual([
+      '0A000',
       '21000',
+      '22001',
+      '22003',
       '22012',
       '22P02',
+      '23001',
       '23502',
       '23503',
       '23505',
       '23514',
+      '2BP01',
+      '3F000',
       '42601',
+      '42701',
       '42702',
       '42703',
+      '42704',
+      '42710',
       '42803',
       '42804',
+      '42809',
+      '42830',
       '42883',
       '428C9',
       '42P01',
+      '42P06',
       '42P07',
+      '42P10',
+      '42P16',
+      '55000',
     ]);
+  });
+
+  it.each([
+    ['dependentDrop', '2BP01', 'зависят'],
+    ['referencedTruncate', '0A000', 'TRUNCATE'],
+    ['restrictDelete', '23001', 'RESTRICT'],
+    ['invalidConflict', '42P10', 'уникальн'],
+    ['nonuniqueReference', '42830', 'уникальн'],
+    ['missingSchema', '3F000', 'missing_schema'],
+    ['duplicateSchema', '42P06', 'public'],
+    ['wrongObject', '42809', 'другого типа'],
+    ['unusedSequence', '55000', 'currval'],
+    ['duplicateColumn', '42701', 'name'],
+    ['missingConstraint', '42704', 'не нашёл'],
+    ['multiplePrimary', '42P16', 'первичный ключ'],
+    ['duplicateConstraint', '42710', 'уже создан'],
+    ['numericOverflow', '22003', 'числовой тип'],
+    ['stringOverflow', '22001', 'длиннее'],
+  ])('%s: реальный код %s получает своё объяснение', (name, code, expected) => {
+    expect(errors.get(name)?.code).toBe(code);
+    const explanation = explain(name);
+    expect(explanation.title).not.toBe('Postgres отклонил запрос');
+    expect(explanation.body).not.toBe(errors.get(name)?.message);
+    expect(explanation.body).not.toMatch(/undefined/);
+    expect(explanation.body).toContain(expected);
+  });
+
+  it('общие коды не выдают ошибки другого вида за TRUNCATE, currval, ON CONFLICT или первичный ключ', () => {
+    const context = { sql: '', schema: null };
+    for (const [code, message, forbidden] of [
+      ['0A000', 'feature not supported', 'TRUNCATE'],
+      ['55000', 'object is not in prerequisite state', 'currval'],
+      ['42P10', 'invalid column reference', 'ON CONFLICT'],
+      ['42P16', 'invalid table definition', 'первичный ключ'],
+    ]) {
+      const explanation = explainError({ code, message }, context);
+      expect(`${explanation.title} ${explanation.body}`).not.toContain(forbidden);
+    }
+  });
+
+  it('различает повторное изменение строки и скалярный подзапрос', () => {
+    expect(errors.get('upsertTwice')?.code).toBe('21000');
+    expect(errors.get('mergeTwice')?.code).toBe('21000');
+    expect(explain('upsertTwice').body).toMatch(/одну и ту же строку/);
+    expect(explain('mergeTwice').body).toMatch(/одну и ту же строку/);
+    expect(explain('upsertTwice').suggestion).toContain('ON CONFLICT');
+    expect(explain('mergeTwice').suggestion).toContain('источника');
+    expect(explain('subquery').body).toMatch(/Подзапрос/);
+  });
+
+  it('SET NOT NULL сообщает о существующих строках с NULL', () => {
+    expect(errors.get('setNotNull')?.code).toBe('23502');
+    expect(explain('setNotNull').body).toMatch(/существующ/);
+    expect(explain('setNotNull').suggestion).toMatch(/NULL/);
+    expect(explain('setNotNull').body).not.toContain('undefined');
+  });
+
+  it('ошибки вычисляемых колонок отличаются от identity', () => {
+    expect(errors.get('generatedInsert')?.code).toBe('428C9');
+    expect(errors.get('generatedUpdate')?.code).toBe('428C9');
+    expect(explain('generatedInsert').body).toMatch(/вычисляемая/);
+    expect(explain('generatedUpdate').body).toMatch(/вычисляемая/);
+    expect(explain('identityInsert').suggestion).toContain('OVERRIDING SYSTEM VALUE');
   });
 
   it('42P01: предлагает ближайшую таблицу', () => {
@@ -282,7 +392,7 @@ describe('explainError', () => {
     });
     expect(
       explainError(
-        { code: '2BP01', message: 'cannot drop table author', hint: 'Use DROP ... CASCADE' },
+        { code: 'ZZ001', message: 'cannot drop table author', hint: 'Use DROP ... CASCADE' },
         { sql: '', schema: null },
       ),
     ).toEqual({

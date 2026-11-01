@@ -17,10 +17,10 @@ describe('notifyDbError', () => {
 
   it('код вне словаря: SQLSTATE в заголовке, текст один раз', () => {
     notifyDbError(
-      new DbException({ code: '2BP01', message: 'cannot drop table author' }),
+      new DbException({ code: 'ZZ001', message: 'cannot drop table author' }),
       'drop table author',
     );
-    expect(toast.error).toHaveBeenLastCalledWith('Postgres отклонил запрос (2BP01)', {
+    expect(toast.error).toHaveBeenLastCalledWith('Postgres отклонил запрос (ZZ001)', {
       description: 'cannot drop table author',
       style: { whiteSpace: 'pre-line' },
     });

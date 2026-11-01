@@ -92,7 +92,7 @@ describe('MessagesList', () => {
   it('код ошибки в карточке один раз, и для кода вне словаря', () => {
     for (const error of [
       { code: '42703', message: 'column "nme" does not exist', position: 8 },
-      { code: '2BP01', message: 'cannot drop table author because other objects depend on it' },
+      { code: 'ZZ001', message: 'cannot drop table author because other objects depend on it' },
     ]) {
       const { unmount } = render(<MessagesList trace={traceWith(error)} />);
       const card = screen.getByTestId('pg-error');

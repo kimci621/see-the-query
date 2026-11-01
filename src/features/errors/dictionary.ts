@@ -356,12 +356,24 @@ export const DICTIONARY: Record<string, Entry> = {
     };
   },
 
-  '23502': (err) => ({
-    title: `${err.column} не может быть пустым`,
-    body: `У колонки ${err.column} в ${err.table} стоит NOT NULL, а строка пришла с NULL.`,
-    suggestion: `Передай значение для ${err.column} или задай колонке DEFAULT.`,
-    highlight: { tableIds: [tableId(err)], columns: [columnId(err, err.column ?? '')] },
-  }),
+  '23502': (err) =>
+    err.message.includes('contains null values')
+      ? {
+          title: `${err.column ?? quoted(err.message)} содержит NULL`,
+          body: 'В существующих строках этой колонки есть NULL, поэтому Postgres не может добавить NOT NULL.',
+          suggestion:
+            'Сначала замени NULL подходящими значениями или удали такие строки, затем повтори SET NOT NULL.',
+          highlight: {
+            tableIds: err.table ? [tableId(err)] : [],
+            columns: err.table && err.column ? [columnId(err, err.column)] : [],
+          },
+        }
+      : {
+          title: `${err.column} не может быть пустым`,
+          body: `У колонки ${err.column} в ${err.table} стоит NOT NULL, а строка пришла с NULL.`,
+          suggestion: `Передай значение для ${err.column} или задай колонке DEFAULT.`,
+          highlight: { tableIds: [tableId(err)], columns: [columnId(err, err.column ?? '')] },
+        },
 
   '23514': (err, ctx) => {
     // имя по умолчанию: <таблица>_<колонка>_check
@@ -385,7 +397,7 @@ export const DICTIONARY: Record<string, Entry> = {
     return {
       title: `${name} заполняет сам Postgres`,
       body: identity
-        ? `Колонка ${name} объявлена как GENERATED ALWAYS AS IDENTITY: номер для неё выдаёт Postgres, а явное значение она отвергает всегда.`
+        ? `Колонка ${name} объявлена как GENERATED ALWAYS AS IDENTITY: номер для неё выдаёт Postgres, а явное значение требует специального указания.`
         : `Колонка ${name} вычисляемая (GENERATED ALWAYS AS): Postgres считает её сам из других колонок.`,
       suggestion: !identity
         ? `Убери ${name} из запроса или передай DEFAULT.`
@@ -410,10 +422,160 @@ export const DICTIONARY: Record<string, Entry> = {
     highlight: none,
   }),
 
-  '21000': () => ({
-    title: 'Подзапрос вернул больше одной строки',
-    body: 'Подзапрос стоит на месте одного значения, а вернул несколько строк.',
-    suggestion: 'Используй IN или EXISTS, добавь агрегат или условие, после которого останется одна строка.',
+  '21000': (err) =>
+    /(?:ON CONFLICT DO UPDATE|MERGE).*cannot affect row a second time/i.test(err.message)
+      ? {
+          title: 'Строка изменяется дважды',
+          body: 'Один запрос пытается изменить одну и ту же строку больше одного раза.',
+          suggestion: err.message.startsWith('MERGE')
+            ? 'Проверь условие соединения и оставь не больше одной строки источника для каждой строки цели.'
+            : 'Убери повторы ключа из вставляемых строк перед ON CONFLICT DO UPDATE.',
+          highlight: none,
+        }
+      : {
+          title: 'Подзапрос вернул больше одной строки',
+          body: 'Подзапрос стоит на месте одного значения, а вернул несколько строк.',
+          suggestion:
+            'Используй IN или EXISTS, добавь агрегат или условие, после которого останется одна строка.',
+          highlight: none,
+        },
+
+  '2BP01': () => ({
+    title: 'Есть зависимые объекты',
+    body: 'Postgres не удалил объект: от него зависят другие объекты базы.',
+    suggestion: 'Сначала удали зависимости или используй CASCADE, чтобы удалить их вместе с объектом.',
+    highlight: none,
+  }),
+
+  '0A000': (err) =>
+    /cannot truncate a table referenced in a foreign key/i.test(err.message)
+      ? {
+          title: 'Таблица связана внешним ключом',
+          body: 'TRUNCATE не может очистить таблицу отдельно: на неё ссылается другая таблица.',
+          suggestion:
+            'Укажи связанные таблицы вместе или используй TRUNCATE ... CASCADE: он очистит и зависимые таблицы.',
+          highlight: none,
+        }
+      : {
+          title: 'Операция не поддерживается',
+          body: 'Postgres не поддерживает эту операцию в указанном виде.',
+          highlight: none,
+        },
+
+  '23001': () => ({
+    title: 'Изменение запрещено внешним ключом',
+    body: 'На строку ссылаются другие строки, а внешний ключ запрещает удаление или изменение через RESTRICT.',
+    suggestion: 'Сначала измени или удали ссылающиеся строки, затем повтори запрос.',
+    highlight: none,
+  }),
+
+  '42P10': (err) =>
+    /no unique or exclusion constraint matching.*ON CONFLICT/i.test(err.message)
+      ? {
+          title: 'Нет ограничения для ON CONFLICT',
+          body: 'Указанные колонки не совпадают с подходящим уникальным ограничением или индексом.',
+          suggestion: 'Укажи подходящий уникальный ключ или создай нужное ограничение уникальности.',
+          highlight: none,
+        }
+      : {
+          title: 'Недопустимая ссылка на колонку',
+          body: 'Ссылка на колонку не подходит для этого места запроса.',
+          highlight: none,
+        },
+
+  '42830': () => ({
+    title: 'Внешнему ключу нужен уникальный ключ',
+    body: 'Колонки, на которые ссылается внешний ключ, не образуют подходящий первичный или уникальный ключ.',
+    suggestion: 'Укажи существующий ключ или добавь подходящее ограничение UNIQUE.',
+    highlight: none,
+  }),
+
+  '3F000': (err) => ({
+    title: 'Схема не найдена',
+    body: quoted(err.message) ? `Схемы ${quoted(err.message)} нет в базе.` : 'Указанной схемы нет в базе.',
+    suggestion: 'Проверь имя схемы или создай её командой CREATE SCHEMA.',
+    highlight: none,
+  }),
+
+  '42P06': (err) => ({
+    title: 'Схема уже существует',
+    body: quoted(err.message)
+      ? `Схема ${quoted(err.message)} уже есть в базе.`
+      : 'Схема с таким именем уже есть в базе.',
+    suggestion: 'Выбери другое имя или используй CREATE SCHEMA IF NOT EXISTS.',
+    highlight: none,
+  }),
+
+  '42809': () => ({
+    title: 'Не тот тип объекта',
+    body: 'Команда ожидает объект другого типа, например представление вместо таблицы.',
+    suggestion: 'Проверь тип объекта и выбери соответствующую команду.',
+    highlight: none,
+  }),
+
+  '55000': (err) =>
+    /currval.*not yet defined/i.test(err.message)
+      ? {
+          title: 'Последовательность ещё не использована',
+          body: 'В этой сессии ещё не вызывали nextval для последовательности, поэтому currval не знает её значения.',
+          suggestion: 'Сначала вызови nextval для этой последовательности.',
+          highlight: none,
+        }
+      : {
+          title: 'Объект не готов к операции',
+          body: 'Текущее состояние объекта не позволяет выполнить команду.',
+          highlight: none,
+        },
+
+  '42701': (err) => ({
+    title: 'Колонка уже существует',
+    body: quoted(err.message)
+      ? `Колонка ${quoted(err.message)} уже есть в таблице.`
+      : 'Колонка с таким именем уже есть в таблице.',
+    suggestion: 'Выбери другое имя или используй ADD COLUMN IF NOT EXISTS.',
+    highlight: none,
+  }),
+
+  '42704': () => ({
+    title: 'Объект не найден',
+    body: 'Postgres не нашёл указанный объект, например ограничение или тип.',
+    suggestion: 'Проверь имя и схему объекта.',
+    highlight: none,
+  }),
+
+  '42P16': (err) =>
+    /multiple primary keys/i.test(err.message)
+      ? {
+          title: 'Первичный ключ уже есть',
+          body: 'У таблицы может быть один первичный ключ, который при необходимости включает несколько колонок.',
+          suggestion: 'Измени существующий первичный ключ или используй UNIQUE для другого набора колонок.',
+          highlight: none,
+        }
+      : {
+          title: 'Недопустимое определение таблицы',
+          body: 'Postgres не может создать или изменить таблицу с таким определением.',
+          suggestion: 'Проверь ограничения и настройки таблицы в тексте ошибки Postgres.',
+          highlight: none,
+        },
+
+  '42710': () => ({
+    title: 'Объект уже существует',
+    body: 'Объект с таким именем уже создан в этой области, например ограничение таблицы.',
+    suggestion: 'Выбери другое имя или измени существующий объект.',
+    highlight: none,
+  }),
+
+  '22003': () => ({
+    title: 'Число вне допустимого диапазона',
+    body: 'Результат или значение не помещается в выбранный числовой тип.',
+    suggestion: 'Подбери значение в пределах диапазона или выбери тип с большим диапазоном и точностью.',
+    highlight: none,
+  }),
+
+  '22001': () => ({
+    title: 'Строка слишком длинная',
+    body: 'Значение длиннее ограничения типа колонки.',
+    suggestion: 'Сократи строку или увеличь допустимую длину колонки.',
     highlight: none,
   }),
 
