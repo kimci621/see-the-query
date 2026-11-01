@@ -3,6 +3,19 @@ import { inPreview, withDataset } from '../../../../tests/helpers/db';
 import { column, stageOf, summary, traceSql } from '../../../../tests/helpers/trace';
 
 describe('стадия join: INNER и LEFT', () => {
+  it('успешный запрос к служебному представлению показывает итог без ложной ошибки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          "select table_name from information_schema.tables where table_schema = 'public' order by 1",
+        );
+        expect(trace.mode).toBe('final-only');
+        expect(trace.error).toBeNull();
+        expect(trace.result?.rows).toHaveLength(8);
+        expect(trace.fallbackReason).toBe('Пока не анимируется: источник не поддерживается');
+      }),
+    ));
   it('INNER JOIN: сканы обеих таблиц, пары, клоны, строки без пары не в результате', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

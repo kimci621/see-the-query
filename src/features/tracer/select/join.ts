@@ -39,7 +39,7 @@ export function flattenFrom(
   const complex = 'Пока не анимируется: сложный FROM';
   const pushSource = (rv: RangeVar): string | null => {
     const table = findTable(schema, rv.schemaname, rv.relname ?? '');
-    if (!table) return 'Таблица не найдена в схеме';
+    if (!table) return 'Пока не анимируется: источник не поддерживается';
     // У представления нет ctid, у секций родителя ctid повторяются
     if (table.kind === 'view') return 'Пока не анимируется: представление';
     if (table.kind === 'partitioned') return 'Пока не анимируется: секционированная таблица';
