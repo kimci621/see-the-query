@@ -139,11 +139,17 @@ test('после «Применить» превью не повторяет о�
   page,
 }) => {
   await openLesson(page);
-  await setEditorText(page, 'create table mine (id int)');
+  await setEditorText(page, 'create table mine (id int, a int, b int, c int, d int, e int, f int)');
   await expect(page.getByTestId('preview-status')).toContainText('Превью', { timeout: 5000 });
+  await expect(page.getByTestId('ghost-table').filter({ hasText: 'mine' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('table-node-public.mine')).toHaveCount(0);
+  await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Пауза');
   const apply = page.getByTestId('apply-button');
   await apply.click();
   await expect(apply).toContainText('Применено', { timeout: 5000 });
+  await expect(page.getByTestId('ghost-table')).toHaveCount(0);
+  await expect(page.getByTestId('table-node-public.mine')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('board-canvas')).not.toHaveAttribute('data-dimmed');
   await expect(page.getByTestId('result-count')).toHaveText('CREATE');
   // дольше паузы превью (250 мс) и возврата камеры (0,8 с): карточки 42P07 нет
   await page.waitForTimeout(1500);

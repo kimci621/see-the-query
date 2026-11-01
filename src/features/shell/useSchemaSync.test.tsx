@@ -86,4 +86,39 @@ describe('useSchemaSync', () => {
     listener({ type: 'changed' });
     await waitFor(() => expect(useBoardStore.getState().rowWrites).toEqual([]));
   });
+
+  it('INSERT и CREATE TABLE обновляют схему и пометки вместе, по одному разу на применение', async () => {
+    const table = (id: string) => ({ id }) as SchemaSnapshot['tables'][number];
+    const inserted = { ...schemaA, tables: [table('public.book')] };
+    const created = { ...schemaA, tables: [table('public.book'), table('public.mine')] };
+    introspect.mockResolvedValueOnce(schemaA).mockResolvedValueOnce(inserted).mockResolvedValueOnce(created);
+    renderHook(() => useSchemaSync());
+    await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaA));
+
+    const updates: Array<
+      Pick<ReturnType<typeof useBoardStore.getState>, 'schema' | 'rowWrites' | 'userTables'>
+    > = [];
+    const unsubscribe = useBoardStore.subscribe(({ schema, rowWrites, userTables }) => {
+      updates.push({ schema, rowWrites, userTables });
+    });
+    try {
+      listener({ type: 'changed', apply: { since: 750, command: 'INSERT' } });
+      await waitFor(() => expect(useBoardStore.getState().schema).toBe(inserted));
+      listener({ type: 'changed', apply: { since: 751, command: 'CREATE' } });
+      await waitFor(() => expect(useBoardStore.getState().schema).toBe(created));
+      expect(updates).toEqual([
+        { schema: inserted, rowWrites: [{ since: 750, mark: 'new' }], userTables: [] },
+        {
+          schema: created,
+          rowWrites: [
+            { since: 750, mark: 'new' },
+            { since: 751, mark: 'new' },
+          ],
+          userTables: ['public.mine'],
+        },
+      ]);
+    } finally {
+      unsubscribe();
+    }
+  });
 });
