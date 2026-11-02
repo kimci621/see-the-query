@@ -1,4 +1,4 @@
-import { introspect } from '@/features/db/introspect';
+import { findTable, introspect } from '@/features/db/introspect';
 import type { DbClient } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
@@ -19,9 +19,7 @@ function renamesOf(stmt: ParsedStatement, schema: TraceOptions['schema']): Renam
     }
   ).RenameStmt;
   if (!body?.relation?.relname || !body.newname) return { columns: [], tables: [] };
-  const table = schema.tables.find(
-    (item) => item.name === body.relation?.relname && item.schema === (body.relation.schemaname ?? 'public'),
-  );
+  const table = findTable(schema, body.relation.schemaname, body.relation.relname);
   if (!table) return { columns: [], tables: [] };
   if (body.subname)
     return { columns: [{ tableId: table.id, from: body.subname, to: body.newname }], tables: [] };

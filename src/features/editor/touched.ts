@@ -1,4 +1,4 @@
-import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import { findTable, type SchemaSnapshot, type TableInfo } from '@/features/db/introspect';
 import { relationsOf } from '@/features/sql/relations';
 import type { ColumnRef, ParsedStatement, RangeRef } from '@/features/sql/types';
 
@@ -147,11 +147,6 @@ export function resolveColumn(
   return target && col ? { id: `${target.id}.${col.name}`, type: col.type } : null;
 }
 
-// Резолв ссылки таблицы: схема-имя, иначе имя без схемы (public имеет приоритет, иначе единственная)
 function resolveTable(ref: RangeRef, schema: SchemaSnapshot): TableInfo | null {
-  const candidates = schema.tables.filter(
-    (t) => t.name === ref.name && (ref.schema == null || t.schema === ref.schema),
-  );
-  if (ref.schema != null) return candidates[0] ?? null;
-  return candidates.find((t) => t.schema === 'public') ?? (candidates.length === 1 ? candidates[0] : null);
+  return findTable(schema, ref.schema ?? undefined, ref.name);
 }

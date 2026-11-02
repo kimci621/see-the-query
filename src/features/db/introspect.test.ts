@@ -120,4 +120,19 @@ describe('introspect на bookstore', () => {
     },
     T,
   );
+
+  it('видимость учитывает системные и временные таблицы', () =>
+    withDataset('empty', (db) =>
+      inPreview(db, async () => {
+        await db.exec('create table public.pg_class (id int); create table public.book (id int);');
+        let snapshot = await introspect(db);
+        expect(snapshot.tables.find((t) => t.id === 'public.pg_class')?.visible).toBe(false);
+        expect(snapshot.tables.find((t) => t.id === 'public.book')?.visible).toBe(true);
+
+        await db.query('create temp table book (id int)');
+        snapshot = await introspect(db);
+        expect(snapshot.tables.find((t) => t.id === 'public.book')?.visible).toBe(false);
+        expect(snapshot.tables.find((t) => t.id === 'pg_temp.book')?.visible).toBe(true);
+      }),
+    ));
 });

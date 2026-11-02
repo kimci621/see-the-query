@@ -1,5 +1,5 @@
 import type { FuncCall, JoinExpr, Node, SelectStmt } from '@pgsql/types';
-import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import { findTable, type SchemaSnapshot, type TableInfo } from '@/features/db/introspect';
 import type { ParsedStatement, StatementKind } from '@/features/sql/types';
 
 // Функции, которые при повторном вызове дают другое значение или меняют состояние
@@ -259,18 +259,7 @@ export function unsupportedReason(stmt: ParsedStatement): string | null {
   return bad.length ? `Пока не анимируется: ${bad.map((f) => FEATURE_LABELS[f]).join(', ')}` : null;
 }
 
-// Таблица из снапшота по имени из запроса: временные раньше public, как в search_path
-export function findTable(
-  schema: SchemaSnapshot,
-  schemaName: string | undefined,
-  name: string,
-): TableInfo | null {
-  const matches = schema.tables.filter(
-    (t) =>
-      t.name === name && (schemaName ? t.schema === schemaName : t.kind === 'temp' || t.schema === 'public'),
-  );
-  return matches.find((t) => t.kind === 'temp') ?? matches[0] ?? null;
-}
+export { findTable };
 
 // 42803: column "b.title" must appear in the GROUP BY clause → фокус ровно на этой колонке
 export function groupingErrorFocus(

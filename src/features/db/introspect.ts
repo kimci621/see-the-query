@@ -23,6 +23,7 @@ export interface TableInfo {
   id: string; // 'public.book': ключ таблицы везде в приложении
   schema: string;
   name: string;
+  visible?: boolean; // PostgreSQL выберет таблицу по имени без схемы
   kind: 'table' | 'view' | 'matview' | 'partitioned' | 'temp';
   columns: ColumnInfo[];
   rowCount: number;
@@ -45,6 +46,22 @@ export interface SchemaSnapshot {
   tables: TableInfo[];
   fks: FkInfo[];
   sequences: Array<{ schema: string; name: string; lastValue: number | null }>;
+}
+
+export function findTable(
+  schema: SchemaSnapshot,
+  schemaName: string | undefined,
+  name: string,
+): TableInfo | null {
+  const matches = schema.tables.filter((table) => table.name === name);
+  if (schemaName) return matches.find((table) => table.schema === schemaName) ?? null;
+  if (matches.some((table) => table.visible !== undefined))
+    return matches.find((table) => table.visible) ?? null;
+  return (
+    matches.find((table) => table.kind === 'temp') ??
+    matches.find((table) => table.schema === 'public') ??
+    null
+  );
 }
 
 // Пользовательские схемы: без системных и toast
@@ -70,6 +87,7 @@ type TableRow = [
   persistence: string,
   populated: boolean,
   comment: string | null,
+  visible: boolean,
 ];
 type ColumnRow = [
   oid: number,
@@ -104,7 +122,7 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
     )
   ).map((r) => r[0]);
   const tableRows = await rows<TableRow>(`
-    select c.oid::int, n.nspname, c.relname, c.relkind::text, c.relpersistence::text, c.relispopulated, obj_description(c.oid, 'pg_class')
+    select c.oid::int, n.nspname, c.relname, c.relkind::text, c.relpersistence::text, c.relispopulated, obj_description(c.oid, 'pg_class'), pg_table_is_visible(c.oid)
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where c.relkind in ('r', 'v', 'm', 'p') and ${NS} order by n.nspname, c.relname`);
   const columns = await rows<ColumnRow>(`
@@ -141,7 +159,7 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
     return t ? `${t.schema}.${t.table}` : null;
   };
   const tables: TableInfo[] = [];
-  for (const [oid, schema, name, relkind, persistence, populated, comment] of tableRows) {
+  for (const [oid, schema, name, relkind, persistence, populated, comment, visible] of tableRows) {
     const own = constraints.filter((c) => c[0] === oid);
     const has = (type: string, col: string, alone = false) =>
       own.some(([, , t, cols]) => t === type && cols.includes(col) && (!alone || cols.length === 1));
@@ -170,6 +188,7 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
       id: idOf(oid) as string,
       schema: schemaName(schema),
       name,
+      visible,
       kind,
       columns: columns
         .filter((c) => c[0] === oid)
