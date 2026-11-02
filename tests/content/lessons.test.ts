@@ -42,6 +42,7 @@ const GUIDE_LESSONS: string[] = [
   'cluster-db-schema',
   'primary-foreign-key',
   'command-groups',
+  'create-schema',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
