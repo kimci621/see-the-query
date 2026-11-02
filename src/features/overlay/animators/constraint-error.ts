@@ -1,6 +1,8 @@
+import { rem } from '@/features/board/layout';
 import type { Relation } from '@/features/tracer/types';
 import { currentTable, mapColumns, mapRows, rebuildTable, withTable } from '../frame';
-import type { Animator, Decoration, GhostTable, StageOf } from '../types';
+import { frameBounds, ghostHeight } from '../geometry';
+import type { Animator, Decoration, Frame, GhostTable, StageOf } from '../types';
 
 function sampleRows(table: NonNullable<ReturnType<typeof tableOf>>): Relation {
   return {
@@ -88,6 +90,23 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
   const table = tableOf(stage, ctx);
   if (!table) return [];
   const decorations = dangerArrow(stage, ctx);
+  const withFocus = (frame: Frame): Frame => {
+    if (stage.focus.tableIds.length < 2) return frame;
+    const bounds = frameBounds(frame);
+    if (!bounds) return frame;
+    let { x, y } = bounds;
+    let right = x + bounds.width;
+    let bottom = y + bounds.height;
+    for (const id of stage.focus.tableIds) {
+      const rect = ctx.nodeRect(id);
+      if (!rect) continue;
+      x = Math.min(x, rect.x);
+      y = Math.min(y, rect.y);
+      right = Math.max(right, rect.x + rect.width);
+      bottom = Math.max(bottom, rect.y + rect.height);
+    }
+    return { ...frame, camera: { x, y, width: right - x, height: bottom - y } };
+  };
   const conflict = stage.conflictKeys?.length ? conflictTable(prev, stage, table, ctx) : null;
   const base = conflict ? withTable({ ...prev, decorations }, conflict) : { ...prev, decorations };
   if (!stage.attempted) {
@@ -98,7 +117,7 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
         stageIndex,
         caption: stage.caption,
         durationMs: 650,
-        frame: base,
+        frame: withFocus(base),
       },
     ];
   }
@@ -120,21 +139,26 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
     table.id,
     stage.focus.columns,
   );
-  const hit = { ...attempted, x: rect?.x ?? attempted.x, y: rect?.y ?? attempted.y, opacity: 1 };
+  const hit = {
+    ...attempted,
+    x: rect?.x ?? attempted.x,
+    y: rect && conflict ? rect.y - ghostHeight(attempted) - rem(1) : (rect?.y ?? attempted.y),
+    opacity: 1,
+  };
   return [
     {
       id: `${stageIndex}:constraint-attempt`,
       stageIndex,
       caption: `${stage.caption}: проверяем новую строку`,
       durationMs: 450,
-      frame: withTable(base, attempted),
+      frame: withFocus(withTable(base, attempted)),
     },
     {
       id: `${stageIndex}:constraint-error`,
       stageIndex,
       caption: stage.caption,
       durationMs: 500,
-      frame: withTable(base, hit),
+      frame: withFocus(withTable(base, hit)),
     },
   ];
 };
