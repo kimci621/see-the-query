@@ -378,7 +378,7 @@
 - ✅ (2026-11-02) **L1.3** 1.3 Первичный и внешний ключ
 - ✅ (2026-11-02) **L1.4** 1.4 DDL, DML, DCL, TCL
 - ✅ (2026-11-02) **L2.1** 2.1 CREATE SCHEMA, search_path
-- 🔄 (2026-11-02) **L2.2** 2.2 CREATE TABLE, базовые типы, TEMP
+- ✅ (2026-11-02) **L2.2** 2.2 CREATE TABLE, базовые типы, TEMP
 - ⬜ **L2.2a** 2.2a Генерируемые колонки
 - ⬜ **L2.3** 2.3 NOT NULL, UNIQUE, CHECK, DEFAULT
 - ⬜ **L2.4** 2.4 PK, FK, ON DELETE

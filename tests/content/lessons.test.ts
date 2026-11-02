@@ -43,6 +43,7 @@ const GUIDE_LESSONS: string[] = [
   'primary-foreign-key',
   'command-groups',
   'create-schema',
+  'create-table',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
