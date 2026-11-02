@@ -15,6 +15,7 @@ let listener: (e: SandboxEvent) => void = () => undefined;
 const sandbox = {
   status: 'ready',
   client: () => ({}),
+  preview: vi.fn((fn: (db: object) => Promise<SchemaSnapshot>) => fn({})),
   datasetTables: () => ['public.book'],
   subscribe: (l: (e: SandboxEvent) => void) => {
     listener = l;
@@ -29,6 +30,7 @@ describe('useSchemaSync', () => {
   beforeEach(() => {
     useBoardStore.setState(useBoardStore.getInitialState(), true);
     introspect.mockReset();
+    sandbox.preview.mockImplementation((fn) => fn({}));
   });
 
   it('кладёт схему при старте и после changed', async () => {
@@ -37,6 +39,20 @@ describe('useSchemaSync', () => {
     await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaA));
     listener({ type: 'changed' });
     await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaB));
+  });
+
+  it('ждёт окончания другого превью перед чтением схемы', async () => {
+    let finishPreview: () => void = () => undefined;
+    const busy = new Promise<void>((resolve) => {
+      finishPreview = resolve;
+    });
+    sandbox.preview.mockImplementation((fn) => busy.then(() => fn({})));
+    introspect.mockResolvedValue(schemaA);
+    renderHook(() => useSchemaSync());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(useBoardStore.getState().schema).toBeNull();
+    finishPreview();
+    await waitFor(() => expect(useBoardStore.getState().schema).toBe(schemaA));
   });
 
   it('таблицы вне датасета уходят в userTables', async () => {

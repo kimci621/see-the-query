@@ -23,7 +23,7 @@ export function useSchemaSync(): void {
     const sync = async () => {
       const mine = ++generation;
       try {
-        const schema = await introspect(sandbox.client(), { sampleRows: MAX_VISIBLE_ROWS });
+        const schema = await sandbox.preview((db) => introspect(db, { sampleRows: MAX_VISIBLE_ROWS }));
         const base = sandbox.datasetTables();
         const userTables = schema.tables.filter((t) => !base.includes(t.id)).map((t) => t.id);
         if (alive && mine === generation) {
