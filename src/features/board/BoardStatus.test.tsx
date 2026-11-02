@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useBoardStore } from '@/stores/board';
 import { SCHEMA } from './__fixtures__/schema';
@@ -35,6 +35,16 @@ describe('BoardStatus', () => {
     useBoardStore.getState().setSchema({ schemas: ['public'], tables: [], fks: [], sequences: [] });
     render(<BoardStatus status="ready" version={VERSION} />);
     expect(screen.getByTestId('board-empty')).toHaveTextContent('Создай первую таблицу: create table ...');
+  });
+
+  it('подсказка исчезает во время сцены и возвращается после её закрытия', () => {
+    useBoardStore.getState().setSchema({ schemas: ['public'], tables: [], fks: [], sequences: [] });
+    render(<BoardStatus status="ready" version={VERSION} />);
+    expect(screen.getByTestId('board-empty')).toBeInTheDocument();
+    act(() => useBoardStore.getState().setDimmed(true));
+    expect(screen.queryByTestId('board-empty')).toBeNull();
+    act(() => useBoardStore.getState().setDimmed(false));
+    expect(screen.getByTestId('board-empty')).toBeInTheDocument();
   });
 
   it('фильтр урока скрыл всё: тоже пусто', () => {

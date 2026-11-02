@@ -13,6 +13,7 @@ export function pgVersionLabel(version: string | null): string | null {
 export function BoardStatus({ status, version }: { status: Sandbox['status']; version: string | null }) {
   const schema = useBoardStore((s) => s.schema);
   const visible = useBoardStore((s) => s.visibleTables);
+  const dimmed = useBoardStore((s) => s.dimmed);
   const loading = status === 'booting' || status === 'restarting' || (status === 'ready' && schema === null);
   const empty = schema !== null && !schema.tables.some((t) => isTableVisible(visible, t.id));
   const label = pgVersionLabel(version);
@@ -43,7 +44,7 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
           Postgres не запустился. Обнови страницу.
         </div>
       )}
-      {!loading && status !== 'failed' && empty && (
+      {!loading && status !== 'failed' && empty && !dimmed && (
         <div
           data-testid="board-empty"
           className="pointer-events-none absolute inset-0 grid place-items-center"
