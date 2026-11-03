@@ -1,0 +1,129 @@
+---
+id: insert
+title: INSERT
+chapter: dml
+number: "3.1"
+order: 1
+dataset: bookstore
+initialQuery: |
+  select author_id, name, country, born_year from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/dml-insert.html
+    title: Вставка данных
+  - url: https://www.postgresql.org/docs/18/sql-insert.html
+    title: INSERT
+course: ["11.14"]
+tags: [insert, values, default, identity, returning]
+---
+
+<TlDr>`INSERT` добавляет строки в таблицу. Колонки перечисляем по именам, а значения передаём в том же порядке; остальное база заполнит сама.</TlDr>
+
+## Что есть в данных
+
+В `author` шесть авторов с номерами от 1 до 6. У `customer` бонус по умолчанию равен нулю. В `book` внешний ключ `author_id` ссылается на `author`, поэтому книга с несуществующим автором не вставится.
+
+## Одна строка
+
+```sql run expect=rows:1
+insert into author (name, country, born_year) values ('Лев Толстой', 'Россия', 1828) returning author_id;
+```
+
+На доске новая строка влетает в `author`. Номер `author_id` база выдала сама: колонка объявлена как `generated always as identity`. Сцена показывает счётчик последовательности и бейдж `default` у номера.
+
+`RETURNING author_id` возвращает номер новой строки. Без `RETURNING` в панели результата будет только `INSERT: 1`.
+
+## Несколько строк
+
+```sql run expect=rows:2
+insert into author (name, country, born_year)
+values ('Иван Бунин', 'Россия', 1870), ('Эрих Мария Ремарк', 'Германия', 1898)
+returning author_id;
+```
+
+Один `INSERT` вставляет обе строки одной командой. На доске они влетают вдвоём, счётчик прыгает на два. Так быстрее, чем два отдельных запроса: меньше обращений и одна проверка ограничений на пачку.
+
+## Порядок колонок
+
+Порядок колонок в списке не важен, важно совпадение с порядком значений:
+
+```sql run expect=rows:1
+insert into author (country, name) values ('Франция', 'Антуан де Сент-Экзюпери') returning author_id;
+```
+
+`author_id` снова выдала последовательность, а `born_year` остался `NULL`: колонку не указали, значение по умолчанию не задано, ограничение `NOT NULL` на неё не стоит.
+
+Если у колонки есть `DEFAULT`, база подставит его:
+
+```sql run expect=rows:1
+insert into customer (name, email, created_at) values ('Нина Соколова', 'nina@example.com', now()) returning customer_id, bonus;
+```
+
+`bonus` получил ноль из `DEFAULT 0`. На доске ячейка помечена как значение по умолчанию.
+
+## Ошибки при вставке
+
+Строка не появится, если нарушено ограничение. Без имени:
+
+```sql run expectError=23502
+insert into author (country) values ('Россия');
+```
+
+Ссылка на несуществующего автора:
+
+```sql run expectError=23503
+insert into book (title, author_id) values ('Книга-призрак', 999);
+```
+
+На доске к `author` тянется красная стрелка: внешнего ключа с номером 999 нет. Повтор email:
+
+```sql run expectError=23505
+insert into customer (name, email, created_at) values ('Двойник Анны', 'anna@example.com', now());
+```
+
+Postgres показывает конфликтующую строку. Все три попытки откатываются целиком: частичной вставки не бывает.
+
+## Вставить результат SELECT
+
+```sql run expect=rows:2
+insert into author (name, country, born_year)
+select name, country, born_year from author where author_id <= 2
+returning author_id;
+```
+
+На доске появляется пунктирная таблица `SELECT`, из неё две строки перелетают в `author`. Колонки сопоставляются по позициям: первый столбец `SELECT` идёт в первую колонку списка `INSERT`. Число колонок должно совпадать, имена могут отличаться.
+
+## Чего нет в выдаче и почему
+
+- ❌ Автора без имени нет: `NOT NULL` остановил вставку.
+- ❌ «Книги-призрака» нет: внешний ключ не нашёл автора 999.
+- ❌ Двойника Анны нет: `UNIQUE` не пропустил повтор email.
+- ❌ Вставок из примеров нет в базе после превью: они откатились.
+
+## Ловушки
+
+<Callout kind="trap">
+`insert into author values ('Икс', 'Россия', 1900);` без списка колонок сработает только пока порядок и число колонок совпадают с таблицей. После `ALTER TABLE` такой запрос сломается. Перечисляй колонки по именам:
+
+```sql noexec
+insert into author (name, country, born_year) values ('Икс', 'Россия', 1900);
+```
+</Callout>
+
+<Callout kind="tip">
+Для массовой загрузки используй `COPY`, а не тысячи `INSERT`. Для одной-двух строк хватает `INSERT ... VALUES`; `RETURNING` избавляет от отдельного `SELECT` за сгенерированным номером.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `INSERT` с двумя парами `VALUES` и `RETURNING`?
+2. Что получит колонка, которую не указали в списке?
+3. Почему книга с `author_id = 999` не вставилась?
+
+<Cheatsheet>
+- `insert into t (колонки) values (значения);`
+- Порядок значений совпадает с порядком колонок в списке.
+- Пропущенные колонки получают `DEFAULT` или `NULL`.
+- `RETURNING` возвращает значения новой строки.
+- `INSERT ... SELECT` вставляет результат запроса.
+- Нарушение `NOT NULL`, `UNIQUE` или внешнего ключа отменяет всю вставку.
+</Cheatsheet>
