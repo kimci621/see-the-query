@@ -105,6 +105,7 @@ export const SUPPORTED = new Set<Feature>([
   'setop',
   'cte',
   'window',
+  'subquery',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {
@@ -259,7 +260,15 @@ export function unsupportedReason(stmt: ParsedStatement): string | null {
   if (stmt.kind !== 'select' || !('SelectStmt' in stmt.ast))
     return `Пока не анимируется: ${KIND_LABELS[stmt.kind]}`;
   const bad = [...selectFeatures(stmt.ast.SelectStmt)].filter((f) => !SUPPORTED.has(f));
-  return bad.length ? `Пока не анимируется: ${bad.map((f) => FEATURE_LABELS[f]).join(', ')}` : null;
+  if (bad.length) return `Пока не анимируется: ${bad.map((f) => FEATURE_LABELS[f]).join(', ')}`;
+  let unsupported: string | null = null;
+  walk(stmt.ast, (key, value) => {
+    if (key !== 'SubLink') return;
+    const type = (value as { subLinkType?: string }).subLinkType;
+    if (type === 'ALL_SUBLINK') unsupported = 'Пока не анимируется: ANY / ALL с подзапросом';
+    else if (type === 'ARRAY_SUBLINK') unsupported = 'Пока не анимируется: ARRAY с подзапросом';
+  });
+  return unsupported;
 }
 
 export { findTable };

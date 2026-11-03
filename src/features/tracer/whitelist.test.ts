@@ -47,12 +47,13 @@ describe('whitelist', () => {
     expect(
       unsupportedReason(await stmt('select b.title from book b full join author a using (author_id)')),
     ).toBe(null);
-    expect(unsupportedReason(await stmt('select * from (select 1) s'))).toBe(
-      'Пока не анимируется: подзапрос',
-    );
+    expect(unsupportedReason(await stmt('select * from (select 1) s'))).toBe(null);
     expect(
       unsupportedReason(await stmt('select * from book where price > (select avg(price) from book)')),
-    ).toBe('Пока не анимируется: подзапрос');
+    ).toBe(null);
+    expect(unsupportedReason(await stmt('select * from generate_series(1, 2)'))).toBe(
+      'Пока не анимируется: функция в FROM',
+    );
     expect(unsupportedReason(await stmt('select 1 where false'))).toBe(
       'Пока не анимируется: WHERE, ORDER BY или LIMIT без FROM',
     );

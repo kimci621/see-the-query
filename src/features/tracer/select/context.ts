@@ -4,7 +4,7 @@ import type { QueryResult } from '@/features/db/types';
 import { clauseRanges } from '@/features/sql/clauses';
 import type { ClauseName, ParsedStatement } from '@/features/sql/types';
 import { ident, type Prober, sqlOf, TraceFallback, typeNames } from '../probe';
-import type { Column, Row, RowKey, SourceRange, Stage } from '../types';
+import type { Column, Row, RowKey, SourceRange, Stage, Trace, TraceOptions } from '../types';
 import { canon, rowCanon } from '../verify';
 import { hasVolatile, walk } from '../whitelist';
 import { alignWindow } from './align';
@@ -39,11 +39,14 @@ export interface LimitParams {
   withTies: boolean;
 }
 
+export type TraceChild = (stmt: ParsedStatement, opts?: Partial<TraceOptions>) => Promise<Trace>;
+
 export interface SelectCtx {
   stmt: ParsedStatement;
   sel: SelectStmt;
   prober: Prober;
   reference: QueryResult;
+  trace?: TraceChild; // вложенная трасса подзапроса; у DML-контекста может не быть
   volatile: boolean;
   sources: Source[];
   joins: JoinNode[];
@@ -87,6 +90,7 @@ export function createSelectCtx(args: {
   sources: Source[];
   joins: JoinNode[];
   schema: SchemaSnapshot;
+  trace?: TraceChild;
 }): SelectCtx {
   const { sel, prober, sources, joins } = args;
   const aliasOrder = sources.map((s) => s.alias);

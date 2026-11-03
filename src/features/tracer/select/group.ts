@@ -4,14 +4,27 @@ import { captions } from '../captions';
 import { ident, sqlOf, TraceFallback } from '../probe';
 import { groupKey } from '../rowkey';
 import type { RowKey } from '../types';
-import { AGGREGATES, funcName, walk } from '../whitelist';
+import { AGGREGATES, funcName } from '../whitelist';
 import { rangeOf, refColumns, type SelectCtx, stageId } from './context';
 import type { SelectStep } from './pipeline';
+
+// Обход без спуска в подзапросы: агрегат внутри скалярного подзапроса не сворачивает внешний SELECT
+function walkTop(node: unknown, fn: (key: string, value: unknown) => void): void {
+  if (Array.isArray(node)) {
+    for (const item of node) walkTop(item, fn);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  for (const [key, value] of Object.entries(node)) {
+    fn(key, value);
+    if (key !== 'SubLink') walkTop(value, fn);
+  }
+}
 
 // Уникальные агрегатные вызовы из SELECT и HAVING в порядке появления
 function aggregateCalls(sel: SelectStmt): FuncCall[] {
   const out = new Map<string, FuncCall>();
-  walk([sel.targetList, sel.havingClause], (key, value) => {
+  walkTop([sel.targetList, sel.havingClause], (key, value) => {
     if (key !== 'FuncCall') return;
     const fc = value as FuncCall;
     if (fc.over || !(fc.agg_star || AGGREGATES.has(funcName(fc)))) return;

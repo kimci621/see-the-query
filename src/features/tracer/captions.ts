@@ -39,6 +39,11 @@ export const captions = {
   aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
   window: (functions: string[], rows: number) =>
     `ОКНО ${functions.join(', ')}: ${rowsWord(rows)}, строки не схлопываются`,
+  subqueryScalar: (value: unknown) =>
+    `Подзапрос: одно значение ${value === null || value === undefined ? 'NULL' : String(value)}`,
+  subqueryIn: (yes: number, unknown: number) =>
+    `IN: совпало ${yes}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
+  subqueryExists: (yes: number) => `EXISTS: совпало ${yes}`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
     `DISTINCT: ${rowsWord(before)} → ${after} ${plural(after, 'уникальная', 'уникальные', 'уникальных')}`,

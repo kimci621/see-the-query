@@ -1,3 +1,4 @@
+import { selectSubqueryStep, whereSubqueryStep } from '../subquery/subquery';
 import { windowStep } from '../window/window';
 import type { SelectCtx } from './context';
 import { distinctStep } from './distinct';
@@ -20,10 +21,12 @@ export interface SelectStep {
 export const SELECT_PIPELINE: SelectStep[] = [
   scanStep,
   joinStep,
+  whereSubqueryStep,
   filterStep,
   groupStep,
   havingStep,
   windowStep,
+  selectSubqueryStep,
   projectStep,
   distinctStep,
   sortStep,

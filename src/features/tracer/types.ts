@@ -100,6 +100,8 @@ export type Stage = StageBase &
         mode: 'scalar' | 'in' | 'exists' | 'correlated' | 'lateral';
         samples: Array<{ outer: RowKey; inner: Trace }>;
         limit3: boolean; // первые 3 внешние строки подробно, остальные из итога
+        value?: unknown; // скалярный: единственное значение подзапроса
+        verdicts?: Record<RowKey, true | false | null>; // IN и EXISTS: вердикт по строкам входа
       }
     | {
         kind: 'dml';

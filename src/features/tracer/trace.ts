@@ -172,7 +172,18 @@ export async function traceStatement(
   if (!from.ok) return finalOnly(from.reason);
 
   const { sources, joins } = from;
-  const args = { stmt, sel, prober, reference, volatile, sources, joins, schema };
+  const args = {
+    stmt,
+    sel,
+    prober,
+    reference,
+    volatile,
+    sources,
+    joins,
+    schema,
+    trace: (child: ParsedStatement, extra: Partial<TraceOptions> = {}) =>
+      traceStatement(child, db, { ...opts, ...extra }),
+  };
   const createCtx = () => {
     const next = createSelectCtx(args);
     next.stages.push(...prefix);
