@@ -46,6 +46,7 @@ export interface SelectCtx {
   sel: SelectStmt;
   prober: Prober;
   reference: QueryResult;
+  schema: SchemaSnapshot;
   trace?: TraceChild; // вложенная трасса подзапроса; у DML-контекста может не быть
   volatile: boolean;
   sources: Source[];

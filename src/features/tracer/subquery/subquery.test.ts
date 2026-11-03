@@ -52,6 +52,36 @@ describe('подзапросы', () => {
       }),
     ));
 
+  it('коррелированный EXISTS: до трёх внутренних сцен', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select title from book b where exists (select 1 from review r where r.book_id = b.book_id)',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const subquery = stageOf(trace, 'subquery');
+        expect(subquery.mode).toBe('exists');
+        expect(subquery.samples).toHaveLength(3);
+        expect(trace.result?.rows).toHaveLength(7);
+      }),
+    ));
+
+  it('коррелированный скалярный: средняя по автору', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select title from book b where price > (select avg(price) from book where author_id = b.author_id)',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const subquery = stageOf(trace, 'subquery');
+        expect(subquery.mode).toBe('correlated');
+        expect(subquery.samples).toHaveLength(3);
+        expect(trace.result?.rows).toHaveLength(2);
+      }),
+    ));
+
   it('некоррелированный EXISTS отмечает все строки', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
