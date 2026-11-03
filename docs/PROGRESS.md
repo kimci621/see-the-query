@@ -385,7 +385,7 @@
 - ✅ (2026-11-03) **L2.4** 2.4 PK, FK, ON DELETE
 - ✅ (2026-11-03) **L2.5** 2.5 Identity vs serial, последовательности
 - ✅ (2026-11-03) **L2.6** 2.6 ALTER TABLE
-- ⬜ **L2.7** 2.7 DROP, TRUNCATE, CASCADE
+- ✅ (2026-11-03) **L2.7** 2.7 DROP, TRUNCATE, CASCADE
 - ⬜ **L2.8** 2.8 COMMENT ON
 - ⬜ **L3.1** 3.1 INSERT
 - ⬜ **L3.2** 3.2 RETURNING

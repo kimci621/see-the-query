@@ -1,0 +1,99 @@
+---
+id: drop-truncate
+title: DROP, TRUNCATE и CASCADE
+chapter: ddl
+number: "2.7"
+order: 8
+dataset: bookstore
+initialQuery: |
+  select author_id, name from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-droptable.html
+    title: DROP TABLE
+  - url: https://www.postgresql.org/docs/18/sql-truncate.html
+    title: TRUNCATE
+  - url: https://www.postgresql.org/docs/18/ddl-depend.html
+    title: Зависимости объектов
+course: ["11.34"]
+tags: [drop table, truncate, cascade, зависимости]
+---
+
+<TlDr>`TRUNCATE` мгновенно очищает таблицу, `DROP` удаляет её целиком. `CASCADE` расширяет действие на зависимые объекты.</TlDr>
+
+## Что есть в данных
+
+В `review` десять отзывов. На `author` ссылается `book.author_id`: у каждой книги есть внешний ключ на автора. На `book` ссылается `order_item`, а на `orders` ссылается `order_item`.
+
+Все примеры идут в превью и откатываются. После проверки схема и данные возвращаются к исходным.
+
+## TRUNCATE очищает целиком
+
+```sql run expect=rows:0
+truncate review;
+```
+
+Все десять строк гаснут разом. `DELETE FROM review` прошёл бы строку за строкой и мог бы отфильтровать часть. `TRUNCATE` не знает `WHERE`: очищает таблицу целиком и забирает блокировки, поэтому на больших таблицах быстрее.
+
+```sql run expect=rows:0
+truncate review restart identity;
+```
+
+`RESTART IDENTITY` сбрасывает счётчик `review_id` на начало. Без него номера новых отзывов продолжатся с последнего выданного.
+
+## TRUNCATE и внешние ключи
+
+```sql run expectError=0A000
+truncate author;
+```
+
+Postgres возвращает `0A000`: на `author` ссылается внешний ключ из `book`. Даже если сейчас в `author` нет строк, которые кто-то использует, очистка сломала бы проверку ссылок. Нужен явный `CASCADE`:
+
+```sql run expect=rows:0
+truncate author cascade;
+```
+
+Тогда Postgres очистит и таблицы, которые ссылаются на `author` по цепочке. Здесь это `book`, а за ним `order_item` и `review`. `TRUNCATE ... CASCADE` удаляет строки, а не ограничения.
+
+## DROP удаляет таблицу
+
+```sql run expectError=2BP01
+drop table author;
+```
+
+Postgres возвращает `2BP01`: от `author` зависят другие объекты, в первую очередь внешний ключ из `book`. Просто так таблицу не удалить.
+
+```sql run expect=rows:0
+drop table author cascade;
+```
+
+На доске `author` гаснет вместе со стрелкой внешнего ключа. Сама таблица `book` остаётся, колонка `author_id` тоже. `DROP ... CASCADE` удаляет зависимые ограничения и представления, но не строки ссылающихся таблиц.
+
+## Чего нет в выдаче и почему
+
+- ❌ Десяти отзывов нет после `TRUNCATE`: превью откатилось, строки вернулись.
+- ❌ `author` не удалился без `CASCADE`: внешний ключ из `book` не дал.
+- ❌ Таблицы `author` нет в сцене с `CASCADE`: запрос её удаляет, но превью вернёт её обратно.
+
+## Ловушки
+
+<Callout kind="trap">
+`DROP TABLE ... CASCADE` и `TRUNCATE ... CASCADE` делают разное. `DROP` убирает таблицу и зависимые объекты, но строки в других таблицах остаются. `TRUNCATE` очищает строки и идёт по ссылкам вниз. Перед `CASCADE` проверь, какие таблицы затронет цепочка.
+</Callout>
+
+<Callout kind="tip">
+`TRUNCATE` в PostgreSQL транзакционный: в отличие от некоторых других баз, его можно откатить. Но он берёт блокировку `ACCESS EXCLUSIVE` и ждёт все транзакции, которые читают таблицу. В продакшене очистку большой таблицы планируют.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк останется в `review` после `TRUNCATE`?
+2. Почему `TRUNCATE author` падает, хотя очистить нужно только авторов?
+3. Что произойдёт с колонкой `book.author_id` после `DROP TABLE author CASCADE`?
+
+<Cheatsheet>
+- `TRUNCATE` очищает таблицу целиком и быстро.
+- `TRUNCATE ... RESTART IDENTITY` сбрасывает счётчик.
+- `TRUNCATE` не проходит, если на таблицу ссылается внешний ключ, без `CASCADE`.
+- `DROP TABLE` удаляет таблицу и данные.
+- `DROP TABLE ... CASCADE` удаляет зависимые ограничения и представления, но не строки чужих таблиц.
+</Cheatsheet>

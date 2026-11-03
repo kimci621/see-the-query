@@ -1,7 +1,7 @@
 import { rem } from '@/features/board/layout';
 import type { Relation } from '@/features/tracer/types';
 import { currentTable, mapRows, rebuildTable, withTable } from '../frame';
-import { cellLeft, ghostWidth, TABLE_GAP } from '../geometry';
+import { cellLeft, ghostHeight, ghostWidth, TABLE_GAP } from '../geometry';
 import type { Animator, Decoration, GhostRow, GhostTable, Phase, StageOf } from '../types';
 
 function targetBase(
@@ -104,7 +104,7 @@ function cascadeGhost(
   });
 }
 
-// Волна каскада: призрак зависимой таблицы встаёт справа от уже показанной и остаётся в кадре.
+// Волна каскада: призраки зависимых таблиц встают в сетку справа от цели и остаются в кадре.
 // Позиции нод доски не годятся: связанные таблицы часто стоят далеко, и обе не читаются на зуме.
 function cascadePhases(
   phase: Phase,
@@ -114,13 +114,32 @@ function cascadePhases(
 ): Phase[] {
   const first = currentTable(phase.frame);
   if (!first) return [];
-  let previous: GhostTable = first;
+  const ghosts = stage.cascades.flatMap((cascade) => {
+    const ghost = cascadeGhost(cascade.tableId, cascade, { x: 0, y: 0 }, ctx);
+    return ghost ? [{ cascade, ghost }] : [];
+  });
+  if (!ghosts.length) return [];
+  // Два призрака в ряд: длинная цепочка не растягивает кадр в нечитаемую полосу
+  const all = [first, ...ghosts.map((item) => item.ghost)];
+  const columnWidth = Math.max(...all.map(ghostWidth)) + TABLE_GAP;
+  const placed: GhostTable[] = [];
+  let y = first.y;
+  for (let row = 0; row * 2 < all.length; row++) {
+    let height = 0;
+    for (let column = 0; column < 2; column++) {
+      const table = all[row * 2 + column];
+      if (!table) continue;
+      placed[row * 2 + column] = { ...table, x: first.x + column * columnWidth, y };
+      height = Math.max(height, ghostHeight(table));
+    }
+    y += height + TABLE_GAP;
+  }
   let frame = phase.frame;
   const phases: Phase[] = [];
-  stage.cascades.forEach((cascade, index) => {
-    const at = { x: previous.x + ghostWidth(previous) + TABLE_GAP, y: previous.y };
-    const ghost = cascadeGhost(cascade.tableId, cascade, at, ctx);
-    if (!ghost) return;
+  ghosts.forEach(({ cascade }, index) => {
+    const previous = placed[index];
+    const ghost = placed[index + 1];
+    if (!previous || !ghost) return;
     const name = cascade.tableId.split('.').at(-1) ?? cascade.tableId;
     const caption =
       cascade.updated.length === 0
@@ -140,7 +159,6 @@ function cascadePhases(
       ],
     };
     frame = withTable(frame, ghost);
-    previous = ghost;
     phases.push({
       id: `${stageIndex}:cascade:${index}`,
       stageIndex,
