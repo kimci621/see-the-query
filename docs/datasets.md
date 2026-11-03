@@ -47,6 +47,20 @@
 
 Особых строк нет. Номера identity начинаются с 1: таблицы создаются с нуля.
 
+## events
+
+События заказов для оконных функций. Загружается поверх `bookstore`: `loadDatasetSql('events')` сначала выполняет `bookstore.sql`, потом `events.sql`. В файле только таблица `event`, заказы берутся из базы.
+
+`event`, 21 строка: `event_id`, `order_id → orders on delete cascade`, `kind` (`created`, `paid`, `shipped`, `cancelled`, `returned`), `amount numeric(10,2)`, `happened_at timestamptz`.
+
+Событий по заказам: 1:3, 2:2, 3:3, 4:2, 5:3, 6:2, 7:4, 8:2. Платежей семь.
+
+Особые строки:
+
+- Заказ 3: `paid` и `cancelled` в одну секунду. Разница рамок `RANGE` и `ROWS`.
+- Заказ 4: отменён без `paid`. Проверка «нет платежа».
+- Заказ 7: `returned` позже `shipped`. Порядок событий и lead/lag.
+
 ## Другие датасеты
 
-`events`, `big_bookstore` (тип `DatasetId`) описываются здесь в той фазе, которая создаёт их файлы.
+`big_bookstore` (тип `DatasetId`) описывается здесь в той фазе, которая создаёт его файл.

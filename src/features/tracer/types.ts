@@ -60,9 +60,17 @@ export type Stage = StageBase &
         aggregates: string[];
         aggregateColumns: number[]; // номера колонок входа внутри агрегатов: их оверлей не перечёркивает
         nullSkipColumns: number[]; // колонки входа count(col), sum(col) и т. п.: NULL в них не засчитывается
+        groupingSets?: string[][]; // Ф10: ROLLUP / CUBE / GROUPING SETS
         running?: unknown[][]; // без GROUP BY: значения агрегатов после каждого члена стопки
       }
-    | { kind: 'window'; partitions: Array<{ members: RowKey[] }>; computed: string[]; frame?: string }
+    | {
+        kind: 'window';
+        partitions: Array<{ members: RowKey[] }>;
+        computed: string[];
+        frame?: string;
+        functions: string[]; // имена оконных функций из SELECT
+        orderKeys: string[]; // ключи ORDER BY окна
+      }
     | {
         kind: 'project';
         kept: string[];
@@ -91,6 +99,7 @@ export type Stage = StageBase &
         kind: 'subquery';
         mode: 'scalar' | 'in' | 'exists' | 'correlated' | 'lateral';
         samples: Array<{ outer: RowKey; inner: Trace }>;
+        limit3: boolean; // первые 3 внешние строки подробно, остальные из итога
       }
     | {
         kind: 'dml';

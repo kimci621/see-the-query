@@ -7,7 +7,10 @@ const one = async (db: import('./types').DbClient, sql: string) => (await db.que
 describe('датасет bookstore', () => {
   it('загрузчик находит SQL, неизвестный датасет даёт понятную ошибку', async () => {
     expect(await loadDatasetSql('bookstore')).toContain('create table book');
-    await expect(loadDatasetSql('events')).rejects.toThrow('Датасет events не найден');
+    const extended = await loadDatasetSql('events');
+    expect(extended).toContain('create table book');
+    expect(extended).toContain('create table event');
+    await expect(loadDatasetSql('big_bookstore')).rejects.toThrow('Датасет big_bookstore не найден');
   });
 
   it('число строк совпадает с docs/datasets.md', async () => {
