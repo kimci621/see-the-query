@@ -91,7 +91,6 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
   if (!table) return [];
   const decorations = dangerArrow(stage, ctx);
   const withFocus = (frame: Frame): Frame => {
-    if (stage.focus.tableIds.length < 2) return frame;
     const bounds = frameBounds(frame);
     if (!bounds) return frame;
     let { x, y } = bounds;
@@ -142,7 +141,7 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
   const hit = {
     ...attempted,
     x: rect?.x ?? attempted.x,
-    y: rect && conflict ? rect.y - ghostHeight(attempted) - rem(1) : (rect?.y ?? attempted.y),
+    y: rect ? rect.y - ghostHeight(attempted) - rem(1) : attempted.y,
     opacity: 1,
   };
   return [

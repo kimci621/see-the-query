@@ -12,6 +12,31 @@ const rects = {
 };
 
 describe('сцена ошибки ограничения', () => {
+  it('попытка не закрывает таблицу при ошибке генерируемой колонки', () =>
+    withDataset('empty', async (db) => {
+      await db.exec(
+        'create table t (price numeric, qty int, total numeric generated always as (price * qty) stored)',
+      );
+      await db.exec('insert into t (price, qty) values (890, 2)');
+      await inPreview(db, async () => {
+        const schema = await introspect(db);
+        const trace = await traceSql(db, 'insert into t values (1, 1, 5)', { schema });
+        const rect = { x: 100, y: 200, width: 400, height: 220 };
+        const phases = constraintErrorAnimator({ tables: [], decorations: [] }, stageOf(trace, 'error'), 0, {
+          ...testCtx({ 'public.t': rect }),
+          schema,
+        });
+        const frame = phases.at(-1)?.frame;
+        const attempted = frame?.tables.find((table) => table.id === 'a:public.t');
+        if (!attempted) throw new Error('нет попытки вставки');
+        expect(attempted.y + ghostHeight(attempted)).toBeLessThanOrEqual(rect.y);
+        expect(frame?.camera?.y).toBeLessThanOrEqual(attempted.y);
+        expect((frame?.camera?.y ?? 0) + (frame?.camera?.height ?? 0)).toBeGreaterThanOrEqual(
+          rect.y + rect.height,
+        );
+      });
+    }));
+
   it('кадр FK вмещает обе таблицы и попытку вставки', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
