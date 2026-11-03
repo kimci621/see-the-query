@@ -1,0 +1,94 @@
+---
+id: delete
+title: DELETE, DELETE ... USING и TRUNCATE
+chapter: dml
+number: "3.4"
+order: 4
+dataset: bookstore
+initialQuery: |
+  select review_id, book_id, rating, body from review order by review_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/dml-delete.html
+    title: Удаление данных
+  - url: https://www.postgresql.org/docs/18/sql-delete.html
+    title: DELETE
+  - url: https://www.postgresql.org/docs/18/sql-truncate.html
+    title: TRUNCATE
+course: ["11.22"]
+tags: [delete, using, truncate, where]
+---
+
+<TlDr>`DELETE` удаляет строки по условию. `DELETE ... USING` ищет их по другой таблице, а `TRUNCATE` очищает таблицу целиком и быстрее.</TlDr>
+
+## Что есть в данных
+
+В `review` десять отзывов. У двух рейтинг ниже четырёх: отзывы с номерами 5 и 7. У книг категории 6 «Python» есть два отзыва.
+
+## DELETE с WHERE
+
+```sql run expect=rows:2
+delete from review where rating < 4 returning review_id, rating;
+```
+
+На доске проходит `WHERE`: строки с рейтингом 3 и 2 краснеют, перечёркиваются и уходят. Остальные остаются на месте. `RETURNING` показывает, что именно удалено.
+
+Условие проверяется до удаления. Если написать `where review_id = 5`, удалится одна строка, даже если у неё высокий рейтинг.
+
+## DELETE ... USING
+
+Иногда условие лежит в другой таблице. Тогда нужен `USING`:
+
+```sql run expect=rows:2
+delete from review r
+using book b
+where r.book_id = b.book_id and b.category_id = 6
+returning r.review_id, b.title;
+```
+
+`USING` работает как `FROM` в `SELECT`: добавляет таблицу к запросу. На доске читаются `review` и `book`, соединение оставляет отзывы на книги категории 6, потом эти отзывы удаляются. Без `USING` пришлось бы сначала получить номера книг отдельным запросом.
+
+## TRUNCATE для сравнения
+
+```sql run expect=rows:0
+truncate review;
+```
+
+Все десять строк гаснут разом. `DELETE` идёт по строкам и проверяет условие, `TRUNCATE` очищает таблицу целиком. Поэтому `TRUNCATE` быстрее на больших таблицах, но не умеет `WHERE` и берёт более сильную блокировку.
+
+`DELETE` возвращает число удалённых строк. `TRUNCATE` не возвращает строк и не проходит по ним построчно.
+
+## Чего нет в выдаче и почему
+
+- ❌ Двух отзывов с рейтингом ниже 4 нет после `DELETE`: их удалил `WHERE`.
+- ❌ Отзывов на книги категории 6 нет после `DELETE ... USING`: соединение нашло именно их.
+- ❌ Всех отзывов нет после `TRUNCATE`: таблица очищена целиком.
+- ❌ Изменений нет в базе после превью: удаления откатились.
+
+## Ловушки
+
+<Callout kind="trap">
+`DELETE` без `WHERE` очищает таблицу построчно, но, в отличие от `TRUNCATE`, запускает триггеры и пишет каждую удалённую строку в журнал. Обе команды в PostgreSQL можно откатить, но на большой таблице `DELETE` без условия идёт долго и раздувает журнал. Проверь условие через `SELECT` перед удалением:
+
+```sql noexec
+select review_id, rating from review where rating < 4;
+```
+</Callout>
+
+<Callout kind="tip">
+После массового `DELETE` место на диске не освобождается сразу: его вернёт `VACUUM`. Если нужно освободить файл целиком на большой таблице, планируй `VACUUM FULL` или пересоздание таблицы: обе операции блокируют запись.
+</Callout>
+
+## Проверь себя
+
+1. Сколько отзывов удалит `DELETE FROM review WHERE rating < 4`?
+2. Зачем в `DELETE ... USING` нужна вторая таблица?
+3. Чем `TRUNCATE review` отличается от `DELETE FROM review`?
+
+<Cheatsheet>
+- `delete from t where условие;`
+- `DELETE` возвращает число удалённых строк.
+- `DELETE ... USING` добавляет таблицу для условия, как `FROM`.
+- Без `WHERE` удаляются все строки таблицы.
+- `TRUNCATE` очищает таблицу целиком и не умеет `WHERE`.
+- `DELETE` и `TRUNCATE` в PostgreSQL транзакционные, но `TRUNCATE` быстрее и блокирует сильнее.
+</Cheatsheet>
