@@ -383,7 +383,7 @@
 - ✅ (2026-11-03) **L2.2a** 2.2a Генерируемые колонки
 - ✅ (2026-11-03) **L2.3** 2.3 NOT NULL, UNIQUE, CHECK, DEFAULT
 - ✅ (2026-11-03) **L2.4** 2.4 PK, FK, ON DELETE
-- ⬜ **L2.5** 2.5 Identity vs serial, последовательности
+- ✅ (2026-11-03) **L2.5** 2.5 Identity vs serial, последовательности
 - ⬜ **L2.6** 2.6 ALTER TABLE
 - ⬜ **L2.7** 2.7 DROP, TRUNCATE, CASCADE
 - ⬜ **L2.8** 2.8 COMMENT ON

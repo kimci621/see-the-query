@@ -1,0 +1,119 @@
+---
+id: identity-sequences
+title: Identity, serial и последовательности
+chapter: ddl
+number: "2.5"
+order: 6
+dataset: bookstore
+initialQuery: |
+  select author_id, name from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-createtable.html
+    title: CREATE TABLE и identity
+  - url: https://www.postgresql.org/docs/18/sql-createsequence.html
+    title: CREATE SEQUENCE
+  - url: https://www.postgresql.org/docs/18/functions-sequence.html
+    title: Функции последовательностей
+course: ["11.35"]
+tags: [identity, serial, последовательность, nextval, currval]
+---
+
+<TlDr>Номер строки выдаёт последовательность. `identity` и `serial` делают это автоматически, но номера не обязаны идти без пропусков.</TlDr>
+
+## Что есть в данных
+
+Все первичные ключи в `bookstore` объявлены как `generated always as identity`. В `author` шесть авторов с номерами от 1 до 6. Последовательность таблицы помнит последний выданный номер. Следующий `INSERT` без номера получит 7.
+
+## Как таблица получает номер
+
+**Последовательность** - отдельный объект базы, который выдаёт числа по порядку. `GENERATED ALWAYS AS IDENTITY` связывает её с колонкой: если при вставке номер не указан, Postgres вызывает `nextval` и подставляет результат.
+
+```sql run expect=rows:1
+insert into author (name, country, born_year) values ('Лев Толстой', 'Россия', 1828) returning author_id;
+```
+
+На доске строка влетает в `author`, а счётчик у колонки `author_id` показывает, какое число было до и после. В первый раз это 6 → 7. Превью откатит строку и вернёт последовательность: номер 7 достанется следующей вставке.
+
+**`serial`** - старый способ. Отдельного типа `serial` нет: Postgres создаёт обычную `integer`-колонку, последовательность и `DEFAULT nextval(...)`. `identity` появился в PostgreSQL 10 и работает как часть определения колонки. Новым таблицам выбирай `identity`.
+
+## Почему появляются пропуски
+
+Номер выдаётся до проверки ограничений. Попробуем вставить покупателя с занятым email:
+
+```sql apply expectError=23505
+insert into customer (name, email, created_at) values ('Икс', 'anna@example.com', now());
+```
+
+Postgres успевает вызвать `nextval`, потом проверяет `UNIQUE` и падает. Строка не сохраняется, но номер уже выдан. `nextval` не откатывается вместе с транзакцией: дырку оставляет упавший `INSERT` через «Применить».
+
+Следующая вставка получит номер через один:
+
+```sql apply expect=rows:1
+insert into customer (name, email, created_at) values ('Новый покупатель', 'novyy@example.com', now()) returning customer_id;
+```
+
+Превью в этом уроке возвращает последовательность назад, поэтому при наборе номера не сгорают. Но в обычной транзакции `ROLLBACK` номер не вернёт. Не привязывай логику приложения к тому, что номера идут подряд.
+
+## Своё значение для identity
+
+`GENERATED ALWAYS` не даёт подставить номер руками:
+
+```sql run expectError=428C9
+insert into author (author_id, name) values (100, 'Икс');
+```
+
+Postgres возвращает `428C9` и подсказывает `overriding system value`. Разрешим одно исключение:
+
+```sql run expect=rows:1
+insert into author (author_id, name) overriding system value values (100, 'Икс');
+```
+
+Строка влетает с номером 100. Последовательность при этом не двигается: следующий автоматический номер останется прежним. Так переносят данные из другой системы, но для обычных вставок оставляй автономер.
+
+## Последовательность вручную
+
+Создадим отдельную последовательность и посмотрим на функции:
+
+```sql apply expect=rows:0
+create sequence lesson_counter;
+```
+
+`currval` возвращает последнее число, выданное в текущей сессии. До первого `nextval` его нет:
+
+```sql run expectError=55000
+select currval('lesson_counter');
+```
+
+Теперь выдадим число:
+
+```sql run expect=rows:1
+select nextval('lesson_counter');
+```
+
+`nextval` выдаёт следующее значение, `currval` повторяет последнее. В превью `nextval` показывает одно и то же число: последовательность возвращается к состоянию до запуска. Новое значение закрепляется только после «Применить».
+
+## Чего нет в выдаче и почему
+
+- ❌ Льва Толстого нет в `author` после превью: строка откатилась, и номер вернулся последовательности.
+- ❌ «Икса» с email Анны нет в `customer`: вставка через «Применить» упала на `UNIQUE`, но номер покупателя уже сгорел.
+- ❌ Автора с номером 100 нет после превью: `OVERRIDING SYSTEM VALUE` разрешил вставку, но транзакция откатилась.
+
+## Ловушки
+
+<Callout kind="trap">
+Пропуск в номерах не означает потерю строки. Номер выдаёт последовательность, а не таблица: упавший `INSERT` через «Применить» и `ROLLBACK` оставляют дырки. Если нужен строгий порядок без пропусков, нумеруй строки при чтении, а не по первичному ключу.
+</Callout>
+
+## Проверь себя
+
+1. Что покажет счётчик на доске при вставке автора без номера?
+2. Почему после упавшей вставки покупателя следующая получает номер через один?
+3. Чем `serial` отличается от `generated always as identity`?
+
+<Cheatsheet>
+- `generated always as identity` задаёт автономер как часть колонки.
+- `serial` - колонка, последовательность и `DEFAULT` под одним старым именем.
+- `nextval` выдаёт следующее число, `currval` повторяет последнее в сессии.
+- `OVERRIDING SYSTEM VALUE` разрешает вставить своё значение в `GENERATED ALWAYS`.
+- Пропуски нормальны: откат и ошибки не возвращают номер.
+</Cheatsheet>
