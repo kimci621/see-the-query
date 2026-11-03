@@ -1,4 +1,4 @@
-import type { Node } from '@pgsql/types';
+import type { Node, SelectStmt } from '@pgsql/types';
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
@@ -13,9 +13,32 @@ import { groupStep } from './select/group';
 import { flattenFrom, joinStep } from './select/join';
 import { runSelect } from './select/pipeline';
 import { scanStep } from './select/scan';
+import { type SetopOp, setopStage } from './setop/setop';
 import type { Relation, Stage, Trace, TraceOptions } from './types';
 import { rowCanon, sameResult } from './verify';
 import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason, volatileSort } from './whitelist';
+
+const SETOPS: Record<string, SetopOp> = {
+  SETOP_UNION: 'union',
+  SETOP_INTERSECT: 'intersect',
+  SETOP_EXCEPT: 'except',
+};
+
+function setopOf(sel: SelectStmt): SetopOp | null {
+  const op = sel.op ? SETOPS[sel.op] : undefined;
+  if (!op) return null;
+  return (sel.all ? `${op} all` : op) as SetopOp;
+}
+
+function setopDepth(sel: SelectStmt): number {
+  if (!sel.op || sel.op === 'SETOP_NONE') return 0;
+  return 1 + Math.max(sel.larg ? setopDepth(sel.larg) : 0, sel.rarg ? setopDepth(sel.rarg) : 0);
+}
+
+// Ветвь множества трассируется как отдельный SELECT: у неё свои пробы и стадии
+function branchStatement(stmt: ParsedStatement, branch: SelectStmt): ParsedStatement {
+  return { ...stmt, text: sqlOf({ SelectStmt: branch }), ast: { SelectStmt: branch }, kind: 'select' };
+}
 
 // Вызывающий обязан обернуть вызов в sandbox.preview: транзакция уже открыта
 export async function traceStatement(
@@ -85,6 +108,25 @@ export async function traceStatement(
   if (!('SelectStmt' in stmt.ast)) return finalOnly('Пока не анимируется');
   const sel = stmt.ast.SelectStmt;
   const volatile = selectFeatures(sel).has('volatile');
+
+  // UNION / INTERSECT / EXCEPT: обе ветви трассируются отдельно, итог считается по кратностям
+  if (sel.op && sel.op !== 'SETOP_NONE') {
+    const op = setopOf(sel);
+    if (!op || !sel.larg || !sel.rarg) return finalOnly('Множество без одной из ветвей не анимируется');
+    if (sel.sortClause || sel.limitCount || sel.limitOffset)
+      return finalOnly('ORDER BY или LIMIT над множествами пока не анимируется');
+    if (setopDepth(sel) > 3) return finalOnly('Вложенность множеств глубже 3 не анимируется');
+    const left = await traceStatement(branchStatement(stmt, sel.larg), db, opts);
+    const right = await traceStatement(branchStatement(stmt, sel.rarg), db, opts);
+    if (left.mode !== 'full' || right.mode !== 'full')
+      return finalOnly(
+        `Ветвь множества не анимируется: ${left.fallbackReason ?? right.fallbackReason ?? 'причина не указана'}`,
+      );
+    const stage = setopStage(left, right, op);
+    if (!sameResult(stage.output, reference, null))
+      return finalOnly('Сверка с прямым выполнением не сошлась');
+    return finish({ mode: 'full', stages: [stage], result: reference, error: null });
+  }
 
   // SELECT без FROM: одна стадия, значения прямо из эталона
   if (!sel.fromClause) {

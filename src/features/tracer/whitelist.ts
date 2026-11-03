@@ -102,6 +102,7 @@ export const SUPPORTED = new Set<Feature>([
   'group',
   'having',
   'aggregate',
+  'setop',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {
