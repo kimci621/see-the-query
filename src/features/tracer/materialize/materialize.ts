@@ -4,7 +4,9 @@ import type { DbClient } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
 import { ident, type Prober, sqlOf, typeNames } from '../probe';
+import { prepareRecursive } from '../recursion/recursion';
 import type { Stage, Trace, TraceOptions } from '../types';
+import { replaceRangeVars } from './replace';
 
 export type TraceFn = (stmt: ParsedStatement, db: DbClient, opts: TraceOptions) => Promise<Trace>;
 
@@ -22,22 +24,6 @@ export function materializeStage(name: string, inner: Trace, id: string): Stage 
     output,
     ...(last?.rowCount !== undefined ? { rowCount: last.rowCount } : {}),
   };
-}
-
-// Обход AST: RangeVar с именем CTE заменяем на временную таблицу, сохраняя алиас
-function replaceCtes(node: unknown, names: Map<string, string>): unknown {
-  if (Array.isArray(node)) return node.map((item) => replaceCtes(item, names));
-  if (!node || typeof node !== 'object') return node;
-  const copy: Record<string, unknown> = { ...(node as Record<string, unknown>) };
-  if (typeof copy.relname === 'string' && names.has(copy.relname)) {
-    const alias = copy.alias as { aliasname?: string } | undefined;
-    const original = copy.relname;
-    copy.schemaname = 'pg_temp';
-    copy.relname = names.get(original) ?? original;
-    if (!alias) copy.alias = { aliasname: original };
-  }
-  for (const [key, value] of Object.entries(copy)) copy[key] = replaceCtes(value, names);
-  return copy;
 }
 
 function columnInfo(name: string, type: string): ColumnInfo {
@@ -101,10 +87,21 @@ export async function prepareSources(
   opts: TraceOptions,
   trace: TraceFn,
 ): Promise<PreparedSources | { reason: string }> {
-  if (sel.withClause?.recursive) return { reason: 'Рекурсивный CTE пока не анимируется' };
   const ctes = (sel.withClause?.ctes ?? []).flatMap((node) =>
     'CommonTableExpr' in node ? [node.CommonTableExpr] : [],
   );
+  if (sel.withClause?.recursive) {
+    if (ctes.length !== 1) return { reason: 'Рекурсивный CTE вместе с другими CTE пока не анимируется' };
+    const recursion = await prepareRecursive(ctes[0], opts.schema, prober);
+    if ('reason' in recursion) return { reason: recursion.reason };
+    const rewritten = replaceRangeVars(
+      { ...sel, withClause: undefined },
+      new Map([[recursion.name, recursion.temp]]),
+    ) as SelectStmt;
+    if (hasFromSubquery(rewritten.fromClause))
+      return { reason: 'Рекурсивный CTE с подзапросом в FROM пока не анимируется' };
+    return { sel: rewritten, schema: recursion.schema, stages: [recursion.stage] };
+  }
   let schema = opts.schema;
   const names = new Map<string, string>();
   const stages: Stage[] = [];
@@ -117,7 +114,7 @@ export async function prepareSources(
       return { reason: `CTE ${name} с NOT MATERIALIZED пока не анимируется` };
     if (!cte.ctequery || !('SelectStmt' in cte.ctequery))
       return { reason: `CTE ${name}: тело не SELECT, пока не анимируется` };
-    const body = replaceCtes(cte.ctequery, names) as Node;
+    const body = replaceRangeVars(cte.ctequery, names) as Node;
     const temp = `__vs_m${sequence++}`;
     await prober.run(`CREATE TEMP TABLE ${ident(temp)} AS ${sqlOf(body)}`);
     const table = await tempTable(prober, temp, types);
@@ -137,7 +134,7 @@ export async function prepareSources(
     stages.push(materializeStage(name, inner, `${stages.length}:materialize`));
     names.set(name, temp);
   }
-  let rewritten = replaceCtes({ ...sel, withClause: undefined }, names) as SelectStmt;
+  let rewritten = replaceRangeVars({ ...sel, withClause: undefined }, names) as SelectStmt;
   if (!hasFromSubquery(rewritten.fromClause)) return { sel: rewritten, schema, stages };
   let failure: string | null = null;
   const rewriteFrom = async (node: Node): Promise<Node> => {
