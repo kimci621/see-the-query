@@ -1,6 +1,7 @@
 import { rem } from '@/features/board/layout';
-import { currentTable, rebuildTable, withTable } from '../frame';
-import { cellLeft } from '../geometry';
+import type { Relation } from '@/features/tracer/types';
+import { currentTable, mapRows, rebuildTable, withTable } from '../frame';
+import { cellLeft, ghostWidth, TABLE_GAP } from '../geometry';
 import type { Animator, Decoration, GhostRow, GhostTable, Phase, StageOf } from '../types';
 
 function targetBase(
@@ -61,39 +62,94 @@ function conflictLines(source: GhostTable | null, target: GhostTable, stage: Sta
   });
 }
 
+// Призрак зависимой таблицы из снимка схемы: каскад помечает затронутые строки.
+function cascadeGhost(
+  tableId: string,
+  affected: StageOf<'dml'>['cascades'][number],
+  at: { x: number; y: number },
+  ctx: Parameters<Animator>[3],
+): GhostTable | null {
+  const table = ctx.schema.tables.find((item) => item.id === tableId);
+  if (!table) return null;
+  const deleted = new Set(affected.deleted);
+  const updated = new Map(affected.updated.map((item) => [item.key, item.values]));
+  const relation: Relation = {
+    columns: table.columns.map((column) => ({
+      name: column.name,
+      type: column.type,
+      source: { alias: table.name, column: column.name },
+    })),
+    rows: table.sampleRows.map((values, index) => ({
+      key: `${table.name}=${table.sampleCtids[index]}`,
+      lineage: { [table.name]: table.sampleCtids[index] },
+      values,
+    })),
+  };
+  const ghost = rebuildTable(
+    {
+      id: `t:${table.id}`,
+      title: table.name,
+      x: at.x,
+      y: at.y,
+      fold: ctx.folded(table.id),
+    },
+    relation,
+    undefined,
+    table.rowCount,
+  );
+  return mapRows(ghost, (row) => {
+    if (deleted.has(row.key)) return { state: 'deleted' as const };
+    const values = updated.get(row.key);
+    return values ? { state: 'changed' as const, values: visibleValues(ghost, values) } : {};
+  });
+}
+
+// Волна каскада: призрак зависимой таблицы встаёт справа от уже показанной и остаётся в кадре.
+// Позиции нод доски не годятся: связанные таблицы часто стоят далеко, и обе не читаются на зуме.
 function cascadePhases(
   phase: Phase,
   stage: StageOf<'dml'>,
   stageIndex: number,
   ctx: Parameters<Animator>[3],
 ): Phase[] {
-  const from = ctx.nodeRect(stage.tableId);
-  if (!from) return [];
-  return stage.cascades.flatMap((cascade, index) => {
-    const to = ctx.nodeRect(cascade.tableId);
-    if (!to) return [];
-    return [
-      {
-        id: `${stageIndex}:cascade:${index}`,
-        stageIndex,
-        caption: `Каскад затрагивает ${cascade.tableId.split('.').at(-1) ?? cascade.tableId}`,
-        durationMs: 450,
-        frame: {
-          ...phase.frame,
-          decorations: [
-            ...phase.frame.decorations,
-            {
-              kind: 'arrow',
-              id: `cascade:${stage.tableId}:${cascade.tableId}`,
-              from: { x: from.x + from.width / 2, y: from.y + from.height / 2 },
-              to: { x: to.x + to.width / 2, y: to.y + to.height / 2 },
-              tone: 'info',
-            },
-          ],
+  const first = currentTable(phase.frame);
+  if (!first) return [];
+  let previous: GhostTable = first;
+  let frame = phase.frame;
+  const phases: Phase[] = [];
+  stage.cascades.forEach((cascade, index) => {
+    const at = { x: previous.x + ghostWidth(previous) + TABLE_GAP, y: previous.y };
+    const ghost = cascadeGhost(cascade.tableId, cascade, at, ctx);
+    if (!ghost) return;
+    const name = cascade.tableId.split('.').at(-1) ?? cascade.tableId;
+    const caption =
+      cascade.updated.length === 0
+        ? `Каскад удаляет строки ${name}: ${cascade.deleted.length}`
+        : `Каскад меняет ${name}: удалено ${cascade.deleted.length}, изменено ${cascade.updated.length}`;
+    frame = {
+      ...frame,
+      decorations: [
+        ...frame.decorations,
+        {
+          kind: 'arrow',
+          id: `cascade:${previous.id}:${ghost.id}`,
+          from: { x: previous.x + ghostWidth(previous), y: previous.y + rem(1.5) },
+          to: { x: ghost.x, y: ghost.y + rem(1.5) },
+          tone: 'info',
         },
-      },
-    ];
+      ],
+    };
+    frame = withTable(frame, ghost);
+    previous = ghost;
+    phases.push({
+      id: `${stageIndex}:cascade:${index}`,
+      stageIndex,
+      caption,
+      durationMs: 450,
+      frame,
+    });
   });
+  return phases;
 }
 
 export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, ctx) => {

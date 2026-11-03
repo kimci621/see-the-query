@@ -8,7 +8,11 @@ interface CascadeSnapshot {
   before: Relation;
 }
 
-type Cascade = { tableId: string; deleted: RowKey[]; updated: RowKey[] };
+type Cascade = {
+  tableId: string;
+  deleted: RowKey[];
+  updated: Array<{ key: RowKey; values: unknown[] }>;
+};
 type CascadeEvent = 'delete' | 'update';
 
 const changesRows = (action: FkInfo['onDelete']) =>
@@ -82,11 +86,11 @@ export async function cascadeDiff(prober: Prober, captured: CascadeSnapshot[]): 
     }
     const afterByPk = new Map(after.rows.map((item) => [primaryKey(item.values, pk), item]));
     const deleted: RowKey[] = [];
-    const updated: RowKey[] = [];
+    const updated: Array<{ key: RowKey; values: unknown[] }> = [];
     for (const item of before.rows) {
       const current = afterByPk.get(primaryKey(item.values, pk));
       if (!current) deleted.push(item.key);
-      else if (current.key !== item.key) updated.push(item.key);
+      else if (current.key !== item.key) updated.push({ key: item.key, values: current.values });
     }
     if (deleted.length || updated.length) cascades.push({ tableId: target.table.id, deleted, updated });
   }

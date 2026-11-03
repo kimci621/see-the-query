@@ -101,7 +101,11 @@ export type Stage = StageBase &
         updated: Array<{ key: RowKey; before: unknown[]; after: unknown[]; changedColumns: string[] }>;
         conflicts: Array<{ key: RowKey; action: 'nothing' | 'update' }>;
         mergeBranches: Record<RowKey, 'matched_update' | 'matched_delete' | 'not_matched_insert' | 'skipped'>;
-        cascades: Array<{ tableId: string; deleted: RowKey[]; updated: RowKey[] }>;
+        cascades: Array<{
+          tableId: string;
+          deleted: RowKey[];
+          updated: Array<{ key: RowKey; values: unknown[] }>;
+        }>;
         // Колонки, которые заполнила база: DEFAULT, identity, генерируемые
         defaulted?: string[];
         sequences?: Array<{ column: string; before: number | string | null; after: number | string | null }>;

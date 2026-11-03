@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SCHEMA } from '@/features/board/__fixtures__/schema';
 import { bookScan, testCtx } from '../__fixtures__/traces';
 import type { Frame, StageOf } from '../types';
 import { dmlAnimator } from './dml';
@@ -118,21 +119,40 @@ describe('dmlAnimator', () => {
       { tables: [], decorations: [] },
       stage({
         op: 'delete',
+        tableId: 'public.author',
         inserted: [],
         deleted: ['b=(0,1)'],
         defaulted: undefined,
-        cascades: [{ tableId: 'public.author', deleted: ['a=(0,1)'], updated: [] }],
+        cascades: [
+          {
+            tableId: 'public.book',
+            deleted: ['book=(0,1)'],
+            updated: [{ key: 'book=(0,2)', values: [2, 'Python', 2, 1, '2400.00', null] }],
+          },
+        ],
       }),
       0,
-      testCtx({
-        'public.book': { x: 0, y: 0, width: 260, height: 400 },
-        'public.author': { x: 400, y: 0, width: 260, height: 400 },
-      }),
+      testCtx(
+        {
+          'public.author': { x: 0, y: 0, width: 260, height: 400 },
+          'public.book': { x: 400, y: 0, width: 260, height: 400 },
+        },
+        SCHEMA,
+      ),
     );
     expect(phases).toHaveLength(2);
     expect(phases[1].frame.decorations).toContainEqual(
       expect.objectContaining({ kind: 'arrow', tone: 'info' }),
     );
+    const target = phases[1].frame.tables[0];
+    const ghost = phases[1].frame.tables.find((table) => table.id === 't:public.book');
+    expect(ghost?.x).toBeGreaterThan(target.x);
+    expect(ghost?.y).toBe(target.y);
+    expect(ghost?.rows.find((row) => row.key === 'book=(0,1)')?.state).toBe('deleted');
+    expect(ghost?.rows.find((row) => row.key === 'book=(0,2)')).toMatchObject({
+      state: 'changed',
+      values: [2, 'Python', 2, 1, '2400.00', null],
+    });
   });
 
   it('INSERT SELECT держит источник и проводит линию к конфликту', () => {

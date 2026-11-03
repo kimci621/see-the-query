@@ -204,11 +204,12 @@ export function testCtx(
   rects: Record<string, { x: number; y: number; width: number; height: number }> = {
     'public.book': { x: 0, y: 0, width: 260, height: 400 },
   },
+  schema: SchemaSnapshot = EMPTY_SCHEMA,
 ): AnimatorContext {
   return {
     nodeRect: (id) => rects[id] ?? null,
     workArea: { x: 500, y: 0 },
-    schema: EMPTY_SCHEMA,
+    schema,
     folded: () => [],
   };
 }

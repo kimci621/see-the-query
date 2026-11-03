@@ -33,7 +33,7 @@ describe('каскады FK', () => {
         await db.query('insert into c values (10, 1), (11, 2)');
         const trace = await traceSql(db, 'delete from p where id = 1');
         expect(stageOf(trace, 'dml').cascades).toEqual([
-          { tableId: 'pg_temp.c', deleted: [], updated: ['c=(0,1)'] },
+          { tableId: 'pg_temp.c', deleted: [], updated: [{ key: 'c=(0,1)', values: [10, null] }] },
         ]);
       }),
     ));
@@ -60,7 +60,7 @@ describe('каскады FK', () => {
         await db.query('insert into c values (10, 1)');
         const trace = await traceSql(db, 'update p set id = 2 where id = 1');
         expect(stageOf(trace, 'dml').cascades).toEqual([
-          { tableId: 'pg_temp.c', deleted: [], updated: ['c=(0,1)'] },
+          { tableId: 'pg_temp.c', deleted: [], updated: [{ key: 'c=(0,1)', values: [10, 2] }] },
         ]);
       }),
     ));

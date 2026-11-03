@@ -382,7 +382,7 @@
 - ✅ (2026-11-02) **L2.2** 2.2 CREATE TABLE, базовые типы, TEMP
 - ✅ (2026-11-03) **L2.2a** 2.2a Генерируемые колонки
 - ✅ (2026-11-03) **L2.3** 2.3 NOT NULL, UNIQUE, CHECK, DEFAULT
-- ⬜ **L2.4** 2.4 PK, FK, ON DELETE
+- ✅ (2026-11-03) **L2.4** 2.4 PK, FK, ON DELETE
 - ⬜ **L2.5** 2.5 Identity vs serial, последовательности
 - ⬜ **L2.6** 2.6 ALTER TABLE
 - ⬜ **L2.7** 2.7 DROP, TRUNCATE, CASCADE
