@@ -1,0 +1,99 @@
+---
+id: alter-table
+title: ALTER TABLE
+chapter: ddl
+number: "2.6"
+order: 7
+dataset: bookstore
+initialQuery: |
+  select author_id, name, born_year from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-alter.html
+    title: Изменение таблиц
+  - url: https://www.postgresql.org/docs/18/sql-altertable.html
+    title: ALTER TABLE
+course: ["11.34"]
+tags: [alter table, add column, drop column, rename, тип, ограничение]
+---
+
+<TlDr>`ALTER TABLE` меняет готовую таблицу: добавляет колонки, переименовывает их, меняет типы и ограничения. Строки при этом остаются на месте.</TlDr>
+
+## Что есть в данных
+
+В `author` шесть строк. Колонка `born_year` хранит год рождения как `integer`. Колонки `email` пока нет. В `employee` шесть сотрудников, у директора Ольги Николаевой зарплата 300000.
+
+Все примеры в превью откатываются. Схема на доске возвращается к исходной, данные не меняются.
+
+## Добавить колонку
+
+```sql run expect=rows:0
+alter table author add column email text;
+```
+
+На доске у `author` выезжает новая колонка `email`. Во всех шести строках `NULL`: старые строки не знают, что там записать. Если указать `DEFAULT`, Postgres подставит значение и в существующие строки.
+
+## Удалить колонку
+
+```sql run expect=rows:0
+alter table author drop column born_year;
+```
+
+Колонка `born_year` исчезает вместе со значениями. Это не переименование и не скрытие: данные удалены. `ALTER TABLE ... ADD COLUMN` обратно вернёт пустую колонку, но не старые годы.
+
+## Переименовать
+
+```sql run expect=rows:0
+alter table author rename column born_year to birth_year;
+```
+
+На доске меняется только подпись колонки. Значения и их порядок остаются прежними. Переименование таблицы работает так же:
+
+```sql run expect=rows:0
+alter table author rename to writer;
+```
+
+## Сменить тип
+
+```sql run expect=rows:0
+alter table author alter column born_year type bigint;
+```
+
+Postgres переписывает значения в новый тип. Для шести строк это незаметно, для миллиона строк операция займёт время и заблокирует запись. Если преобразование не автоматическое, добавь `USING`: `alter column price type integer using price::integer`.
+
+## Добавить ограничение
+
+```sql run expectError=23514
+alter table employee add constraint salary_check check (salary <= 180000);
+```
+
+Postgres возвращает `23514`: проверка не прошла. На доске подсвечиваются директор с зарплатой 300000 и менеджер с 190000. Пока такие строки есть, ограничение не появится. Сначала исправь данные, потом добавляй правило.
+
+## Чего нет в выдаче и почему
+
+- ❌ Колонки `email` нет после превью: `ALTER TABLE` откатился вместе с транзакцией.
+- ❌ `born_year` на месте после `DROP COLUMN`: превью вернуло схему.
+- ❌ Ограничения `salary_check` нет: Postgres не пропустил его из-за строки с зарплатой 300000.
+
+## Ловушки
+
+<Callout kind="trap">
+`ALTER TABLE` блокирует таблицу. В продакшене на большой таблице смена типа или добавление ограничения может остановить запись на минуты. Для проверки ограничения без блокировки сначала добавь его как `NOT VALID`, потом проверь старые строки командой `VALIDATE CONSTRAINT`. Новые строки проверяются сразу.
+</Callout>
+
+<Callout kind="tip">
+Добавление колонки с `DEFAULT` в PostgreSQL 11+ не переписывает таблицу: значение хранится как метаданные. А смена типа переписывает все строки и требует места на диске.
+</Callout>
+
+## Проверь себя
+
+1. Что покажет доска после `ADD COLUMN email text` в колонке у шести старых строк?
+2. Почему `DROP COLUMN` опаснее, чем кажется?
+3. Какие строки мешают добавить `salary_check`?
+
+<Cheatsheet>
+- `ALTER TABLE ... ADD COLUMN` добавляет колонку, старые строки получают `NULL` или `DEFAULT`.
+- `DROP COLUMN` удаляет и колонку, и её значения.
+- `RENAME COLUMN` меняет только имя, данные остаются.
+- `ALTER COLUMN ... TYPE` переписывает значения, при неавтоматическом приведении нужен `USING`.
+- `ADD CONSTRAINT` проверяет все строки и падает, если есть нарушители.
+</Cheatsheet>

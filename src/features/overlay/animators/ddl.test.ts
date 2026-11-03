@@ -67,6 +67,21 @@ describe('сцены DDL на реальных трассах', () => {
       }),
     ));
 
+  it('ALTER COLUMN TYPE подсвечивает колонку и называет типы', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const phases = buildPlayback(
+          await traceSql(db, 'alter table author alter column born_year type bigint'),
+          ctx,
+        ).phases;
+        const last = phases.at(-1);
+        expect(last?.caption).toBe('born_year: integer → bigint');
+        expect(last?.frame.tables[0].columns.find((column) => column.name === 'born_year')?.state).toBe(
+          'highlight',
+        );
+      }),
+    ));
+
   it('ADD CONSTRAINT выделяет колонку и называет ограничение', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

@@ -174,6 +174,27 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
     );
   }
 
+  for (const change of diff.alteredColumns) {
+    const old = beforeTable(change.tableId);
+    const next = afterTable(change.tableId);
+    if (!old || !next) continue;
+    push('alter-before', [ghost(old, ctx)]);
+    const table = ghost(next, ctx, [change.column]);
+    push(
+      'alter-type',
+      [
+        {
+          ...table,
+          columns: table.columns.map((column) => ({
+            ...column,
+            state: column.name === change.column ? 'highlight' : 'normal',
+          })),
+        },
+      ],
+      [],
+      `${change.column}: ${change.before} → ${change.after}`,
+    );
+  }
   for (const change of diff.addedConstraints.filter((item) => !diff.addedTables.includes(item.tableId))) {
     const info = afterTable(change.tableId);
     if (!info) continue;
