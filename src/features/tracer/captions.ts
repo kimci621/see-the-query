@@ -37,6 +37,8 @@ export const captions = {
   having: (before: number, after: number, unknown: number) =>
     `HAVING: осталось ${after} из ${before} ${plural(before, 'группы', 'групп', 'групп')}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
+  window: (functions: string[], rows: number) =>
+    `ОКНО ${functions.join(', ')}: ${rowsWord(rows)}, строки не схлопываются`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
     `DISTINCT: ${rowsWord(before)} → ${after} ${plural(after, 'уникальная', 'уникальные', 'уникальных')}`,

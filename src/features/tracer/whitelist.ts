@@ -104,6 +104,7 @@ export const SUPPORTED = new Set<Feature>([
   'aggregate',
   'setop',
   'cte',
+  'window',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {

@@ -1,3 +1,4 @@
+import { windowStep } from '../window/window';
 import type { SelectCtx } from './context';
 import { distinctStep } from './distinct';
 import { filterStep } from './filter';
@@ -22,6 +23,7 @@ export const SELECT_PIPELINE: SelectStep[] = [
   filterStep,
   groupStep,
   havingStep,
+  windowStep,
   projectStep,
   distinctStep,
   sortStep,
