@@ -1,0 +1,168 @@
+---
+id: from-subquery
+title: "Подзапрос в FROM: таблица внутри запроса"
+chapter: subqueries
+number: "8.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select * from (select category_id, avg(price) as avg_price from book group by category_id) s where avg_price > 500 order by category_id nulls last;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-FROM
+    title: Подзапрос в FROM
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY и HAVING
+tags: ["подзапрос в from", "производная таблица", "агрегат", "алиас"]
+mvp: false
+---
+
+<TlDr>Подзапрос в `FROM` сначала выполняется отдельно и становится таблицей с именем. Снаружи с ней работают как с обычной: `WHERE`, `ORDER BY`, что угодно.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг, у «Простого Python» нет категории. Если собрать средние по <C id="public.book.category_id">category_id</C>, получится четыре строки: категория 3 со средней 593.33, категория 4 с 502.50, категория 6 с 2800.00 и `NULL` с 1990.00. Строка с `NULL` это одна книга без категории, а не отдельная категория.
+
+## Сначала агрегат
+
+```sql run expect=rows:4
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id
+order by category_id nulls last;
+```
+
+4 строки. Запомни число: книги свернулись в четыре строки, по одной на значение `category_id`.
+
+## Почему нельзя отфильтровать сразу
+
+Хочется дописать условие по средней прямо в тот же запрос:
+
+```sql run expectError=42703
+select category_id, avg(price) as avg_price
+from book where avg_price > 500 group by category_id;
+```
+
+Код `42703`: `column "avg_price" does not exist`. Псевдоним из `SELECT` в `WHERE` не виден, потому что `WHERE` выполняется раньше. В уроке 7.3 для групп был `HAVING`. Здесь другой путь: сначала собрать таблицу с готовыми средними, потом фильтровать её снаружи.
+
+## Средние становятся таблицей
+
+```sql run expect=rows:4
+select * from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where avg_price > 500
+order by category_id nulls last;
+```
+
+4 строки. Внутренний запрос дал 4 строки, внешний не потерял ни одной: самая маленькая средняя 502.50, она выше порога.
+
+На доске появляется пунктирная таблица с именем `s`. В ней две колонки: `category_id` и `avg_price`. Дальше с ней работают как с обычной таблицей, и подпись шага это подтверждает: «s: 4 строки».
+
+<Callout kind="analogy">
+Конструктор. Сначала собираешь из деталей готовый узел и ставишь на него бирку `s`. Дальше в инструкции узел называют по бирке, а не перечисляют его детали заново.
+</Callout>
+
+Подними порог до 550, и одна строка уйдёт:
+
+```sql run expect=rows:3
+select s.category_id, round(s.avg_price, 2) as avg_price
+from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where s.avg_price > 550
+order by s.category_id nulls last;
+```
+
+3 строки: категории 3, 6 и `NULL`. Категория 4 со средней 502.50 осталась снаружи. Колонки взяты через `s.`, и это ровно те имена, которые дал подзапрос.
+
+Снаружи можно снова агрегировать:
+
+```sql run expect=rows:1
+select count(*) as categories
+from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where avg_price > 550;
+```
+
+Одна строка, число 3. Внешний агрегат считает уже не книги, а строки таблицы `s`.
+
+Пройди главное одной сценой:
+
+<Scene>
+<Step caption="Внутри: 4 средние по категориям">
+
+```sql run expect=rows:4
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id
+order by category_id nulls last;
+```
+
+</Step>
+<Step caption="Снаружи: порог 550, осталось 3 строки">
+
+```sql run expect=rows:3
+select s.category_id, round(s.avg_price, 2) as avg_price
+from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where s.avg_price > 550
+order by s.category_id nulls last;
+```
+
+</Step>
+</Scene>
+
+## Чего нет в выдаче и почему
+
+- ❌ 11 книг: внутренний `GROUP BY` свернул их в 4 строки.
+- ❌ Категория 4 при пороге 550: её средняя 502.50 ниже.
+- ❌ Названия книг: они остались внутри подзапроса.
+- ❌ Колонка `price` снаружи: подзапрос её не вернул.
+- ❌ Одна общая средняя: `GROUP BY` считает среднюю по каждой категории отдельно.
+
+## Ловушки
+
+<Callout kind="trap">
+Снаружи видно только то, что подзапрос положил в `SELECT`:
+
+```sql run expectError=42703
+select * from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where price > 500;
+```
+
+Код `42703`: `column "price" does not exist`. В таблице `s` есть `category_id` и `avg_price`, а `price` остался внутри. Если колонка нужна снаружи, добавь её в `SELECT` подзапроса.
+</Callout>
+
+<Callout kind="tip">
+Если подзапрос в `FROM` нужен только ради фильтра по агрегату, часто хватает `HAVING`. Обёртка полезна, когда поверх средней нужен ещё один агрегат, соединение или сортировка по псевдониму. `ORDER BY` внутри подзапроса без `LIMIT` смысла не имеет: внешний запрос всё равно может переставить строки.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк останется при пороге `avg_price > 1000`? Сначала ответь, потом проверь.
+2. Что вернёт `select count(*) from (...) s where avg_price > 500`? Посчитай по четырём средним.
+3. Сколько строк даст порог `avg_price > 3000`? Проверь на доске.
+
+<Cheatsheet>
+- `from (select ...) s`: результат подзапроса становится таблицей с именем `s`.
+- Снаружи доступны только колонки из `SELECT` подзапроса.
+- Фильтр по псевдониму агрегата работает снаружи, в `WHERE` того же уровня он даёт `42703`.
+- Снаружи можно снова группировать, считать и сортировать.
+- Для одной лишь фильтрации групп проверь, не хватит ли `HAVING`.
+</Cheatsheet>

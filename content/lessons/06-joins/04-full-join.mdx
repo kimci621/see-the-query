@@ -1,0 +1,138 @@
+---
+id: full-join
+title: "FULL OUTER JOIN: строки с обеих сторон"
+chapter: joins
+number: "6.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name, b.title
+  from author a
+  full join book b using (author_id)
+  order by a.name nulls last, b.title;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Соединение таблиц (JOIN)
+  - url: https://www.postgresql.org/docs/current/tutorial-join.html
+    title: "Учебник: соединение таблиц"
+tags: ["full join", "full outer join", "внешнее соединение", "строки без пары", "null в соединении"]
+mvp: false
+---
+
+<TlDr>`FULL JOIN` сохраняет строки обеих таблиц: совпавшие пары идут вместе, а строка без пары получает `NULL` с противоположной стороны. В выдаче остаются и левые, и правые одиночки.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.author">author</T> 6 авторов, в <T id="public.book">book</T> 11 книг. Девять книг находят автора по <C id="public.book.author_id">author_id</C>, и получается 9 пар.
+
+Одной пары не хватает с левой стороны: у Бориса Пастернака нет книг. Двух пар не хватает с правой: «Простой Python» и «Изучаем Python» без автора. Сложим всё: 9 + 1 + 2 = 12 строк.
+
+## Сначала LEFT и RIGHT
+
+Возьмём авторов слева. `LEFT JOIN` сохраняет всех авторов:
+
+```sql run expect=rows:10
+select a.name, b.title
+from author a
+left join book b using (author_id)
+order by a.name nulls last, b.title;
+```
+
+10 строк: 9 пар и Пастернак с `NULL` вместо книги. Две книги без автора пропали, их номер ни на кого не ссылается.
+
+`RIGHT JOIN` сохраняет книги:
+
+```sql run expect=rows:11
+select a.name, b.title
+from author a
+right join book b using (author_id)
+order by a.name nulls last, b.title;
+```
+
+11 строк: 9 пар и две книги без автора. Пастернак пропал: он в левой таблице, а левые одиночки `RIGHT JOIN` не сохраняет.
+
+## FULL JOIN: все одиночки сразу
+
+`FULL JOIN` это `LEFT` и `RIGHT` вместе. Он сохраняет непарные строки с обеих сторон:
+
+```sql run expect=rows:12
+select a.name, b.title
+from author a
+full join book b using (author_id)
+order by a.name nulls last, b.title;
+```
+
+12 строк. Первые 10 строк с именем автора: 9 пар и Пастернак. Последние 2 с `NULL` в name: «Изучаем Python» и «Простой Python».
+
+Полное название `FULL OUTER JOIN`, слово `OUTER` можно опустить.
+
+На доске шаг `FULL JOIN` показывает три группы. Девять пар сливаются в широкие строки. Пастернак остаётся один, в колонках книги у него `NULL`. Две книги без автора тоже остаются, в колонках автора у них `NULL`. Подпись шага: «FULL JOIN: 9 пар, 1 слева без пары, 2 справа без пары».
+
+## Две NULL-половины
+
+В строке Пастернака пустые все колонки книги: title, category_id, price, pages и остальные. В строках двух книг пустые все колонки автора: name, country, born_year.
+
+С `USING` колонка author_id в выдаче одна. У Пастернака в ней 6, у пар номер автора, у книг 10 и 11 `NULL`, потому что в самих книгах автора нет.
+
+С `ON` колонок author_id было бы две, по одной с каждой стороны. У Пастернака левая была бы 6, правая `NULL`. У книг 10 и 11 обе колонки `NULL`: в самих книгах автора нет. Слияние ключа в одну колонку это удобство `USING`, а не отдельное правило `FULL JOIN`.
+
+## Кто остался без пары
+
+Самый полезный запрос на `FULL JOIN` ищет не совпадения, а одиночек:
+
+```sql run expect=rows:3
+select a.name, b.title
+from author a
+full join book b using (author_id)
+where a.name is null or b.title is null
+order by a.name nulls last, b.title;
+```
+
+3 строки: Пастернак без книги и две книги без автора. Совпавшие 9 пар отфильтровались. Так сверяют два списка: что есть только слева, что только справа и что совпало.
+
+## Чего нет в выдаче и почему
+
+- ❌ Две книги без автора в `LEFT JOIN` авторов с книгами: левое соединение сохраняет только левую сторону.
+- ❌ Борис Пастернак в `RIGHT JOIN` авторов с книгами: правое соединение сохраняет только правую сторону.
+- ❌ Две книги без автора в `FULL JOIN` с `where a.name is not null`: условие отбросило строки, где имя автора `NULL`.
+- ❌ Пастернак в `FULL JOIN` с `where b.title is not null`: условие отбросило строку, где нет книги.
+
+## Ловушки
+
+<Callout kind="trap">
+`WHERE` по колонке одной стороны срезает её `NULL`-половины и превращает `FULL JOIN` в одностороннее соединение:
+
+```sql run expect=rows:10
+select a.name, b.title
+from author a
+full join book b using (author_id)
+where a.name is not null
+order by a.name, b.title;
+```
+
+10 строк вместо 12. Две книги без автора ушли: у них name равен `NULL`, а `IS NOT NULL` на `NULL` даёт `FALSE`. Осталось то же, что дал бы `LEFT JOIN` авторов с книгами. Условие `where b.title is not null` срежет Пастернака и оставит 11 строк, как `RIGHT JOIN`.
+</Callout>
+
+<Callout kind="tip">
+`FULL JOIN` бери для сверки двух источников: база и импортированный файл, старый и новый справочник. Для отчёта «все заказы с покупателями» хватает `LEFT JOIN`: вторая сторона там нужна не всегда.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт запрос с `where a.name is null or b.title is null`, если поменять `or` на `and`? Сначала ответь, потом проверь.
+2. Замени в основном запросе `full join` на `left join`. Сколько строк останется и кто пропадёт?
+3. Сколько строк вернёт `where a.name is null`? А сколько `where b.title is null`? Почему числа разные?
+
+<Cheatsheet>
+- `full join`: все строки обеих таблиц. Пары, левые одиночки, правые одиночки.
+- Строка без пары получает `NULL` в колонках противоположной таблицы.
+- `USING (col)` сливает ключ в одну колонку. С `ON` ключей было бы два.
+- `FULL JOIN` это сумма `LEFT` и `RIGHT` без повтора пар.
+- `WHERE` по колонке одной стороны убирает её одиночек и делает соединение односторонним.
+- Для поиска одиночек: `where a.name is null or b.title is null`.
+</Cheatsheet>

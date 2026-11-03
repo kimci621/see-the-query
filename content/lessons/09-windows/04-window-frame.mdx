@@ -1,0 +1,176 @@
+---
+id: window-frame
+title: "Накопительные итоги и рамка окна"
+chapter: windows
+number: "9.4"
+order: 4
+dataset: events
+board:
+  tables: [public.event, public.orders]
+  layout:
+    orders: { x: 0, y: 0 }
+    event: { x: 620, y: 0 }
+initialQuery: |
+  select order_id, kind, amount, sum(amount) over (order by happened_at) as total
+  from event
+  where kind = 'paid'
+  order by happened_at;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
+    title: Оконные выражения
+  - url: https://www.postgresql.org/docs/current/functions-window.html
+    title: Оконные функции
+tags: [оконные функции, рамка окна, "running total", rows, range, накопительный итог]
+mvp: false
+---
+
+<TlDr>`ORDER BY` внутри `OVER` включает накопление, а рамка `ROWS` или `RANGE` решает, какие строки попадают в расчёт текущей строки.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.event">event</T> 21 событие по 8 заказам. Платежей семь: в <C id="public.event.kind">kind</C> стоит `paid`, суммы в <C id="public.event.amount">amount</C> от 1400 до 4390.
+
+Сумма всех семи платежей равна 17430. Запомни это число: оно будет последним в накопительном итоге.
+
+У заказа 3 платёж и отмена стоят в одну секунду, `2024-04-02 23:55:00+03`. На этой паре видно разницу `ROWS` и `RANGE`. У заказа 4 платежа нет, он отменён.
+
+## Накопительный итог
+
+```sql run expect=rows:7
+select order_id, kind, amount,
+  sum(amount) over (order by happened_at) as total
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+Вернулось 7 строк. В `total` сумма растёт от строки к строке:
+
+- заказ 1: 1730;
+- заказ 2: 4130;
+- заказ 3: 5910;
+- заказ 5: 7310;
+- заказ 6: 11700;
+- заказ 7: 13810;
+- заказ 8: 17430.
+
+Первая строка показывает 1730, потому что до неё платежей нет. Последняя показывает 17430, потому что в рамку попали все семь платежей.
+
+На доске по строкам едет рамка от первой строки до текущей, и в колонке `total` появляется сумма того, что рамка накрыла. Подпись стадии показывает `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`: это рамка по умолчанию, когда в окне есть `ORDER BY`, но нет явной рамки.
+
+## Вся партиция без накопления
+
+Уберём `order by` из окна:
+
+```sql run expect=rows:7
+select order_id, amount, sum(amount) over () as total
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+У всех семи строк `total` равно 17430. Без `order by` рамка не движется, окно сразу берёт всю партицию. На доске все строки одного цвета: партиция одна, подсветка стоит на всей группе.
+
+Это важное отличие: `sum(amount) over ()` и `sum(amount) over (order by happened_at)` возвращают одну и ту же последнюю сумму, но разные промежуточные.
+
+## ROWS: строки по одной
+
+Возьмём заказ 3 и посчитаем, сколько строк рамка видит на каждом шаге:
+
+```sql run expect=rows:3
+select kind, happened_at,
+  count(*) over (order by happened_at rows between unbounded preceding and current row) as rows_cnt
+from event
+where order_id = 3
+order by happened_at;
+```
+
+Вернулось 3 строки: `created`, `paid` и `cancelled`. `ROWS` считает физические строки: первая получает 1, вторая 2, третья 3.
+
+У `paid` и `cancelled` одинаковое время. Какая из них окажется второй, а какая третьей, запрос не обещает. В этом прогоне `paid` получил 2, `cancelled` 3, но при другом плане числа могут поменяться местами. Сама последовательность 1, 2, 3 сохранится.
+
+На доске рамка расширяется ровно на одну строку за шаг, даже если время у двух строк совпадает.
+
+## RANGE: все ровесники
+
+Теперь та же рамка, но `RANGE`:
+
+```sql run expect=rows:3
+select kind, happened_at,
+  count(*) over (order by happened_at range between unbounded preceding and current row) as range_cnt
+from event
+where order_id = 3
+order by happened_at;
+```
+
+Значения в `range_cnt`: 1, 3, 3.
+
+`RANGE` смотрит на значение ключа сортировки, а не на номер строки. Как только рамка дошла до времени `23:55`, в неё попали оба события с этой секундой. Поэтому и у `paid`, и у `cancelled` счётчик равен 3, хотя физически они идут друг за другом.
+
+На доске рамка едет по строкам партиции, а значения в `range_cnt` считает Postgres: у обеих строк с одной секундой стоит 3.
+
+## Скользящее окно на три платежа
+
+Рамку можно ограничить с двух сторон. Посчитаем сумму платежа и двух предыдущих:
+
+```sql run expect=rows:7
+select order_id, amount,
+  sum(amount) over (order by happened_at rows between 2 preceding and current row) as last3
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+Последнее значение равно 10120: это 4390, 2110 и 3620, три последних платежа. В середине, например у заказа 5, в рамку попали 2400, 1780 и 1400, сумма 5580.
+
+На доске рамка шириной в три строки едет по партиции. У первых двух строк она упирается в начало и накрывает меньше трёх строк: 1730 и 4130.
+
+<Callout kind="analogy">
+Рамка это линейка на странице. `ROWS` отмеряет ровно три строки, сколько бы времени они ни показывали. `RANGE` захватывает все строки с той же отметкой времени: если двое событий попали в одну секунду, линейка накрывает оба сразу.
+</Callout>
+
+## Чего нет в выдаче и почему
+
+- ❌ У первого платежа `total` не 17430: накопительная рамка видит только его, поэтому 1730.
+- ❌ У `paid` в этом прогоне нет значения 3: рамка `ROWS` заканчивается на текущей строке, а `cancelled` ещё не попал в неё. При другом порядке ровесников числа 2 и 3 поменяются местами.
+- ❌ У `paid` в `RANGE` нет значения 2: второе событие с той же секундой входит в рамку, поэтому 3.
+- ❌ Заказ 4 в выдаче по платежам: у него нет `paid`, `WHERE` убрал его до окна.
+- ❌ В `sum(amount) over ()` нет накопления: без `order by` окно сразу берёт всю партицию, у всех 17430.
+- ❌ В скользящей сумме последнее значение не 17430: рамка видит только три последних платежа, 10120.
+
+## Ловушки
+
+<Callout kind="trap">
+Начало рамки не может стоять позже её конца:
+
+```sql run expectError=42P20
+select order_id, sum(amount) over (
+  order by happened_at rows between 1 following and 1 preceding
+) as total
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+Postgres отвечает кодом `42P20`: `frame starting from following row cannot have preceding rows`. Сначала идёт начало, потом конец: `rows between 1 preceding and 1 following`. Если нужна рамка от текущей строки вперёд, пиши `rows between current row and unbounded following`.
+</Callout>
+
+<Callout kind="tip">
+По умолчанию с `order by` работает `RANGE`, а не `ROWS`. Если нужны ровно три строки, а не все ровесники, указывай `ROWS` явно. И добавляй в `order by` уникальный ключ, иначе при равном времени порядок строк не определён.
+</Callout>
+
+## Проверь себя
+
+1. Чему равен `total` после заказа 5 в накопительном запросе? Посчитай по суммам из урока.
+2. Из каких платежей состоит последнее значение 10120 в скользящем окне?
+3. Что вернёт `count(*) over (order by happened_at)` для заказа 3 без явной рамки: 1, 2, 3 или 1, 3, 3?
+
+<Cheatsheet>
+- `sum(x) over (order by t)`: накопительный итог, рамка по умолчанию `range ... current row`.
+- `sum(x) over ()`: вся партиция сразу, без накопления.
+- `ROWS`: считает физические строки, 1, 2, 3.
+- `RANGE`: включает все строки с равным ключом сортировки, 1, 3, 3.
+- `rows between 2 preceding and current row`: скользящее окно на три строки.
+- `rows between unbounded preceding and unbounded following`: вся партиция.
+- Начало рамки не может быть позже конца, иначе `42P20`.
+</Cheatsheet>

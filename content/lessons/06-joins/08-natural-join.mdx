@@ -1,0 +1,128 @@
+---
+id: natural-join
+title: "NATURAL JOIN: соединение по общим именам"
+chapter: joins
+number: "6.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.orders, public.order_item, public.customer]
+  layout:
+    orders: { x: 0, y: 0 }
+    customer: { x: 720, y: 0 }
+    order_item: { x: 0, y: 360 }
+initialQuery: |
+  select order_id, book_id, qty
+  from orders natural join order_item
+  order by order_id, book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Соединение таблиц (JOIN)
+  - url: https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM
+    title: "SELECT: раздел FROM"
+tags: ["natural join", "join using", "общие колонки", "соединение", "cross join"]
+mvp: false
+---
+
+<TlDr>`NATURAL JOIN` сам ищет колонки с одинаковыми именами и соединяет по всем сразу. Пока общая колонка одна, это удобно. Когда их две, соединение может тихо вернуть пустоту.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.orders">orders</T> 8 заказов, в <T id="public.order_item">order_item</T> 15 позиций. Общая колонка у них одна: <C id="public.orders.order_id">order_id</C>. Поэтому `NATURAL JOIN` соединяет по ней.
+
+У <T id="public.customer">customer</T> и `orders` общих имён два: <C id="public.customer.customer_id">customer_id</C> и <C id="public.customer.created_at">created_at</C>. Второе имя и создаст проблему.
+
+## NATURAL сам находит ключ
+
+```sql run expect=rows:15
+select order_id, book_id, qty
+from orders natural join order_item
+order by order_id, book_id;
+```
+
+15 строк, столько же, сколько позиций в `order_item`. Условие `ON` не написано: Postgres сам взял колонку `order_id` из обеих таблиц и соединил по ней.
+
+В выдаче `order_id` встречается один раз, хотя колонка есть в обеих таблицах. `NATURAL` склеивает общие колонки, как `USING`.
+
+На доске таблицы съезжаются по `order_id`, счётчик показывает 15 строк. Заказ 3 даёт три строки, заказы 2 и 4 по одной, остальные по две.
+
+## Когда общих колонок две
+
+Теперь покупатели и заказы:
+
+```sql run expect=rows:1
+select count(*) from customer natural join orders;
+```
+
+Одна строка, в ней 0. Запомни это число. Хотя `customer_id` у всех восьми заказов указывает на существующего покупателя, `NATURAL` сравнивает ещё и `created_at`.
+
+Время создания покупателя и время заказа не совпало ни разу. Самый близкий случай: покупатель 5 создан `2024-04-10 14:00`, его заказ 6 в `15:00`. Тот же день, тот же покупатель, разница в час. Пары нет.
+
+Проверим, что дело именно в двух колонках. Перечислим их руками:
+
+```sql run expect=rows:1
+select count(*) from customer join orders using (customer_id, created_at);
+```
+
+Снова 0. Это тот же запрос, только `USING` называет общие колонки явно.
+
+А теперь только по `customer_id`:
+
+```sql run expect=rows:1
+select count(*) from customer join orders using (customer_id);
+```
+
+Вернулось 8. Каждый заказ нашёл покупателя. Елена Козлова без заказов в выдачу не попала, соединение внутреннее.
+
+Восемь против нуля. Вся разница в лишней колонке `created_at`, которую `NATURAL` добавил в условие без спроса.
+
+## NATURAL это USING по всем общим именам
+
+`NATURAL JOIN` нельзя дополнить условием `ON`. Postgres отвечает синтаксической ошибкой:
+
+```sql run expectError=42601
+select * from orders natural join order_item on orders.order_id = order_item.order_id;
+```
+
+Код `42601`, `syntax error at or near "on"`. Либо `NATURAL` без условия, либо `JOIN` с `ON` или `USING`.
+
+<Callout kind="tip">
+Пиши `join ... using (order_id)`. Тогда ключ виден в тексте запроса. Новая колонка с тем же именем в одной из таблиц не поменяет смысл соединения молча.
+</Callout>
+
+## Чего нет в выдаче и почему
+
+- ❌ В `customer natural join orders` нет ни одного заказа: `created_at` не совпал ни у одной пары.
+- ❌ В том же запросе нет ни одного покупателя: соединение внутреннее, пары не нашлось ни у кого.
+- ❌ «Остров погибших кораблей» в соединении заказов с позициями: книгу ни разу не заказали, позиции для неё нет.
+- ❌ В выдаче по `using (customer_id)` нет Елены Козловой: у покупателя 6 нет заказов.
+- ❌ В `customer join orders using (customer_id, created_at)` нет всех 8 заказов: время создания покупателя и заказа это разные события.
+
+## Ловушки
+
+<Callout kind="trap">
+Если общих колонок нет вовсе, `NATURAL JOIN` не падает. Он превращается в `CROSS JOIN` и соединяет каждую строку с каждой:
+
+```sql run expect=rows:1
+select count(*) from orders natural join book_category;
+```
+
+Одна строка, в ней 48. У `orders` и `book_category` нет колонок с одинаковыми именами, поэтому условие получилось пустым: 8 заказов умножились на 6 категорий.
+
+Тот же запрос с `join ... on true` вернул бы те же 48 строк. Разница в том, что `NATURAL` скрывает отсутствие ключа. Ты ждёшь соединение по смыслу, а получаешь декартово произведение.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `select count(*) from book natural join order_item`? Сначала ответь, потом проверь на доске.
+2. Сколько строк даст `select count(*) from author natural join book`? Вспомни про Пастернака и про две книги без автора.
+3. Сколько строк вернёт `select count(*) from orders natural join employee`? Есть ли у этих таблиц общие имена?
+
+<Cheatsheet>
+- `natural join`: `USING` по всем колонкам с одинаковыми именами.
+- Общая колонка в выдаче одна, дубля нет.
+- `NATURAL` и `ON` вместе: синтаксическая ошибка `42601`.
+- Нет общих колонок: `NATURAL` работает как `CROSS JOIN`.
+- `NATURAL` учитывает все совпадения имён, включая служебные вроде `created_at`.
+- Надёжнее писать `join ... using (...)` и перечислять ключ руками.
+</Cheatsheet>

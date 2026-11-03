@@ -1,0 +1,151 @@
+---
+id: lag-lead
+title: "lag, lead, first_value, last_value"
+chapter: windows
+number: "9.3"
+order: 3
+dataset: events
+board:
+  tables: [public.event, public.orders]
+  layout:
+    orders: { x: 0, y: 0 }
+    event: { x: 620, y: 0 }
+initialQuery: |
+  select kind, amount,
+    lag(kind) over (order by happened_at) as prev,
+    lead(kind) over (order by happened_at) as next
+  from event
+  where order_id = 7
+  order by happened_at;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-window.html
+    title: Оконные функции
+  - url: https://www.postgresql.org/docs/current/tutorial-window.html
+    title: "Учебник: оконные функции"
+tags: [оконные функции, lag, lead, first_value, last_value, "соседняя строка"]
+mvp: false
+---
+
+<TlDr>`lag` и `lead` достают соседнюю строку окна, `first_value` и `last_value` берут крайнее значение рамки. У первой строки нет предыдущей, у последней нет следующей, поэтому там NULL.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.event">event</T> 21 событие по 8 заказам. В <C id="public.event.kind">kind</C> пять видов: `created`, `paid`, `shipped`, `cancelled`, `returned`. Сумма в <C id="public.event.amount">amount</C> заполнена только у платежей.
+
+Заказ 7 прошёл четыре шага: создан, оплачен 2110.00, отправлен, возвращён. В <C id="public.event.happened_at">happened_at</C> у этих четырёх событий разные моменты, ничьей нет. Это удобный короткий ряд для соседей.
+
+## Сосед до и после
+
+```sql run expect=rows:4
+select kind, amount,
+  lag(kind) over (order by happened_at) as prev,
+  lead(kind) over (order by happened_at) as next
+from event
+where order_id = 7
+order by happened_at;
+```
+
+Вернулось 4 строки:
+
+- `created`: `prev` NULL, `next` `paid`;
+- `paid`: `prev` `created`, `next` `shipped`;
+- `shipped`: `prev` `paid`, `next` `returned`;
+- `returned`: `prev` `shipped`, `next` NULL.
+
+`lag` смотрит на строку выше по порядку окна, `lead` на строку ниже. У первой строки предыдущей нет, поэтому `prev` равен NULL. У последней нет следующей, поэтому NULL в `next`.
+
+На доске от каждой строки к соседям тянутся стрелки: `lag` назад, `lead` вперёд. У крайних строк стрелка упирается в пустое место и подсвечивается серым.
+
+## Граница заказа
+
+Если не задать партицию, окно видит все события подряд. Возьмём два первых заказа:
+
+```sql run expect=rows:5
+select order_id, kind,
+  lag(kind) over (order by happened_at) as prev_all,
+  lag(kind) over (partition by order_id order by happened_at) as prev_order
+from event
+where order_id in (1, 2)
+order by happened_at;
+```
+
+Вернулось 5 строк: три события заказа 1 и два события заказа 2.
+
+У первого `created` заказа 2 в `prev_all` стоит `shipped` из заказа 1. Без партиции это законно: предыдущая строка всего ряда принадлежит другому заказу. В `prev_order` у той же строки NULL, потому что внутри партиции заказа 2 она первая.
+
+На доске строки окрашиваются по `order_id`, и стрелка `prev_order` не переходит границу цвета. Стрелка `prev_all` такую границу пересекает.
+
+<Callout kind="tip">
+Почти всегда добавляй `partition by order_id`, если события разных заказов лежат в одной таблице. Иначе первый шаг нового заказа получит соседа из старого, и отчёт станет неверным.
+</Callout>
+
+## first_value и last_value
+
+`first_value` берёт первое значение рамки, `last_value` последнее. Для всего ряда заказа 7:
+
+```sql run expect=rows:4
+select kind, happened_at,
+  first_value(kind) over (order by happened_at) as first_kind,
+  last_value(kind) over (order by happened_at rows between unbounded preceding and unbounded following) as last_kind
+from event
+where order_id = 7
+order by happened_at;
+```
+
+У всех четырёх строк `first_kind` равно `created`, а `last_kind` равно `returned`. Функции не смотрят на текущую строку: они берут край рамки. Рамка здесь задана явно, от первой строки партиции до последней.
+
+На доске рамка растянута на все четыре строки, а значения в колонках повторяются. В отличие от `lag` и `lead`, это не сосед, а край всего окна.
+
+## NULL можно заменить
+
+У `lag` и `lead` есть третий аргумент: что вернуть, если соседа нет.
+
+```sql run expect=rows:4
+select kind, lag(kind, 1, 'начало') over (order by happened_at) as prev
+from event
+where order_id = 7
+order by happened_at;
+```
+
+У `created` в `prev` теперь стоит `начало`, у остальных строк соседи те же. Вместо строки можно поставить число или дату, но тип должен подходить к колонке.
+
+## Чего нет в выдаче и почему
+
+- ❌ `prev` у `created`: предыдущего события нет, `lag` вернул NULL.
+- ❌ `next` у `returned`: следующего события нет, `lead` вернул NULL.
+- ❌ NULL в `prev_order` у `created` заказа 2: внутри партиции это первая строка, хотя во всей таблице перед ней есть события заказа 1.
+- ❌ `returned` в `last_kind` без явной рамки: рамка по умолчанию заканчивается на текущей строке, поэтому `last_value` вернёт саму строку.
+- ❌ Числа в `amount` у `shipped` и `returned`: сумма есть только у платежа, остальные значения NULL.
+
+## Ловушки
+
+<Callout kind="trap">
+`last_value` без рамки не достаёт до конца партиции:
+
+```sql run expect=rows:4
+select kind, last_value(kind) over (order by happened_at) as last_kind
+from event
+where order_id = 7
+order by happened_at;
+```
+
+В колонке `last_kind` получаются `created`, `paid`, `shipped`, `returned`, то есть значение самой строки. Причина в рамке по умолчанию: `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. Она заканчивается на текущей строке, и «последняя» для неё это текущая, а при равном времени последняя из ровесников.
+
+Нужен последний элемент всей партиции, задай рамку до конца: `rows between unbounded preceding and unbounded following`. Именно так сделано в примере выше.
+</Callout>
+
+## Проверь себя
+
+1. Замени `lead(kind)` на `lead(kind, 2)` в запросе по заказу 7. Что окажется в `next` у `created` и у `paid`?
+2. Что будет в `prev` у `created`, если в окне написать `order by happened_at desc`?
+3. Сколько строк с NULL в `prev_order` вернёт запрос по заказам 1 и 2? А сколько с NULL в `prev_all`?
+
+<Cheatsheet>
+- `lag(kind)`: значение предыдущей строки окна.
+- `lead(kind)`: значение следующей строки окна.
+- У края окна соседа нет, поэтому NULL.
+- `lag(kind, 1, 'начало')`: заменить NULL на значение по умолчанию.
+- `partition by order_id`: не пускать соседей из чужого заказа.
+- `first_value` и `last_value`: края рамки, а не соседи.
+- `last_value` без `rows between ... unbounded following` часто возвращает текущую строку.
+</Cheatsheet>

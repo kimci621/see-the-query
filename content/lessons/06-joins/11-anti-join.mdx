@@ -1,0 +1,171 @@
+---
+id: anti-join
+title: "ANTI JOIN: NOT EXISTS и ловушка NOT IN"
+chapter: joins
+number: "6.11"
+order: 11
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name
+  from author a
+  where not exists (select 1 from book b where b.author_id = a.author_id)
+  order by a.name;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS
+    title: Подзапрос EXISTS
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#FUNCTIONS-COMPARISONS-IN-SCALAR
+    title: Выражение IN
+tags: ["anti join", "not exists", "not in", "null", "подзапрос"]
+mvp: false
+---
+
+<TlDr>`NOT EXISTS` оставляет строки, для которых подзапрос не нашёл ни одной. `NOT IN` на списке с `NULL` не оставляет ничего: сравнение даёт `UNKNOWN`, а `WHERE` пропускает только `TRUE`.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.author">author</T> 6 авторов. У Бориса Пастернака нет ни одной книги, это единственный такой автор.
+
+В <T id="public.book">book</T> 11 книг. У двух из них <C id="public.book.author_id">author_id</C> равен `NULL`: «Простой Python» и «Изучаем Python». Эти два `NULL` и решат исход урока.
+
+## NOT EXISTS: ни одной книги
+
+```sql run expect=rows:1
+select a.name
+from author a
+where not exists (select 1 from book b where b.author_id = a.author_id)
+order by a.name;
+```
+
+1 строка: Пастернак. Запомни это число.
+
+Работает как `EXISTS` из урока 6.10, только ответ переворачивается. Для каждого автора Postgres ищет хотя бы одну книгу. Нашёл: `NOT EXISTS` даёт `FALSE`, строка уходит. Не нашёл: `TRUE`, строка остаётся.
+
+`EXISTS` возвращает только `TRUE` или `FALSE`. Никакого `UNKNOWN` здесь нет, даже если внутри есть `NULL`.
+
+На доске пять авторов находят книгу и краснеют на шаге проверки. У Пастернака проверка пустая, его строка остаётся зелёной. Счётчик: 1 из 6.
+
+## NOT IN и NULL
+
+Кажется, что короче написать так:
+
+```sql run expect=rows:0
+select a.name
+from author a
+where a.author_id not in (select author_id from book)
+order by a.name;
+```
+
+0 строк. Хотя Пастернак книг не имеет и должен был остаться. Запомни ноль, это главная ловушка урока.
+
+`NOT IN` это сокращение для `<> ALL`. Запрос сравнивает `author_id` с каждым значением из списка и соединяет результаты через `AND`. Список из `book` содержит 11 значений, два из них `NULL`.
+
+Для Пастернака проверка выглядит так:
+
+`6 <> 1 AND 6 <> 2 AND ... AND 6 <> 5 AND 6 <> NULL`
+
+Первые сравнения дают `TRUE`. Последнее даёт `UNKNOWN`, потому что сравнивать с `NULL` нельзя. `TRUE AND UNKNOWN` даёт `UNKNOWN`. `WHERE` пропускает только `TRUE`, поэтому строка Пастернака уходит.
+
+Список один и тот же для всех авторов, и `NULL` в нём есть всегда. Поэтому результат снова станет `UNKNOWN`. Один `NULL` в подзапросе отравляет проверку для всех строк.
+
+Сколько таких `NULL`:
+
+```sql run expect=rows:1
+select count(*) from book where author_id is null;
+```
+
+Одна строка, в ней 2. Даже один `NULL` в списке способен обнулить `NOT IN`.
+
+## Как починить NOT IN
+
+Убрать `NULL` из списка:
+
+```sql run expect=rows:1
+select a.name
+from author a
+where a.author_id not in (
+  select author_id from book where author_id is not null
+)
+order by a.name;
+```
+
+Снова 1 строка, Пастернак. Список стал чище, `UNKNOWN` не появился.
+
+Способ рабочий, но хрупкий. Кто-то уберёт `where author_id is not null`, и запрос не упадёт: он молча начнёт возвращать 0 строк. Ошибку заметят не сразу.
+
+## Классический anti join через LEFT JOIN
+
+Тот же результат даёт левое соединение с проверкой на `NULL`:
+
+```sql run expect=rows:1
+select a.name
+from author a
+left join book b on b.author_id = a.author_id
+where b.book_id is null
+order by a.name;
+```
+
+1 строка, Пастернак. Соединение сохраняет всех авторов, а у кого книги нет, правая половина заполняется `NULL`. `WHERE` оставляет только такие строки.
+
+Проверять надо первичный ключ `b.book_id`. Он не бывает `NULL` у настоящей книги, поэтому `NULL` однозначно значит «пары не было». Если написать `b.price is null`, в выдачу попадёт ещё и Беляев: у его книги «Остров погибших кораблей» цена пустая, хотя книга существует.
+
+## Почему NOT EXISTS надёжнее
+
+- `EXISTS` возвращает только `TRUE` или `FALSE`, `UNKNOWN` не появляется.
+- `NULL` внутри подзапроса не меняет ответ.
+- Корреляция явная: видно, по какому полю ищем связь.
+- Можно добавить сколько угодно условий внутрь, включая несколько колонок.
+- Postgres обычно планирует `NOT EXISTS` как анти-соединение, по скорости он не хуже.
+
+## Чего нет в выдаче и почему
+
+- ❌ Пастернак в `NOT IN`: сравнение с `NULL` дало `UNKNOWN`, а не `TRUE`.
+- ❌ Все авторы в `NOT IN`: хотя бы один `NULL` в списке делает `UNKNOWN` для каждой строки.
+- ❌ Авторы с книгами в `NOT EXISTS`: подзапрос нашёл строку, условие стало ложным.
+- ❌ Авторы с книгами в `LEFT JOIN` с `is null`: у них `b.book_id` заполнен, фильтр их отбрасывает.
+- ❌ Беляев в `LEFT JOIN` с `b.price is null`: книга у него есть, пустая только цена. Поэтому проверять надо ключ.
+
+## Ловушки
+
+<Callout kind="trap">
+`NOT EXISTS` без корреляции проверяет всю таблицу, а не текущую строку:
+
+```sql run expect=rows:0
+select a.name
+from author a
+where not exists (select 1 from book b)
+order by a.name;
+```
+
+0 строк. Подзапрос не упоминает `a`, поэтому для каждого автора отвечает одинаково: в `book` есть строки, значит `NOT EXISTS` ложно. Выглядит как «авторов без книг нет», хотя на самом деле вопрос про таблицу, а не про автора.
+
+Сравни с коррелированным запросом в начале урока: там внутри есть `b.author_id = a.author_id`, и у Пастернака проверка пустая.
+
+Проверяй корреляцию и в `EXISTS`, и в `NOT EXISTS`. Без ссылки на внешний алиас подзапрос отвечает не про строку.
+</Callout>
+
+<Callout kind="tip">
+Для анти-join по умолчанию пиши `NOT EXISTS`. Если используешь `NOT IN`, убедись, что подзапрос не может вернуть `NULL`: колонка объявлена `NOT NULL` или в подзапросе стоит явный фильтр.
+
+`LEFT JOIN ... WHERE right.pk IS NULL` оставь для случаев, когда из правой таблицы всё равно нужны колонки или когда так понятнее читателю. По смыслу это тот же анти-join.
+</Callout>
+
+## Проверь себя
+
+1. Сколько авторов останется, если в `NOT EXISTS` добавить `and b.price > 1000`? Сначала посчитай, потом проверь.
+2. Сколько строк вернёт `not in (select author_id from book where price > 1000)`? Посмотри, какие книги дороже 1000 и что у них в `author_id`.
+3. Почему `left join ... where b.price is null` вернёт двух человек, а `where b.book_id is null` одного? Найди второго.
+
+<Cheatsheet>
+- Анти-join: строки левой таблицы, для которых справа нет ни одной пары.
+- `not exists (select 1 ... where correlated)`: безопасный способ, `UNKNOWN` не возвращает.
+- `not in (список с NULL)`: результат `UNKNOWN` для всех строк, обычно 0 строк.
+- `not in (select ... where col is not null)`: работает, но ломается, если фильтр убрать.
+- `left join ... where right.pk is null`: классический анти-join.
+- Проверяй `is null` по первичному ключу, а не по nullable-колонке вроде `price`.
+- `NOT EXISTS` без корреляции проверяет всю таблицу, а не текущую строку.
+</Cheatsheet>

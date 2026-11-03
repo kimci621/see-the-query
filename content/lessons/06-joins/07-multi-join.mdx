@@ -1,0 +1,156 @@
+---
+id: multi-join
+title: "Три и больше таблиц: цепочка JOIN"
+chapter: joins
+number: "6.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.book, public.author, public.book_category]
+  layout:
+    author: { x: 0, y: 0 }
+    book_category: { x: 720, y: 0 }
+    book: { x: 360, y: 300 }
+initialQuery: |
+  select b.title, a.name as author, c.name as category
+  from book b
+  join author a on a.author_id = b.author_id
+  join book_category c on c.category_id = b.category_id
+  order by b.book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Соединение таблиц (JOIN)
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-FROM
+    title: "FROM: список таблиц"
+tags: ["соединение трёх таблиц", "цепочка join", "многотабличный запрос", "алиасы таблиц", "порядок соединений"]
+mvp: false
+---
+
+<TlDr>`JOIN` можно ставить цепочкой: каждый следующий присоединяется к результату предыдущих. Три таблицы это два соединения, четыре таблицы три.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг, в <T id="public.author">author</T> 6 авторов, в <T id="public.book_category">book_category</T> 6 категорий.
+
+Девять книг имеют и автора, и категорию. У «Простого Python» и «Изучаем Python» нет автора. У «Простого Python» ещё и нет категории. У Бориса Пастернака нет книг.
+
+## Первый шаг: книга и автор
+
+Начнём с двух таблиц:
+
+```sql run expect=rows:9
+select b.title, a.name as author
+from book b
+join author a on a.author_id = b.author_id
+order by b.book_id;
+```
+
+9 строк. Две книги без автора ушли, Пастернак тоже: у него нет книг. Это знакомый `INNER JOIN` из урока 6.2.
+
+## Второй шаг: добавляем категорию
+
+Теперь приклеим категорию:
+
+```sql run expect=rows:9
+select b.title, a.name as author, c.name as category
+from book b
+join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id
+order by b.book_id;
+```
+
+Снова 9 строк. Второй `JOIN` добавил колонку category, но не изменил число строк: у всех девяти книг, которые прошли первый шаг, есть категория.
+
+Читается цепочка слева направо. Сначала `book` соединяется с `author` по author_id. Получается промежуточный результат из 9 строк и 13 колонок. Потом этот результат соединяется с `book_category` по category_id.
+
+Второй `JOIN` видит уже не только book, но и весь промежуточный результат. Поэтому в условии можно ссылаться на `b.category_id`, хотя рядом стоит `author`.
+
+Если бы у книги был автор, но не было категории, второй `JOIN` выбросил бы её. В наших данных такого нет, поэтому 9 не меняется. Но правило важное: строка должна пережить каждое соединение цепочки.
+
+## Четыре таблицы
+
+Цепочка не ограничена тремя. Добавим заказы:
+
+```sql run expect=rows:13
+select o.order_id, b.title, c.name as category
+from orders o
+join order_item oi on oi.order_id = o.order_id
+join book b on b.book_id = oi.book_id
+join book_category c on c.category_id = b.category_id
+order by o.order_id, b.title;
+```
+
+13 строк, хотя в order_item 15. Две строки потерялись на последнем соединении: «Простой Python» не имеет категории, а его заказывали в заказах 4 и 6. Первые два соединения их пропустили, третье выбросило.
+
+На доске в этом запросе три шага `JOIN`: orders + order_item, потом + book, потом + book_category. Каждый шаг показывает промежуточное число строк. Здесь после первых двух шагов было 15, после последнего осталось 13.
+
+## Условие на любой таблице
+
+`WHERE` стоит после всей цепочки и может ссылаться на любую таблицу:
+
+```sql run expect=rows:2
+select b.title, a.name as author, c.name as category
+from book b
+join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id
+where c.name = 'Фантастика' and a.country = 'Россия'
+order by b.book_id;
+```
+
+2 строки: «Голова профессора Доуэля» и «Остров погибших кораблей». Обе книги Александра Беляева, обе в фантастике. Остальные фантастические книги Жюля Верна не прошли по стране, а российская классика не прошла по категории.
+
+## Чего нет в выдаче и почему
+
+- ❌ «Простой Python» и «Изучаем Python» в цепочке book + author + book_category: у них нет автора, первый `JOIN` их выбрасывает.
+- ❌ Две строки order_item из заказов 4 и 6 в запросе с четырьмя таблицами: «Простой Python» без категории, последний `JOIN` его выбрасывает.
+- ❌ «Путешествие к центру Земли» и «Дети капитана Гранта» в запросе про фантастику России: Жюль Верн из Франции.
+- ❌ «Тихий Дон», «Судьба человека», «Капитанская дочка» и «Сказка о рыбаке и рыбке» в том же запросе: они классика, а не фантастика.
+
+## Ловушки
+
+<Callout kind="trap">
+В цепочке появляется неоднозначное имя. У author и book_category есть колонка name:
+
+```sql run expectError=42702
+select name
+from book b
+join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id;
+```
+
+Код `42702`, «column reference name is ambiguous». Postgres не знает, имя автора тебе нужно или категории. Пиши `a.name` или `c.name`, даже если сейчас нужна только одна из них.
+</Callout>
+
+<Callout kind="trap">
+`LEFT JOIN` в начале цепочки не спасает, если следующий `JOIN` обычный:
+
+```sql run expect=rows:10
+select b.title, a.name, c.name as category
+from book b
+left join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id
+order by b.book_id;
+```
+
+10 строк. `LEFT JOIN` сохранил «Изучаем Python» без автора, но следующий `INNER JOIN` по категории выбросил «Простой Python»: у него нет категории. Хочешь сохранить все книги до конца цепочки, делай `LEFT JOIN` на каждом шаге.
+</Callout>
+
+<Callout kind="tip">
+Строй цепочку в том порядке, в котором её проще читать: сначала главная таблица, потом справочники. И давай алиасы всем таблицам. В запросе на пять таблиц без алиасов через неделю не разберёшься, какая `name` откуда.
+</Callout>
+
+## Проверь себя
+
+1. Добавь в основной запрос `where a.country = 'Россия'`. Сколько строк останется? Российских авторов с книгами трое, у каждого по две книги.
+2. Почему в запросе с четырьмя таблицами 13 строк, а не 15? Найди две потерянные строки.
+3. Замени в цепочке из трёх таблиц первый `JOIN` на `LEFT JOIN`. Сколько строк получится и кто появится?
+
+<Cheatsheet>
+- Цепочка: `from a join b on ... join c on ...`. Три таблицы это два соединения.
+- Каждый следующий `JOIN` видит результат предыдущих.
+- `INNER JOIN` в цепочке: строка должна пережить каждое соединение.
+- `LEFT JOIN`, за которым идёт `INNER JOIN`, может потерять сохранённые строки.
+- Условие в `WHERE` может ссылаться на любую таблицу цепочки.
+- Одинаковые имена колонок требуют алиаса: `42702`.
+- Порядок `INNER JOIN` не меняет набор строк, но меняет читаемость и порядок колонок.
+</Cheatsheet>

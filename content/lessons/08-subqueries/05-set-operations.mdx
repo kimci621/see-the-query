@@ -1,0 +1,162 @@
+---
+id: set-operations
+title: UNION, INTERSECT и EXCEPT
+chapter: subqueries
+number: "8.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 0, y: 0 }
+    book: { x: 0, y: 360 }
+initialQuery: |
+  select author_id, name, country from author where country = 'Россия'
+  union
+  select author_id, name, country from author where country = 'Франция';
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-union.html
+    title: Объединение запросов (UNION, INTERSECT, EXCEPT)
+tags: [union, "union all", intersect, except, "операции над множествами"]
+mvp: false
+---
+
+<TlDr>`UNION`, `INTERSECT` и `EXCEPT` собирают результат из двух запросов: сложить, оставить общее или вычесть. Колонки ветвей должны совпадать по числу и типу, а порядок строк задаёт только `ORDER BY` в конце.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.author">author</T> 6 авторов. По <C id="public.author.country">country</C> они делятся так: Россия у четырёх (Шолохов, Пушкин, Беляев, Пастернак), Франция у одного (Жюль Верн), Бразилия у одного (Лусиану Рамальо).
+
+В <T id="public.book">book</T> 11 книг. В категории «Фантастика» (`category_id = 3`) четыре книги: 6, 7, 8 и 9. Тег «приключения» в <C id="public.book.tags">tags</C> стоит у трёх из них: 7, 8 и 9. В <T id="public.review">review</T> 10 отзывов, оценка 5 у четырёх: 1, 2, 6 и 10.
+
+## Складываем два списка
+
+```sql run expect=rows:5
+select author_id, name, country from author where country = 'Россия'
+union
+select author_id, name, country from author where country = 'Франция';
+```
+
+4 российских автора плюс 1 французский, итого 5 строк. Ветви читают одну и ту же таблицу, но это не важно: `UNION` работает с результатами, а не с таблицами. На доске сначала появляются две ветви, потом стадия `UNION` собирает их в один результат.
+
+`UNION` убирает полные дубли строк. Здесь дублей нет: множества стран не пересекаются.
+
+## UNION против UNION ALL
+
+Возьмём один и тот же запрос дважды, только по отзывам с оценкой 5. Сначала `UNION`:
+
+```sql run expect=rows:4
+select review_id, book_id from review where rating = 5
+union
+select review_id, book_id from review where rating = 5;
+```
+
+4 строки. Теперь `UNION ALL`:
+
+```sql run expect=rows:8
+select review_id, book_id from review where rating = 5
+union all
+select review_id, book_id from review where rating = 5;
+```
+
+8 строк. Каждая ветвь вернула по четыре одинаковые строки. `UNION` сравнил строки целиком и оставил по одной копии. `UNION ALL` приклеил второй список к первому.
+
+Запомни пару: 4 против 8. На доске восемь призраков встают парами, и на стадии `UNION` четыре правых копии краснеют и уходят. У `UNION ALL` уходят только служебные пометки, все восемь остаются.
+
+## INTERSECT: что есть в обоих списках
+
+```sql run expect=rows:3
+select book_id, title from book where category_id = 3
+intersect
+select book_id, title from book where 'приключения' = any(tags);
+```
+
+3 строки: книги 7, 8 и 9. В категории «Фантастика» четыре книги, тег «приключения» у трёх, и все три входят в категорию. Книга 6 «Голова профессора Доуэля» есть только в категории, поэтому не проходит.
+
+`INTERSECT` оставляет строки, которые целиком есть и слева, и справа. Сравнение идёт по всем колонкам `SELECT`, а не только по `book_id`.
+
+## EXCEPT: вычитаем один список из другого
+
+```sql run expect=rows:3
+select book_id, title from book where category_id = 3
+except
+select book_id, title from book where title like '%Путешествие%';
+```
+
+Снова 3 строки: 6, 7 и 9. Из четырёх фантастических книг ушла одна, «Путешествие к центру Земли» (8): её заголовок совпал с шаблоном.
+
+`EXCEPT` возвращает строки левой ветви, которых нет в правой. Если поменять ветви местами, результат будет 0 строк: единственное «Путешествие» уже есть в правом списке.
+
+## Порядок задаёт внешний ORDER BY
+
+У множеств нет обещанного порядка. Даже если каждая ветвь отсортирована, итог может прийти в другом порядке. `ORDER BY` пишется один раз, после последней ветви, и сортирует весь результат.
+
+```sql run expect=rows:5
+select author_id, name, country from author where country = 'Россия'
+union
+select author_id, name, country from author where country = 'Франция'
+order by name;
+```
+
+5 строк, теперь по алфавиту. `ORDER BY` относится к `UNION`, а не к последней ветви. Имена колонок берутся из первого `SELECT`, поэтому `order by name` видит `name` первой ветви.
+
+## Чего нет в выдаче и почему
+
+- ❌ Лусиану Рамальо в `UNION`: он из Бразилии, а ветви берут Россию и Францию.
+- ❌ «Голова профессора Доуэля» в `INTERSECT`: в категории «Фантастика» есть, тега «приключения» нет.
+- ❌ «Путешествие к центру Земли» в `EXCEPT`: заголовок совпал с `%Путешествие%`.
+- ❌ Четыре повторные строки в `UNION` по оценке 5: каждая пара схлопнулась в одну.
+- ❌ Второй порядок строк в `UNION` без `ORDER BY`: база не обещает, в каком порядке вернуть строки.
+
+## Ловушки
+
+<Callout kind="trap">
+Число колонок в ветвях должно совпадать:
+
+```sql run expectError=42601
+select name from author where country = 'Россия'
+union
+select name, country from author where country = 'Франция';
+```
+
+Postgres отвечает `each UNION query must have the same number of columns`, код `42601`. Слева одна колонка, справа две. Исправление: привести списки к одному набору, например добавить `country` в левую ветвь.
+
+Типы тоже должны стыковаться:
+
+```sql run expectError=42804
+select name from author
+union
+select born_year from author;
+```
+
+`UNION types text and integer cannot be matched`, код `42804`. Приведение `born_year::text` снимет ошибку, но подумай, нужен ли в одном столбце текст и год. Обычно это признак, что ветви задумывались разными.
+</Callout>
+
+<Callout kind="trap">
+`ORDER BY` внутри первой ветви ломает запрос:
+
+```sql run expectError=42601
+select author_id from author where country = 'Россия' order by author_id
+union
+select author_id from author where country = 'Франция';
+```
+
+`ORDER BY` должен стоять после всего множества. Внутри ветви он не имеет смысла: ветвь ещё не знает, что её ждёт.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `UNION ALL` для России и Франции? Проверь на доске.
+2. Сколько книг останется, если в `EXCEPT` заменить правую ветвь на `select book_id, title from book where 'приключения' = any(tags)`? Сначала ответь, потом запусти.
+3. Сколько разных стран вернёт `select country from author union select country from author`? Почему не 12?
+
+<Cheatsheet>
+- `union`: сложить и убрать полные дубли.
+- `union all`: сложить и оставить все копии.
+- `intersect`: оставить строки, которые есть в обеих ветвях.
+- `except`: оставить строки левой ветви, которых нет в правой.
+- В ветвях одно и то же число колонок и совместимые типы.
+- Имена колонок результата берутся из первого `select`.
+- `order by` один раз в конце, после последней ветви.
+- `NULL` при сравнении строк считаются равными друг другу.
+</Cheatsheet>

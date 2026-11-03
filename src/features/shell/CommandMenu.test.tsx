@@ -65,7 +65,7 @@ describe('CommandMenu', () => {
 
   it('пустой результат', async () => {
     renderMenu();
-    await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'zzzz');
+    await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'qwxqz');
     expect(screen.getByText('Ничего не нашлось')).toBeInTheDocument();
   });
 });

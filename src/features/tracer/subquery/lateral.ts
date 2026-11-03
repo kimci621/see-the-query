@@ -4,6 +4,7 @@ import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
 import { type Prober, sqlOf, typeNames } from '../probe';
 import { resultKey } from '../rowkey';
+import { rangeOf } from '../select/context';
 import type { Relation, Row, Stage, Trace, TraceOptions } from '../types';
 import { innerNames, outerValues, substituteOuter } from './substitute';
 
@@ -132,5 +133,19 @@ export async function traceLateral(
     caption: captions.subqueryLateral(samples.length, outerRelation.rows.length, output.rows.length),
     output,
   };
-  return { stages: [...outer.stages, stage], output };
+  const stages: Stage[] = [...outer.stages, stage];
+  // ORDER BY снаружи LATERAL применяется к готовому итогу: показываем отдельной стадией
+  if (sel.sortClause) {
+    stages.push({
+      id: `${stages.length}:sort`,
+      kind: 'sort',
+      order: output.rows.map((row) => row.key),
+      sortKeys: sel.sortClause.map(sqlOf),
+      keyColumns: [],
+      sourceRange: rangeOf(stmt, 'order'),
+      caption: captions.sort(sel.sortClause.map(sqlOf), output.rows.length),
+      output,
+    });
+  }
+  return { stages: [...stages], output };
 }

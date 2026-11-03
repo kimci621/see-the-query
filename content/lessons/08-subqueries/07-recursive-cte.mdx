@@ -1,0 +1,169 @@
+---
+id: recursive-cte
+title: Рекурсивный CTE
+chapter: subqueries
+number: "8.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.employee]
+  layout:
+    employee: { x: 0, y: 0 }
+initialQuery: |
+  with recursive tree as (
+    select employee_id, name, manager_id, 1 as level
+    from employee
+    where manager_id is null
+    union all
+    select e.employee_id, e.name, e.manager_id, t.level + 1
+    from employee e
+    join tree t on e.manager_id = t.employee_id
+  )
+  select employee_id, name, level from tree order by level, employee_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-RECURSIVE
+    title: Рекурсивные запросы (WITH RECURSIVE)
+tags: [cte, "with recursive", рекурсия, иерархия, дерево]
+mvp: false
+---
+
+<TlDr>`WITH RECURSIVE` собирает иерархию слоями: якорь даёт первый слой, шаг добавляет следующий, а пустой слой останавливает цикл.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.employee">employee</T> 8 сотрудников. Корень дерева один: Ольга Николаева (`employee_id = 1`), у неё <C id="public.employee.manager_id">manager_id</C> равен NULL. Дальше слои такие:
+
+- слой 1: Ольга;
+- слой 2: Павел Орлов и Светлана Волкова;
+- слой 3: Дмитрий Соколов, Алексей Морозов, Наталья Лебедева и Игорь Новиков;
+- слой 4: Татьяна Зайцева.
+
+Всего 8 строк и 4 уровня. У Татьяны manager_id = 4, у Дмитрия, Алексея, Натальи и Игоря manager_id = 2 или 3.
+
+## Якорь: первый слой
+
+Рекурсивный CTE начинается с обычного запроса, который даёт первый слой. Его называют **якорем**. Возьмём корень:
+
+```sql run expect=rows:1
+select employee_id, name, manager_id, 1 as level
+from employee
+where manager_id is null;
+```
+
+1 строка: Ольга с уровнем 1. Это ещё не рекурсия, а обычная выборка. Она нужна, чтобы было с чего начать.
+
+## Шаг: добавляем следующий слой
+
+Теперь полный запрос:
+
+```sql run expect=rows:8
+with recursive tree as (
+  select employee_id, name, manager_id, 1 as level
+  from employee
+  where manager_id is null
+  union all
+  select e.employee_id, e.name, e.manager_id, t.level + 1
+  from employee e
+  join tree t on e.manager_id = t.employee_id
+)
+select employee_id, name, level
+from tree
+order by level, employee_id;
+```
+
+8 строк. Внутри `WITH RECURSIVE` две части, соединённые `UNION ALL`:
+
+- якорь: корень, уровень 1;
+- шаг: сотрудники, чей `manager_id` указывает на `employee_id` из `tree`; уровень увеличивается на 1.
+
+На первой итерации `tree` содержит только Ольгу, поэтому шаг находит Павла и Светлану. На второй итерации рабочий набор `tree` содержит только прошлый слой: Павла и Светлану. Шаг добавляет четырёх их подчинённых. На третьей итерации появляется Татьяна. На четвёртой шаг не находит никого, и цикл останавливается.
+
+В трассировщике видны итерации: 1, 2, 4, 1 и 0 строк. Пятая, пустая, нужна, чтобы понять, что дальше идти некуда. На доске слои появляются один под другим, как этажи.
+
+## Сколько людей на каждом уровне
+
+Сгруппируем результат по уровню:
+
+```sql run expect=rows:4
+with recursive tree as (
+  select employee_id, name, manager_id, 1 as level
+  from employee
+  where manager_id is null
+  union all
+  select e.employee_id, e.name, e.manager_id, t.level + 1
+  from employee e
+  join tree t on e.manager_id = t.employee_id
+)
+select level, count(*)
+from tree
+group by level
+order by level;
+```
+
+4 строки: 1, 2, 4 и 1 человек. Сумма 8, как и в прошлом запросе. На доске после рекурсии получается четыре стопки, по одной на уровень. Это тот же результат, только свёрнутый.
+
+## Лимит 50
+
+У рекурсии нет встроенного предохранителя. Если шаг никогда не вернёт пустой слой, Postgres будет считать и считать, пока не кончится память. Визуализатор останавливает такие запросы после 50 итераций и честно говорит, что показать не может. В самом Postgres такого лимита нет.
+
+Поэтому в рекурсивном CTE всегда проверяй, что шаг упирается в условие остановки. Для дерева это естественный конец: у листьев нет детей. Для графа с циклами нужен счётчик посещений, массив пути или `CYCLE` (PostgreSQL 14+).
+
+## Чего нет в выдаче и почему
+
+- ❌ Ольга во втором слое: она корень, якорь даёт её на уровне 1.
+- ❌ Павел в первом слое: его manager_id = 1, он появляется только на шаге.
+- ❌ Татьяна на третьем уровне: её manager_id = 4, а Дмитрий появляется на третьем слое, значит Татьяна на четвёртом.
+- ❌ Пятый уровень: у Татьяны нет подчинённых, шаг возвращает 0 строк.
+- ❌ Сотрудники вне дерева: все 8 достижимы от корня, поэтому лишних нет.
+
+## Ловушки
+
+<Callout kind="trap">
+Без слова `RECURSIVE` CTE не видит сам себя:
+
+```sql run expectError=42P01
+with tree as (
+  select employee_id, manager_id
+  from employee
+  where manager_id is null
+  union all
+  select e.employee_id, e.manager_id
+  from employee e
+  join tree t on e.manager_id = t.employee_id
+)
+select count(*) from tree;
+```
+
+Код `42P01`, `relation "tree" does not exist`. Postgres читает `tree` как обычную таблицу и не находит её. Добавь `recursive` после `with`, и имя станет доступно внутри собственного тела.
+
+Второй капкан: шаг без условия остановки. Такой запрос не запускай:
+
+```sql noexec
+with recursive t(n) as (
+  select 1
+  union all
+  select n + 1 from t
+)
+select n from t;
+```
+
+Здесь `n + 1` никогда не перестанет расти. Нужен `where n < 5` или другой предел. Если строки могут повторяться, помогает `UNION` вместо `UNION ALL`: он выбрасывает дубли и часто обрывает цикл. Но если в строке есть счётчик уровня, дубля не будет, и `UNION` не спасёт. Тогда считай путь или используй `CYCLE`.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт дерево, если в якоре написать `where manager_id = 1`? Сначала ответь, потом проверь.
+2. Сколько сотрудников на третьем уровне?
+3. Что изменится, если заменить `union all` на `union`?
+4. Где остановится рекурсия, если у Татьяны появится подчинённый?
+
+<Cheatsheet>
+- `with recursive имя as (якорь union all шаг) select ...`
+- Якорь даёт первый слой, шаг добавляет следующий.
+- В шаге ссылка на CTE означает прошлый слой, не весь накопленный результат.
+- Колонки якоря и шага совпадают по числу и типу.
+- Цикл останавливается, когда шаг вернул 0 строк.
+- `union` убирает дубли, `union all` оставляет все.
+- Визуализатор ограничивает рекурсию 50 итерациями; в Postgres такого лимита нет.
+- Для циклов используй массив пути или `CYCLE`.
+</Cheatsheet>

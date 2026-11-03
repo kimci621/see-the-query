@@ -1,0 +1,203 @@
+---
+id: rollup-cube
+title: ROLLUP, CUBE и GROUPING SETS
+chapter: aggregation
+number: "7.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.book]
+  layout:
+    book: { x: 300, y: 0 }
+initialQuery: |
+  select category_id, count(*) from book group by rollup(category_id) order by grouping(category_id), category_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUPING-SETS
+    title: GROUPING SETS, CUBE и ROLLUP
+  - url: https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-GROUPING-TABLE
+    title: Функция GROUPING
+course: ["11.57"]
+tags: [rollup, cube, "grouping sets", grouping, итоги, "многоуровневая группировка"]
+mvp: false
+---
+
+<TlDr>`ROLLUP` добавляет к обычным группам промежуточные и общий итог, `CUBE` все комбинации ключей, `GROUPING SETS` только перечисленные уровни. `GROUPING()` показывает, где ключ погашен группировкой.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг. По <C id="public.book.category_id">category_id</C> они делятся на группы 3, 4, 6 и `NULL`: 4, 4, 2 и 1 книга. У категорий 1, 2 и 5 нет своих книг.
+
+По <C id="public.book.author_id">author_id</C> картина такая: у авторов 1, 3, 4 и 5 по две книги, у автора 2 одна, ещё две книги без автора. Пять авторов плюс группа без автора дают 6 стопок.
+
+## Обычный GROUP BY: 4 детали
+
+Сначала привычный запрос из урока 7.2:
+
+```sql run expect=rows:4
+select category_id, count(*) from book
+group by category_id
+order by category_id;
+```
+
+4 строки: 3, 4, 6 и `NULL`. Сумма чисел 4 + 4 + 2 + 1 = 11. Это детальные строки, по одной на реальную группу.
+
+## ROLLUP: пятая строка
+
+**`ROLLUP`** добавляет к обычным группам общий итог. Попросим его у категорий:
+
+```sql run expect=rows:5
+select category_id, count(*) from book
+group by rollup(category_id)
+order by grouping(category_id), category_id;
+```
+
+5 строк. Четыре прежние плюс пятая: `category_id` `NULL`, число 11. Это итог по всей таблице.
+
+`ROLLUP(category_id)` строит два уровня: сначала группировка по `category_id`, потом группировка без ключа, то есть вся таблица. Для двух ключей `rollup(a, b)` уровней три: `(a, b)`, `(a)` и `()`. Чем длиннее список, тем больше промежуточных итогов.
+
+На доске после `GROUP BY` стоят 4 стопки. `ROLLUP` добавляет пятую, в ней лежат все 11 строк, а ключ погашен. Счётчик в итоговой строке показывает 11.
+
+## GROUPING: где NULL настоящий
+
+В прошлом запросе у двух строк `category_id` равен `NULL`, и по ключу их не различить. На помощь приходит `GROUPING`:
+
+```sql run expect=rows:5
+select category_id, grouping(category_id) as g, count(*)
+from book
+group by rollup(category_id)
+order by grouping(category_id), category_id;
+```
+
+5 строк. У четырёх детальных `g` равно 0, у итоговой 1. **`GROUPING`** возвращает 0, когда значение пришло из данных, и 1, когда ключ погасили при свёртке.
+
+Посмотри на строку `NULL / 0 / 1`. Это «Простой Python» без категории, настоящий `NULL`. В строке `NULL / 1 / 11` лежит итог. Снаружи обе выглядят одинаково, различает их только `GROUPING`.
+
+`GROUPING` можно писать в `SELECT`, `ORDER BY` и `HAVING`. С несколькими аргументами он возвращает битовую маску: `grouping(a, b)` даёт 0, 1, 2 или 3. Для одного ключа это 0 или 1.
+
+В отчёте итоговую строку подписывают «всего». В SQL её узнают по `grouping(category_id) = 1`.
+
+## CUBE: все комбинации
+
+**`CUBE`** строит все подмножества ключей. Для двух колонок это четыре уровня: пара, каждый ключ отдельно и пустой набор.
+
+```sql run expect=rows:18
+select author_id,
+       category_id,
+       grouping(author_id) as g_author,
+       grouping(category_id) as g_category,
+       count(*) as books
+from book
+group by cube(author_id, category_id)
+order by grouping(author_id), grouping(category_id), author_id, category_id;
+```
+
+18 строк. Разложим по уровням:
+
+- 7 детальных строк: пары автор и категория, которые реально встретились;
+- 6 строк по авторам: пять авторов и группа из двух книг без автора;
+- 4 строки по категориям: 3, 4, 6 и `NULL`;
+- 1 общий итог.
+
+7 + 6 + 4 + 1 = 18. Для сравнения, `rollup(author_id, category_id)` по тем же ключам дал бы 7 + 6 + 1 = 14 строк. `CUBE` добавил уровень по категориям, которого в `ROLLUP` нет.
+
+Флаги читаются так. В детальных строках оба нуля, даже когда `author_id` или `category_id` равен `NULL` по-настоящему. В строках по авторам `g_category` равно 1, ключ категории погашен. В строках по категориям `g_author` равно 1. В итоге оба флага 1.
+
+На доске уровни ложатся стопками: сначала 7 детальных строк, под ними 6 авторских, потом 4 категорийные, в самом низу 1 итоговая. Каждая ступень шире предыдущей: детали считают по одной паре, авторские строки по автору, категорийные по категории, итог по всем 11 книгам.
+
+## GROUPING SETS: выбрать уровни руками
+
+**`GROUPING SETS`** перечисляет ровно те наборы ключей, которые нужны. Лишних уровней не будет:
+
+```sql run expect=rows:11
+select author_id, category_id, count(*)
+from book
+group by grouping sets ((author_id), (category_id), ())
+order by grouping(author_id), grouping(category_id), author_id, category_id;
+```
+
+11 строк: 6 по авторам, 4 по категориям и 1 итог. 6 + 4 + 1 = 11.
+
+В строках по авторам `category_id` погашен, в строках по категориям погашен `author_id`. Без `GROUPING()` снова не понять, где настоящий `NULL`, а где ключ не участвовал в уровне. Именно поэтому флаги стоит выводить рядом с ключами.
+
+Если нужны только категории и итог, пиши `grouping sets ((category_id), ())`. Получишь те же 5 строк, что у `rollup(category_id)`. Если нужны категории и авторы без общего итога, убери пустой набор `()`.
+
+## Оставить только детали
+
+`HAVING` работает после группировки, поэтому `GROUPING()` в нём доступен:
+
+```sql run expect=rows:4
+select category_id, count(*)
+from book
+group by rollup(category_id)
+having grouping(category_id) = 0
+order by category_id;
+```
+
+4 строки, только детали. Итог отброшен. Так из отчёта убирают строку «всего», если её считают отдельно или выводят другим блоком. Для обратной задачи, оставить только итог, условие меняется на `= 1`.
+
+## Чего нет в выдаче и почему
+
+- ❌ Категории 1, 2 и 5 в детальных строках: у них нет книг, групп тоже нет.
+- ❌ «Простой Python» в строках категорий 3, 4 и 6: у книги `category_id` равен `NULL`, она попадает только в `NULL`-группу.
+- ❌ Число 11 в детальных строках: оно появляется только на итоговом уровне.
+- ❌ 22 при сложении всех строк отчёта: 4 + 4 + 2 + 1 + 11. Итог уже включает детали, второй раз их складывать нельзя.
+- ❌ Разница между `NULL`-группой и итогом без `GROUPING()`: обе строки показывают `NULL` в ключе.
+
+## Ловушки
+
+<Callout kind="trap">
+`GROUPING()` нужен потому, что `NULL` в данных и `NULL`-итог неотличимы. Попробуй найти итог по значению ключа:
+
+```sql run expect=rows:2
+select category_id, count(*)
+from book
+group by rollup(category_id)
+having category_id is null;
+```
+
+2 строки вместо одной: `NULL`-группа с «Простым Python» и числом 1, и итог с числом 11. Условие поймало обе. Для итога пиши `having grouping(category_id) = 1`.
+</Callout>
+
+<Callout kind="trap">
+`GROUPING()` нельзя ставить в `WHERE`. Он вычисляется на шаге группировки, а `WHERE` идёт раньше:
+
+```sql run expectError=42803
+select category_id, count(*) from book
+where grouping(category_id) = 0
+group by rollup(category_id);
+```
+
+Код `42803`, `grouping operations are not allowed in WHERE`. Фильтруй уровни в `HAVING`.
+</Callout>
+
+<Callout kind="trap">
+Аргумент `GROUPING` должен быть выражением из `GROUP BY`. Другая колонка даёт ошибку:
+
+```sql run expectError=42803
+select grouping(price) from book group by rollup(category_id);
+```
+
+Код `42803`, `arguments to GROUPING must be grouping expressions of the associated query level`. В `GROUP BY` у нас `category_id`, колонки `price` там нет.
+</Callout>
+
+<Callout kind="tip">
+В отчёте заменяй итоговый `NULL` на понятную подпись: `case when grouping(category_id) = 1 then 'всего' else category_id::text end`. Человек читает отчёт без догадок.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `group by rollup(author_id)`? Сначала посчитай уровни, потом проверь на доске.
+2. Как оставить в `rollup(category_id)` только итог? Напиши условие в `HAVING`.
+3. Сколько строк вернёт `group by grouping sets ((author_id, category_id), ())`?
+4. Чем `cube(author_id, category_id)` отличается от `rollup(author_id, category_id)` по числу строк?
+
+<Cheatsheet>
+- `group by rollup(a, b)`: уровни `(a, b)`, `(a)`, `()`. Для одного ключа это детали плюс итог.
+- `group by cube(a, b)`: все подмножества: `(a, b)`, `(a)`, `(b)`, `()`.
+- `group by grouping sets ((a), (b), ())`: ровно перечисленные уровни.
+- Ключ, которого нет в уровне, показывается как `NULL`.
+- `grouping(x)`: 0 для настоящего значения, 1 если ключ погашен. Несколько аргументов дают битовую маску.
+- Итоги фильтруй через `having grouping(x) = 1`, детали через `= 0`.
+- `order by grouping(x), x` ставит детали первыми, итог последним.
+- Итог включает все строки. Не складывай его с деталями повторно.
+</Cheatsheet>

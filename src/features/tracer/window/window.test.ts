@@ -65,7 +65,7 @@ describe('стадия window', () => {
           'select kind, count(*) over (order by happened_at rows between unbounded preceding and current row) from event where order_id = 3',
         );
         expect(rows.mode, rows.fallbackReason).toBe('full');
-        expect(stageOf(rows, 'window').frame).toContain('ROWS BETWEEN UNBOUNDED PRECEDING');
+        expect(stageOf(rows, 'window').frame).toBe('ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW');
         expect(column(stageOf(rows, 'window'), 'count').map(Number).sort()).toEqual([1, 2, 3]);
       }),
     ));

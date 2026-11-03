@@ -1,0 +1,169 @@
+---
+id: distinct-on
+title: DISTINCT и DISTINCT ON
+chapter: select
+number: "4.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.book, public.author]
+  layout:
+    book: { x: 0, y: 0 }
+    author: { x: 330, y: 360 }
+initialQuery: |
+  select distinct category_id from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-select-lists.html#QUERIES-DISTINCT
+    title: DISTINCT и DISTINCT ON
+  - url: https://www.postgresql.org/docs/current/sql-select.html
+    title: Команда SELECT
+tags: [distinct, "distinct on", "уникальные строки", "order by"]
+mvp: false
+---
+
+<TlDr>`DISTINCT` убирает повторяющиеся строки целиком, а `DISTINCT ON` оставляет по одной строке на каждую группу ключей.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг. Категорий всего четыре значения: 3, 4, 6 и NULL. Авторов у книг шесть значений: 1, 2, 3, 4, 5 и NULL. У двух книг автор не указан.
+
+`DISTINCT` работает со всей строкой, а не с одной колонкой. Это главное, что стоит запомнить до примеров.
+
+## DISTINCT: уникальные значения
+
+Все категории книг:
+
+```sql run expect=rows:4
+select distinct category_id from book
+order by category_id nulls last;
+```
+
+4 строки: 3, 4, 6 и NULL. В таблице 11 книг, но категорий меньше. На доске одинаковые значения съезжаются в стопку и схлопываются в одну строку, на стопке счётчик.
+
+NULL в `DISTINCT` считается обычным значением: две книги без категории дают одну строку NULL, а не две.
+
+Авторы:
+
+```sql run expect=rows:6
+select distinct author_id from book
+order by author_id nulls last;
+```
+
+6 строк: пять авторов и NULL. Книги Шолохова (две) и Верна (две) дали по одной строке на автора.
+
+<Callout kind="trap">
+`DISTINCT` относится ко всем колонкам в `SELECT`, а не к первой:
+
+```sql run expect=rows:11
+select distinct author_id, title from book;
+```
+
+11 строк, потому что названия у книг разные. Две строки считаются дублями, только если совпали все выбранные колонки.
+</Callout>
+
+## DISTINCT ON: по одной строке на группу
+
+`DISTINCT ON (author_id)` оставляет первую строку каждой группы авторов. Порядок задаёт `ORDER BY`, и это не украшение, а часть смысла запроса.
+
+Самая дорогая книга каждого автора:
+
+```sql run expect=rows:6
+select distinct on (author_id) title, author_id, price
+from book
+order by author_id nulls last, price desc nulls last, title;
+```
+
+6 строк. У Шолохова «Тихий Дон» за 890, у Рамальо «Python. К вершинам мастерства» за 2400, у Пушкина «Капитанская дочка» за 420, у Беляева «Голова профессора Доуэля» за 560, у Верна «Дети капитана Гранта» за 610, у книг без автора «Изучаем Python» за 3200.
+
+У Верна две книги по 610. Ничью разбирает третий ключ `title`: «Дети капитана Гранта» идут раньше «Путешествия к центру Земли».
+
+На доске строки группируются по `author_id`, а победитель в каждой группе подсвечен. Остальные строки гаснут.
+
+## DISTINCT ON по категории
+
+Тот же приём, но ключ другой. Самая дорогая книга в каждой категории:
+
+```sql run expect=rows:4
+select distinct on (category_id) category_id, title, price
+from book
+order by category_id nulls last, price desc nulls last, title;
+```
+
+4 строки: по одной на категории 3, 4, 6 и NULL. В категории 4 победил «Тихий Дон» за 890, в категории 6 «Изучаем Python» за 3200.
+
+<Callout kind="analogy">
+`DISTINCT ON` похож на выбор капитана команды: команды заданы ключом, а капитан определяется порядком. Если поменять порядок, поменяется и капитан, хотя команды останутся теми же.
+</Callout>
+
+## ORDER BY обязателен
+
+`DISTINCT ON` требует, чтобы выражения в скобках совпадали с началом `ORDER BY`. Иначе Postgres не знает, какую строку считать первой:
+
+```sql run expectError=42P10
+select distinct on (author_id) title from book
+order by price desc;
+```
+
+Код `42P10`: `SELECT DISTINCT ON expressions must match initial ORDER BY expressions`. Сначала в `ORDER BY` должен идти ключ `author_id`, и только потом ключи выбора.
+
+Правильный порядок:
+
+```sql run expect=rows:6
+select distinct on (author_id) title, author_id
+from book
+order by author_id nulls last, price desc nulls last;
+```
+
+6 строк. На доске видно, что ключ `author_id` подсвечен и стоит первым, а цена решает, кто победит внутри группы.
+
+<Callout kind="tip">
+`DISTINCT ON` удобен для задачи «последняя запись на пользователя» и «самый дорогой товар в категории». Но `ORDER BY` должен быть полным: если ключей выбора несколько и возможны ничьи, добавь ещё колонку, иначе победитель будет случайным.
+</Callout>
+
+## DISTINCT и NULL
+
+NULL считается равным NULL при схлопывании:
+
+```sql run expect=rows:6
+select distinct author_id from book
+order by author_id nulls last;
+```
+
+Шестая строка это NULL: книги 10 и 11 без автора дали одну строку. В `GROUP BY` NULL тоже становится отдельной группой, и это одна и та же идея.
+
+## Чего нет в выдаче и почему
+
+- ❌ Две книги без категории в `distinct category_id`: NULL схлопнулся в одну строку.
+- ❌ Вторая книга Верна в `distinct on (author_id)`: у группы уже есть победитель, «Дети капитана Гранта» выиграли ничью по названию.
+- ❌ «Путешествие к центру Земли» в списке победителей категории 3: у Верна две книги по 610, но «Дети капитана Гранта» идут раньше по `title`.
+
+## Ловушки
+
+<Callout kind="trap">
+`DISTINCT ON` без `ORDER BY` формально выполняется, но победитель не определён:
+
+```sql run expect=rows:6
+select distinct on (author_id) title, author_id from book;
+```
+
+Строк всё равно 6, но какие именно книги попадут в выдачу, зависит от плана и физического порядка. Такой запрос нельзя считать правильным, даже если сегодня он вернул нужные строки.
+</Callout>
+
+<Callout kind="trap">
+`DISTINCT` не заменяет `GROUP BY`, когда нужны агрегаты. `select distinct author_id, count(*)` не сгруппирует книги по автору: `count(*)` посчитается по всей таблице. Для агрегатов нужен `GROUP BY`.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `select distinct category_id from book` без `NULLS LAST`? Изменится ли число?
+2. Какая книга победит в `distinct on (author_id)` у Верна, если убрать `title` из `ORDER BY`? Ответ проверь запуском.
+3. Что произойдёт, если в `distinct on (category_id)` поставить `order by price desc, category_id`? Сначала предскажи ошибку, потом проверь.
+
+<Cheatsheet>
+- `DISTINCT`: уникальные строки по всем колонкам `SELECT`.
+- NULL в `DISTINCT` считается одним значением.
+- `DISTINCT ON (ключ)`: одна строка на каждую группу ключа.
+- `DISTINCT ON` требует, чтобы ключ стоял в начале `ORDER BY`.
+- Победителя внутри группы определяет `ORDER BY`, поэтому добавляй ключи для ничьих.
+- `DISTINCT` не считает агрегаты: для этого `GROUP BY`.
+</Cheatsheet>

@@ -189,7 +189,11 @@ export function selectFeatures(sel: SelectStmt): Set<Feature> {
   if (sel.windowClause) f.add('window');
   if (!sel.fromClause) {
     f.add('no-from');
-    if (sel.whereClause || sel.distinctClause || sel.sortClause || sel.limitCount || sel.limitOffset)
+    // У множества ORDER BY относится к готовому итогу, а не к SELECT без FROM
+    if (
+      (!sel.op || sel.op === 'SETOP_NONE') &&
+      (sel.whereClause || sel.distinctClause || sel.sortClause || sel.limitCount || sel.limitOffset)
+    )
       f.add('no-from-clauses');
   } else if (sel.fromClause.length > 1) f.add('join-cross');
   for (const item of sel.fromClause ?? []) {

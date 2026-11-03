@@ -1,0 +1,179 @@
+---
+id: values-generate-series
+title: "FROM без таблиц: VALUES и generate_series"
+chapter: select
+number: "4.10"
+order: 10
+dataset: bookstore
+board:
+  tables: [public.book]
+  layout:
+    book: { x: 0, y: 0 }
+initialQuery: |
+  select n, n * n as square from generate_series(1, 5) as n;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-values.html
+    title: VALUES как источник строк
+  - url: https://www.postgresql.org/docs/current/functions-srf.html
+    title: Функции, возвращающие множества
+tags: [values, generate_series, from, "строки из воздуха"]
+mvp: false
+---
+
+<TlDr>`FROM` не обязан ссылаться на таблицу: `VALUES` создаёт строки из литералов, а `generate_series` генерирует последовательность чисел.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг, но этот урок почти не смотрит в таблицу. Строки можно собрать прямо в запросе, без `CREATE TABLE` и без `INSERT`.
+
+Это удобно для проверки формул, генерации календаря и тестовых данных.
+
+## VALUES: таблица из литералов
+
+Самый простой источник это список значений. У него есть имя, колонки и строки:
+
+```sql run expect=rows:2
+select * from (values (1, 'a'), (2, 'b')) as t(n, s)
+order by n;
+```
+
+2 строки. Внутри скобок после `VALUES` идут кортежи, а `as t(n, s)` задаёт имя таблицы и имена колонок. Без имён Postgres назовёт колонки `column1` и `column2`.
+
+К `VALUES` применимы обычные условия:
+
+```sql run expect=rows:2
+select n, s from (values (1, 'a'), (2, 'b'), (3, 'c')) as t(n, s)
+where n > 1;
+```
+
+2 строки: `2 b` и `3 c`. На доске появляется маленькая таблица с двумя колонками, дальше по ней бежит обычный `WHERE`.
+
+`VALUES` можно сортировать и соединять с настоящими таблицами. Например, подпишем коды категорий:
+
+```sql run expect=rows:4
+select t.code, t.title, count(b.book_id) as books
+from (values (3, 'Фантастика'), (4, 'Классика'), (6, 'Python'), (5, 'Фотография')) as t(code, title)
+left join book b on b.category_id = t.code
+group by t.code, t.title
+order by t.code;
+```
+
+4 строки. У категории 5 «Фотография» книг нет, поэтому `count(b.book_id)` равен 0: `LEFT JOIN` сохранил строку, а `count` не посчитал NULL.
+
+<Callout kind="tip">
+`VALUES` хорош для маленьких справочников прямо в запросе: коды статусов, список праздников, пары «ключ-подпись». Если строк сотни, лучше отдельная таблица.
+</Callout>
+
+## generate_series: числа по порядку
+
+`generate_series(начало, конец)` возвращает все целые числа включая границы:
+
+```sql run expect=rows:5
+select generate_series(1, 5);
+```
+
+5 строк: от 1 до 5. Запрос без `FROM` всё равно вернул пять строк, потому что функция сама размножает результат. На доске это выглядит как таблица из воздуха с одной колонкой.
+
+Обычно функцию ставят в `FROM` и дают алиас:
+
+```sql run expect=rows:4
+select n, n * n as square
+from generate_series(1, 4) as n;
+```
+
+4 строки: 1, 4, 9, 16. Алиас `n` стал и именем таблицы, и именем колонки. Дальше с ним работают как с обычной колонкой.
+
+## WHERE и generate_series
+
+Условия работают как обычно:
+
+```sql run expect=rows:2
+select n from generate_series(1, 5) as n
+where n % 2 = 0;
+```
+
+2 строки: 2 и 4. На доске сканер проходит по пяти сгенерированным строкам и оставляет чётные.
+
+Можно посчитать сумму:
+
+```sql run expect=rows:1
+select sum(n) as total from generate_series(1, 100) as n;
+```
+
+Одна строка: 5050. Строк в промежуточной таблице было 100, но агрегат свернул их в одну.
+
+## Два источника и CROSS JOIN
+
+`generate_series` можно соединять с другим `generate_series`. Получится сетка:
+
+```sql run expect=rows:6
+select n, m
+from generate_series(1, 3) as n
+cross join generate_series(1, 2) as m
+order by n, m;
+```
+
+6 строк: каждая пара из 3 чисел и 2 чисел. Формула `3 × 2 = 6` видна на доске как сетка.
+
+Запятая в `FROM` делает то же самое:
+
+```sql run expect=rows:6
+select n, m
+from generate_series(1, 3) as n, generate_series(1, 2) as m;
+```
+
+6 строк. `CROSS JOIN` и запятая здесь равнозначны.
+
+<Callout kind="trap">
+`generate_series` в `SELECT` и в `FROM` это не одно и то же. В `FROM` функция даёт таблицу, по которой работает весь запрос. В `SELECT` она размножает строки результата:
+
+```sql run expect=rows:3
+select 1 as one, generate_series(1, 3) as n;
+```
+
+3 строки, хотя `1` выглядит как одно значение. Каждая строка результата получила своё число из функции.
+</Callout>
+
+## Чего нет в выдаче и почему
+
+- ❌ Категория 5 «Фотография» с числом книг больше нуля: у неё нет книг, `LEFT JOIN` дал NULL.
+- ❌ Числа больше 5 в `generate_series(1, 5)`: верхняя граница включена, но дальше неё функция не идёт.
+- ❌ Одна строка в `select 1, generate_series(1, 3)`: функция вернула три значения, и результат размножился.
+
+## Ловушки
+
+<Callout kind="trap">
+У `VALUES` без алиаса неудобные имена колонок:
+
+```sql run expect=rows:2
+select * from (values (1, 'a'), (2, 'b')) as t;
+```
+
+2 строки, но колонки называются `column1` и `column2`. Обращаться к ним по смыслу не получится. Всегда задавай имена: `as t(n, s)`.
+</Callout>
+
+<Callout kind="trap">
+`generate_series` с датами требует явного шага:
+
+```sql run expect=rows:3
+select d::date
+from generate_series('2024-01-01'::date, '2024-01-03'::date, '1 day') as d;
+```
+
+3 строки: 1, 2 и 3 января. Без третьего аргумента Postgres не знает, с каким шагом идти, и запрос не выполнится.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `generate_series(2, 6)`? Посчитай и проверь.
+2. Что будет в `select n from generate_series(1, 10) as n where n % 3 = 0`?
+3. Соедини `generate_series(1, 2)` и `values ('a'), ('b')`. Сколько строк получится?
+
+<Cheatsheet>
+- `(values (...), (...)) as t(a, b)`: таблица из литералов.
+- `VALUES` без алиаса даёт колонки `column1`, `column2`.
+- `generate_series(a, b)`: целые от `a` до `b` включительно.
+- Для дат нужен третий аргумент с шагом.
+- `generate_series` в `FROM` это источник строк, в `SELECT` размножение результата.
+- Два источника в `FROM` без условия дают `CROSS JOIN`.
+</Cheatsheet>

@@ -1,0 +1,205 @@
+---
+id: operators
+title: BETWEEN, IN, LIKE и IS DISTINCT FROM
+chapter: select
+number: "4.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.book, public.author]
+  layout:
+    book: { x: 0, y: 0 }
+    author: { x: 330, y: 360 }
+initialQuery: |
+  select title, price from book where price between 350 and 610;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-comparison.html
+    title: Операторы сравнения и BETWEEN
+  - url: https://www.postgresql.org/docs/current/functions-matching.html
+    title: LIKE, ILIKE и шаблоны
+tags: [between, in, like, ilike, "null", операторы]
+mvp: false
+---
+
+<TlDr>Сравнивать можно не только через `=`, `>` и `<`: `BETWEEN` задаёт диапазон, `IN` список, `LIKE` шаблон, а `IS DISTINCT FROM` честно сравнивает NULL.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> 11 книг. Цены от 350 до 3200, у «Острова погибших кораблей» цены нет: в <C id="public.book.price">price</C> стоит NULL. Авторов шесть, у двух книг автор не указан.
+
+Три книги про Python: «Python. К вершинам мастерства», «Простой Python» и «Изучаем Python». Регистр в названиях разный, и это пригодится для `LIKE`.
+
+## BETWEEN: диапазон вместе с границами
+
+Обычное сравнение с двух сторон выглядит громоздко:
+
+```sql run expect=rows:6
+select title, price from book
+where price >= 350 and price <= 610
+order by price, title;
+```
+
+Вернулось 6 строк. Тот же результат короче:
+
+```sql run expect=rows:6
+select title, price from book
+where price between 350 and 610
+order by price, title;
+```
+
+`BETWEEN` включает обе границы. Поэтому «Сказка о рыбаке и рыбке» и «Судьба человека» с ценой 350 попали в выдачу, и «Дети капитана Гранта» с «Путешествием к центру Земли» по 610 тоже.
+
+На доске подсвечена колонка `price`, строки в диапазоне остаются зелёными, остальные уходят.
+
+Отрицание пишется через `NOT BETWEEN`:
+
+```sql run expect=rows:6
+select title, price from book
+where price not between 500 and 1000
+order by price;
+```
+
+6 строк: три дешевле 500 и три дороже 1000. «Остров погибших кораблей» не попал: у него NULL, а NULL не проходит ни `BETWEEN`, ни `NOT BETWEEN`.
+
+<Callout kind="trap">
+Границы могут быть выражениями, но не могут быть NULL:
+
+```sql run expect=rows:0
+select title from book where price between null and 100;
+```
+
+Ноль строк. `price BETWEEN NULL AND 100` превращается в `price >= NULL AND price <= 100`. Первое сравнение даёт UNKNOWN, значит и всё условие не TRUE. NULL в границе выключает фильтр целиком.
+</Callout>
+
+## IN: список значений
+
+`IN` заменяет цепочку `OR`:
+
+```sql run expect=rows:6
+select title, author_id from book
+where author_id in (1, 3, 5)
+order by book_id;
+```
+
+6 книг Шолохова, Пушкина и Верна. На доске видно, что `IN` проверяет каждую строку по списку, как несколько условий `OR`.
+
+`NOT IN` работает как `NOT (x IN (...))`:
+
+```sql run expect=rows:3
+select title, author_id from book
+where author_id not in (1, 3, 5)
+order by book_id;
+```
+
+3 книги: авторы 2 и 4. Книги без автора не вернулись, хотя их автора точно нет в списке. Причина в NULL: `NULL NOT IN (1, 3, 5)` даёт UNKNOWN, а UNKNOWN не пропускается.
+
+<Callout kind="trap">
+Если в списке `NOT IN` окажется NULL, не вернётся ни одна строка. Список из подзапроса ведёт себя так же. Для «автора нет в списке» надёжнее `NOT EXISTS` или `IS NULL` отдельным условием.
+</Callout>
+
+## LIKE и ILIKE: шаблоны
+
+`LIKE` сравнивает строку с шаблоном. `%` значит «любые символы», `_` ровно один символ.
+
+```sql run expect=rows:1
+select title from book where title like 'Python%';
+```
+
+Одна книга: «Python. К вершинам мастерства». Шаблон чувствителен к регистру, поэтому «Простой Python» и «Изучаем Python» не подошли: в них слово стоит не в начале.
+
+```sql run expect=rows:3
+select title from book where title ilike '%python%';
+```
+
+`ILIKE` не смотрит на регистр, и теперь нашлись все три книги. На доске строки подсвечиваются по одной: совпадение с шаблоном видно сразу.
+
+<Callout kind="tip">
+`LIKE` по шаблону, который начинается с `%`, не может использовать обычный индекс. На большой таблице это полный перебор. Для поиска по словам в PostgreSQL есть полнотекстовый поиск, а для регистронезависимых сравнений иногда достаточно `lower(col) = lower(...)`.
+</Callout>
+
+## IS DISTINCT FROM: сравнение с NULL
+
+Обычное `=` с NULL даёт UNKNOWN:
+
+```sql run expect=rows:0
+select title from book where price = null;
+```
+
+Ноль строк. NULL не равен даже самому себе, поэтому так искать «пустые» значения нельзя.
+
+Для NULL есть `IS DISTINCT FROM`. Он отвечает на вопрос «значения различаются?» и всегда даёт TRUE или FALSE:
+
+```sql run expect=rows:10
+select title from book where price is distinct from null
+order by title;
+```
+
+10 книг: все, у кого цена есть. «Остров погибших кораблей» не прошёл, потому что его NULL не отличается от NULL.
+
+Обратная проверка:
+
+```sql run expect=rows:1
+select title from book where price is not distinct from null;
+```
+
+Одна строка, «Остров погибших кораблей». Это то же самое, что `price is null`, но записывается в общей логике сравнения.
+
+## Собираем вместе
+
+Операторы можно комбинировать. Найдём недорогие книги трёх авторов:
+
+```sql run expect=rows:3
+select title, price from book
+where author_id in (1, 3, 5)
+  and price between 300 and 430
+order by price;
+```
+
+3 строки: «Судьба человека» и «Сказка о рыбаке и рыбке» за 350, «Капитанская дочка» за 420. На доске сначала срабатывает `IN`, потом `BETWEEN`, и остаются только строки, прошедшие оба условия.
+
+## Чего нет в выдаче и почему
+
+- ❌ «Остров погибших кораблей» в `not between 500 and 1000`: у книги NULL, а сравнение с NULL не TRUE.
+- ❌ Книги без автора в `author_id not in (1, 3, 5)`: `NULL NOT IN (...)` даёт UNKNOWN.
+- ❌ «Простой Python» и «Изучаем Python» в `like 'Python%'`: шаблон чувствителен к регистру.
+- ❌ «Остров погибших кораблей» в `price is distinct from null`: его NULL не отличается от NULL.
+
+## Ловушки
+
+<Callout kind="trap">
+`NOT IN` с NULL в списке обнуляет выдачу:
+
+```sql run expect=rows:0
+select name from author
+where author_id not in (select author_id from book);
+```
+
+Подзапрос возвращает и NULL, потому что у двух книг автор не указан. Для каждой строки сравнение с NULL даёт UNKNOWN, и остаётся 0 строк. Если нужны авторы без книг, пиши `not exists` или добавь `where author_id is not null` внутрь подзапроса.
+</Callout>
+
+<Callout kind="trap">
+`LIKE` без `%` сравнивает строку целиком:
+
+```sql run expect=rows:0
+select title from book where title like 'Python';
+```
+
+Ноль строк: в названии есть продолжение. Для поиска подстроки нужны `%` с обеих сторон, а для точного совпадения хватит обычного `=`.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `where price between 400 and 900`? Посчитай по ценам из урока и проверь на доске.
+2. Какие книги найдутся через `where title like '%Python%'` без `ilike`? Сначала ответь, потом запусти.
+3. Что вернёт `where author_id not in (1, 3, 5, null)`? Проверь, почему ответ не совпадает с запросом без NULL.
+
+<Cheatsheet>
+- `BETWEEN a AND b`: включает обе границы. NULL в границе отключает фильтр.
+- `NOT BETWEEN` не пропускает NULL.
+- `IN (список)`: то же, что цепочка `OR`.
+- `NOT IN` с NULL в списке даёт 0 строк.
+- `LIKE`: `%` любые символы, `_` один символ, регистр важен.
+- `ILIKE`: то же без учёта регистра.
+- `IS DISTINCT FROM`: TRUE или FALSE даже с NULL. `IS NOT DISTINCT FROM` заменяет `IS NULL`.
+- `= NULL` никогда не TRUE.
+</Cheatsheet>

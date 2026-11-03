@@ -133,8 +133,7 @@ export async function traceStatement(
   if (sel.op && sel.op !== 'SETOP_NONE') {
     const op = setopOf(sel);
     if (!op || !sel.larg || !sel.rarg) return finalOnly('Множество без одной из ветвей не анимируется');
-    if (sel.sortClause || sel.limitCount || sel.limitOffset)
-      return finalOnly('ORDER BY или LIMIT над множествами пока не анимируется');
+    if (sel.limitCount || sel.limitOffset) return finalOnly('LIMIT над множествами пока не анимируется');
     if (setopDepth(sel) > 3) return finalOnly('Вложенность множеств глубже 3 не анимируется');
     const left = await traceStatement(branchStatement(stmt, sel.larg), db, { ...opts, schema });
     const right = await traceStatement(branchStatement(stmt, sel.rarg), db, { ...opts, schema });
@@ -145,7 +144,61 @@ export async function traceStatement(
     const stage = setopStage(left, right, op);
     if (!sameResult(stage.output, reference, null))
       return finalOnly('Сверка с прямым выполнением не сошлась');
-    return finish({ mode: 'full', stages: [stage], result: reference, error: null });
+    const stages: Stage[] = [stage];
+    // ORDER BY над множеством сортирует уже готовый итог, а не одну ветвь
+    if (sel.sortClause) {
+      const base: SelectStmt = {
+        ...sel,
+        sortClause: undefined,
+        limitCount: undefined,
+        limitOffset: undefined,
+        limitOption: undefined,
+      };
+      try {
+        const r = await prober.rows(
+          `SELECT * FROM (${sqlOf({ SelectStmt: base })}) AS __vs_s ORDER BY ${sel.sortClause.map(sqlOf).join(', ')}`,
+        );
+        const types = await typeNames(
+          prober,
+          reference.fields.map((f) => f.dataTypeID),
+          new Map(),
+        );
+        const columns = reference.fields.map((f) => ({
+          name: f.name,
+          type: types.get(f.dataTypeID) ?? 'unknown',
+        }));
+        const rows = r.rows.map((values, i) => ({ key: resultKey(i), lineage: {}, values }));
+        const keyColumns = sel.sortClause.flatMap((node) => {
+          const key = 'SortBy' in node ? node.SortBy.node : undefined;
+          if (!key) return [];
+          if ('A_Const' in key && key.A_Const.ival) return [(key.A_Const.ival.ival ?? 1) - 1];
+          if ('ColumnRef' in key) {
+            const field = key.ColumnRef.fields?.at(-1);
+            const name = field && 'String' in field ? field.String.sval : undefined;
+            const i = columns.findIndex((c) => c.name === name);
+            return i >= 0 ? [i] : [];
+          }
+          return [];
+        });
+        stages.push({
+          id: `${stages.length}:sort`,
+          kind: 'sort',
+          order: rows.map((row) => row.key),
+          sortKeys: sel.sortClause.map(sqlOf),
+          keyColumns,
+          sourceRange: rangeOf(stmt, 'order'),
+          caption: captions.sort(sel.sortClause.map(sqlOf), rows.length),
+          output: { columns, rows },
+        });
+      } catch (e) {
+        if (e instanceof DbException) return finalOnly('ORDER BY над множеством не удалось посчитать');
+        throw e;
+      }
+    }
+    const last = stages.at(-1);
+    if (!last || !sameResult(last.output, reference, null))
+      return finalOnly('Сверка с прямым выполнением не сошлась');
+    return finish({ mode: 'full', stages, result: reference, error: null });
   }
 
   // SELECT без FROM: одна стадия, значения прямо из эталона

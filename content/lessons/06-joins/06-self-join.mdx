@@ -1,0 +1,142 @@
+---
+id: self-join
+title: "SELF JOIN: таблица сама с собой"
+chapter: joins
+number: "6.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.employee]
+  layout:
+    employee: { x: 0, y: 0 }
+initialQuery: |
+  select e.name, m.name as boss
+  from employee e
+  join employee m on e.manager_id = m.employee_id
+  order by e.employee_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Соединение таблиц (JOIN)
+  - url: https://www.postgresql.org/docs/current/tutorial-join.html
+    title: "Учебник: соединение таблиц"
+tags: ["self join", "самосоединение", "алиас таблицы", "иерархия", "менеджер и сотрудник"]
+mvp: false
+---
+
+<TlDr>`SELF JOIN` это обычный `JOIN`, где обе стороны одна таблица. Два алиаса дают две независимые копии строк, и запрос сравнивает сотрудника с его руководителем.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.employee">employee</T> 8 сотрудников. У каждого есть номер <C id="public.employee.employee_id">employee_id</C> и ссылка на руководителя <C id="public.employee.manager_id">manager_id</C>.
+
+Ольга Николаева директор, у неё manager_id равен NULL. Остальные семь человек на кого-то ссылаются. Алексей Морозов получает 190000, а его руководитель Павел Орлов 180000. Татьяна Зайцева сидит на четвёртом уровне дерева.
+
+## Две копии одной таблицы
+
+Нужны пары «сотрудник и его руководитель». Обе роли лежат в одной таблице, поэтому соединяем её с собой:
+
+```sql run expect=rows:7
+select e.name, m.name as boss
+from employee e
+join employee m on e.manager_id = m.employee_id
+order by e.employee_id;
+```
+
+7 строк. Павел Орлов и Светлана Волкова попали к Ольге, Дмитрий и Алексей к Павлу, Наталья и Игорь к Светлане, Татьяна к Дмитрию.
+
+Восемь сотрудников, а строк семь. Ольга осталась без пары: её manager_id равен `NULL`, а `NULL` не даёт `TRUE` при сравнении ни с одним номером. `INNER JOIN` такую строку выбрасывает.
+
+На доске employee сканируется дважды. Слева копия с алиасом `e`, справа копия с алиасом `m`. Это одна и та же таблица, но в запросе у неё две роли. На шаге `JOIN` 7 пар. На левой копии красная Ольга, на правой красные те, кто никому не руководит: Алексей, Наталья, Игорь и Татьяна.
+
+## Зачем два алиаса
+
+`e` и `m` это **алиасы таблиц**, как `b` и `a` в уроке 6.2. Они не переименовывают таблицу в схеме. Они дают два имени внутри одного запроса, чтобы можно было сказать `e.name` и `m.name`.
+
+Без алиасов Postgres не понимает, какая копия где:
+
+```sql run expectError=42712
+select * from employee join employee on employee.manager_id = employee.employee_id;
+```
+
+Карточка «Таблица employee указана дважды», код `42712`. Две копии без имён не различить.
+
+Второй вариант ошибки: алиасы есть, а колонка названа без них.
+
+```sql run expectError=42702
+select name from employee e join employee m on e.manager_id = m.employee_id;
+```
+
+Карточка «Непонятно, какая name», код `42702`: `name` есть в обеих копиях. Пиши `e.name` или `m.name`.
+
+## Кто получает больше руководителя
+
+Направление условия задаёт роли. Слева сотрудник, справа руководитель, значит `e.manager_id = m.employee_id`.
+
+Проверим, кто получает больше своего руководителя:
+
+```sql run expect=rows:1
+select e.name, e.salary, m.name as boss, m.salary as boss_salary
+from employee e
+join employee m on e.manager_id = m.employee_id
+where e.salary > m.salary
+order by e.employee_id;
+```
+
+1 строка: Алексей Морозов, 190000, руководитель Павел Орлов, 180000. У остальных зарплата ниже или руководителя нет.
+
+Так `SELF JOIN` отвечает на вопросы про иерархию: кто кому подчиняется, у кого сколько подчинённых, кто получает больше начальника.
+
+## Директор без руководителя
+
+`INNER JOIN` потерял Ольгу. Если нужны все сотрудники, включая директора, ставь `LEFT JOIN`:
+
+```sql run expect=rows:8
+select e.name, m.name as boss
+from employee e
+left join employee m on e.manager_id = m.employee_id
+order by e.employee_id;
+```
+
+8 строк. У Ольги в boss стоит `NULL`. Остальные строки те же.
+
+## Чего нет в выдаче и почему
+
+- ❌ Ольга Николаева в `INNER JOIN`: manager_id равен `NULL`, пары нет.
+- ❌ Алексей, Наталья, Игорь и Татьяна в колонке boss: они никому не руководители, на их номера никто не ссылается.
+- ❌ Остальные сотрудники в запросе про зарплату: их зарплата не больше зарплаты руководителя.
+- ❌ Руководитель Ольги в `LEFT JOIN`: его нет, поэтому в boss стоит `NULL`.
+
+## Ловушки
+
+<Callout kind="trap">
+Поменяй стороны условия, и роли поменяются местами. Запрос выполнится, но подписи станут врать:
+
+```sql run expect=rows:7
+select e.name as employee, m.name as boss
+from employee e
+join employee m on e.employee_id = m.manager_id
+order by m.employee_id;
+```
+
+7 строк, и в первой «сотрудник Ольга Николаева, руководитель Павел Орлов». На самом деле Павел подчиняется Ольге. Условие `e.employee_id = m.manager_id` означает «e это руководитель, m это подчинённый», а колонки названы наоборот. Следи, какая сторона хранит manager_id.
+</Callout>
+
+<Callout kind="tip">
+В дереве сотрудников держи внешний ключ manager_id на employee_id и запрещай циклы на уровне приложения или триггера. Сам `SELF JOIN` цикл не создаёт, но данные с циклом дадут странные пары и зациклят рекурсивный запрос из урока 8.7.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `LEFT JOIN` сотрудников с руководителями? Проверь на доске.
+2. Кто никому не руководит? Напиши `left join` и оставь строки, где у подчинённого нет пары.
+3. Что изменится, если в основном запросе поменять `e` и `m` местами в условии, но оставить те же подписи колонок?
+
+<Cheatsheet>
+- `SELF JOIN`: обычный `JOIN` таблицы с собой. Специального слова в SQL нет.
+- Два алиаса обязательны: `employee e` и `employee m`.
+- `e.manager_id = m.employee_id`: e сотрудник, m руководитель.
+- `INNER JOIN` теряет корень дерева, у него manager_id `NULL`.
+- `LEFT JOIN` возвращает корень с `NULL` в роли руководителя.
+- Без алиасов: `42712`. Колонка есть в обеих копиях: `42702`.
+- Направление условия задаёт роли. Проверяй подписи колонок.
+</Cheatsheet>

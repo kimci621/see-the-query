@@ -1,0 +1,179 @@
+---
+id: in-exists-any-all
+title: "IN, EXISTS, ANY, ALL"
+chapter: subqueries
+number: "8.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.book, public.book_category, public.review]
+  layout:
+    book: { x: 0, y: 0 }
+    book_category: { x: 620, y: 0 }
+    review: { x: 0, y: 400 }
+initialQuery: |
+  select title from book where category_id in (select category_id from book_category where parent_id = 1) order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-IN
+    title: IN с подзапросом
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS
+    title: EXISTS с подзапросом
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#SQL-SYNTAX-ANY
+    title: ANY и ALL
+tags: ["подзапрос in", "exists", "any и all", "not in и null"]
+mvp: false
+---
+
+<TlDr>`IN` и `EXISTS` отвечают «да» или «нет» по набору строк. `ANY` и `ALL` сравнивают значение с набором. NULL превращает часть вердиктов в UNKNOWN, и `NOT IN` может вернуть пустоту.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book_category">book_category</T> 6 категорий. У «Художественной литературы» (1) дети 3 и 4. У «Литературы по программированию» (2) ребёнок 6. У «Литературы по фотографии» (5) детей нет.
+
+В <T id="public.book">book</T> 11 книг: 8 в категориях 3 и 4, две в категории 6, одна без категории. В <T id="public.review">review</T> 10 отзывов на 7 книг.
+
+## IN: значение входит в набор
+
+```sql run expect=rows:8
+select title from book
+where category_id in (select category_id from book_category where parent_id = 1)
+order by book_id;
+```
+
+8 строк. Подзапрос вернул два числа: 3 и 4. `IN` проверяет каждую книгу: её категория есть в этом списке?
+
+На доске по 11 строкам идут вердикты: 8 зелёных, 2 красных и 1 серый. Подпись шага: «IN: совпало 8, UNKNOWN у 1».
+
+## EXISTS: есть ли хоть одна строка
+
+```sql run expect=rows:7
+select b.title from book b
+where exists (select 1 from review r where r.book_id = b.book_id)
+order by b.book_id;
+```
+
+7 строк. Здесь подзапрос не возвращает значение для сравнения. Он отвечает на вопрос «найдётся ли хоть один отзыв на эту книгу». `select 1` можно заменить на `select *` или `select r.rating`: на ответ это не влияет, важна не колонка, а факт строки.
+
+С отзывами книги 1, 2, 3, 6, 8, 9 и 10. На доске для каждой книги вспыхивает найденный отзыв, а книги без отзывов остаются серыми и уходят.
+
+## ANY: больше хотя бы одного
+
+```sql run expect=rows:6
+select title, price from book
+where price > any (select price from book where category_id = 3)
+order by book_id;
+```
+
+6 строк. Внутри цены книг категории 3: 560.00, NULL, 610.00 и 610.00. `> ANY` значит «больше хотя бы одного значения». Для «Тихого Дона» 890.00 больше 560.00, этого хватает.
+
+NULL не мешает: сравнение с ним даёт UNKNOWN, но одно истинное сравнение уже пропускает строку. Подпись шага: «ANY: прошло 6, UNKNOWN у 1».
+
+## ALL: больше каждого
+
+```sql run expect=rows:0
+select title, price from book
+where price > all (select price from book where category_id = 3)
+order by book_id;
+```
+
+0 строк. Самая дорогая книга 3200.00 больше 560.00 и больше 610.00. Но в наборе есть NULL, и сравнение `3200 > NULL` даёт UNKNOWN. Для `ALL` нужны все сравнения TRUE, одного UNKNOWN хватает, чтобы строка не прошла. Подпись шага: «ALL: прошло 0, UNKNOWN у 5».
+
+<Callout kind="analogy">
+Список гостей на входе. `IN` сверяет имя со списком. `EXISTS` спрашивает охрану: «есть там хоть кто-то с таким именем?». `ANY` и `ALL` сравнивают гостя с каждым в списке: хотя бы с одним или со всеми сразу.
+</Callout>
+
+Пройди четыре вердикта одной сценой:
+
+<Scene>
+<Step caption="IN: 8 книг в категориях 3 и 4">
+
+```sql run expect=rows:8
+select title from book
+where category_id in (select category_id from book_category where parent_id = 1)
+order by book_id;
+```
+
+</Step>
+<Step caption="EXISTS: 7 книг с отзывами">
+
+```sql run expect=rows:7
+select b.title from book b
+where exists (select 1 from review r where r.book_id = b.book_id)
+order by b.book_id;
+```
+
+</Step>
+<Step caption="ANY: 6 книг дороже хотя бы одной книги категории 3">
+
+```sql run expect=rows:6
+select title, price from book
+where price > any (select price from book where category_id = 3)
+order by book_id;
+```
+
+</Step>
+<Step caption="ALL: 0 книг дороже всех книг категории 3">
+
+```sql run expect=rows:0
+select title, price from book
+where price > all (select price from book where category_id = 3)
+order by book_id;
+```
+
+</Step>
+</Scene>
+
+## Чего нет в выдаче и почему
+
+- ❌ Книги 2 и 11 в `IN`: их категория 6, а не ребёнок категории 1.
+- ❌ «Простой Python» в `IN`: категория NULL, вердикт UNKNOWN.
+- ❌ «Капитанская дочка», «Сказка о рыбаке и рыбке», «Остров погибших кораблей» и «Изучаем Python» в `EXISTS`: отзывов на них нет.
+- ❌ «Голова профессора Доуэля» в `ANY`: 560.00 не больше 560.00, а остальные сравнения не спасают.
+- ❌ Любая строка в `ALL`: NULL в наборе делает сравнение UNKNOWN.
+- ❌ Книги вне категории 6 в `NOT IN`: NULL в наборе превращает вердикты в UNKNOWN.
+
+## Ловушки
+
+<Callout kind="trap">
+`NOT IN` спотыкается о NULL в подзапросе:
+
+```sql run expect=rows:0
+select title from book
+where category_id not in (select category_id from book where price > 1000)
+order by book_id;
+```
+
+0 строк, хотя книг вне категории 6 много. Внутренний запрос вернул `{6, NULL}`: у «Простого Python» категория NULL. Для категории 3 сравнение `3 <> 6` истинно, но `3 <> NULL` даёт UNKNOWN. `NOT IN` требует, чтобы все сравнения были TRUE, поэтому UNKNOWN убивает строку. На доске 9 вердиктов остаются серыми.
+
+Убери NULL из подзапроса:
+
+```sql run expect=rows:8
+select title from book
+where category_id not in (
+  select category_id from book where price > 1000 and category_id is not null
+)
+order by book_id;
+```
+
+8 строк: все книги категорий 3 и 4. Без NULL `NOT IN` работает как ожидаешь.
+</Callout>
+
+<Callout kind="tip">
+Для анти-join чаще берут `NOT EXISTS`: он не спотыкается о NULL. `IN` и `NOT IN` сравнивают значения, а `EXISTS` проверяет только факт строки. Если набор приходит из другой таблицы и в колонке бывает NULL, это заметная разница.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `where price >= all (select price from book where category_id = 6)`? Проверь на доске.
+2. Почему `where price > all (select price from book where category_id = 6)` даёт 0 строк, хотя 3200.00 самая дорогая цена?
+3. Замени `EXISTS` на `book_id in (select book_id from review)`. Сколько строк останется?
+
+<Cheatsheet>
+- `in (подзапрос)`: значение равно хотя бы одному из набора. Это то же самое, что `= any`.
+- `exists (подзапрос)`: важна не колонка, а наличие хотя бы одной строки. `select 1` подходит.
+- `> any`: истина, если сравнение истинно хотя бы с одним значением.
+- `> all`: истина, только если сравнение истинно с каждым значением.
+- NULL в наборе делает сравнение UNKNOWN. Для `ANY` это переживаемо, для `ALL` нет.
+- `NOT IN` с NULL в наборе часто даёт 0 строк. Бери `NOT EXISTS` или убери NULL.
+- В уроке: `IN` даёт 8, `EXISTS` 7, `ANY` 6, `ALL` 0.
+</Cheatsheet>

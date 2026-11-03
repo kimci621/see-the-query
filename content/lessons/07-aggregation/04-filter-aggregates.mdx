@@ -1,0 +1,214 @@
+---
+id: filter-aggregates
+title: FILTER, string_agg, array_agg, json_agg
+chapter: aggregation
+number: "7.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.review, public.book, public.book_category]
+  layout:
+    review: { x: 0, y: 0 }
+    book: { x: 380, y: 380 }
+    book_category: { x: 780, y: 380 }
+initialQuery: |
+  select count(*) filter (where rating >= 5) as great, count(*) from review;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-aggregate.html
+    title: Агрегатные функции, FILTER и ORDER BY
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY и HAVING
+  - url: https://www.postgresql.org/docs/current/functions-array.html
+    title: Функции для работы с массивами
+  - url: https://www.postgresql.org/docs/current/functions-json.html
+    title: Функции для работы с JSON
+course: ["11.52"]
+tags: [filter, string_agg, array_agg, json_agg, агрегат, "order by в агрегате", "склейка строк"]
+mvp: false
+---
+
+<TlDr>`FILTER` считает для одного агрегата только строки с подходящим условием, а `string_agg`, `array_agg` и `json_agg` склеивают строки группы в одно значение.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.review">review</T> 10 отзывов на 7 книг. Оценка в <C id="public.review.rating">rating</C> от 1 до 5: пятёрок 4, четвёрок 4, тройка 1, двойка 1.
+
+В <T id="public.book">book</T> 11 книг. Категория есть у 10 из них: у «Простого Python» в <C id="public.book.category_id">category_id</C> стоит `NULL`. В <T id="public.book_category">book_category</T> 6 категорий, но книги есть только у трёх: «Python», «Классика» и «Фантастика».
+
+## FILTER: один агрегат считает не всех
+
+Сколько отзывов поставили оценку 5 и сколько отзывов всего?
+
+```sql run expect=rows:1
+select count(*) filter (where rating >= 5) as great,
+       count(*) as all_reviews
+from review;
+```
+
+Одна строка, два числа: 4 и 10. Запомни пару. Первый `count` берёт только отзывы с оценкой 5. Второй, без `FILTER`, считает все 10.
+
+**`FILTER`** пишется сразу после вызова агрегата. В скобках обычное условие, как в `WHERE`. В агрегат попадают только строки, где условие дало `TRUE`. Строки с `FALSE` и `NULL` он пропускает.
+
+На доске 10 строк review. При подсчёте `great` четыре строки горят зелёным, остальные гаснут. Для второго агрегата те же строки снова горят. `FILTER` не убирает строки из запроса, он сужает вход только одного агрегата.
+
+## FILTER против CASE
+
+До `FILTER` условный счёт писали через `CASE` внутри агрегата:
+
+```sql run expect=rows:1
+select count(case when rating >= 5 then 1 end) as with_case,
+       count(*) filter (where rating >= 5) as with_filter
+from review;
+```
+
+Оба числа 4. Для строк с низкой оценкой `CASE` возвращает `NULL`, а `count` его пропускает. Способ рабочий, но читать его приходится с середины: сначала видишь `count`, потом разбираешь условие внутри. `FILTER` ставит условие рядом с агрегатом, и строка запроса читается слева направо. Поэтому в новых запросах выбирай `FILTER`.
+
+Важно не путать с `WHERE`. `WHERE` режет строки для всего запроса, и до всех агрегатов дойдёт меньше строк. `FILTER` действует на один агрегат, соседние агрегаты в той же строке по-прежнему видят всё.
+
+## FILTER вместе с GROUP BY
+
+Внутри группы `FILTER` работает так же: считает подмножество строк стопки. Посмотрим на отзывы по книгам:
+
+```sql run expect=rows:7
+select book_id,
+       count(*) filter (where rating >= 4) as good,
+       count(*) as all_reviews
+from review
+group by book_id
+order by book_id;
+```
+
+7 строк, по одной на книгу с отзывами. У книги 9 `good` 0, а `all_reviews` 1: единственная оценка там 3. У книги 10 наоборот, 1 из 2: двойка не прошла, четвёрка прошла. У книг 1 и 2 обе оценки высокие, поэтому `good` и `all_reviews` совпали.
+
+На доске review сворачивается в 7 стопок. В каждой стопке строки с низкой оценкой гаснут для `good`, но остаются для `all_reviews`. Два счётчика идут по одной стопке с разными наборами строк. Это и есть сцена урока: часть строк гаснет для конкретного агрегата.
+
+## string_agg: строки в одну строку
+
+Теперь другая задача: не посчитать строки, а склеить значения. **`string_agg`** собирает их в одну строку через разделитель. Соберём названия книг по категориям:
+
+```sql run expect=rows:3
+select c.name, string_agg(b.title, ', ') as titles
+from book_category c
+join book b using (category_id)
+group by c.name
+order by c.name;
+```
+
+Три строки. В «Python» два названия, в «Классике» четыре, в «Фантастике» четыре. Всего 10 книг.
+
+Порядок названий внутри строки пока не задан. Агрегат берёт значения в том порядке, в каком их отдал план запроса. Сегодня он может совпасть с порядком в таблице, завтра стать другим. Для отчёта это плохо: список прыгает между запусками. Добавь `ORDER BY` внутрь вызова:
+
+```sql run expect=rows:3
+select c.name, string_agg(b.title, ', ' order by b.title) as titles
+from book_category c
+join book b using (category_id)
+group by c.name
+order by c.name;
+```
+
+Строк по-прежнему 3, но названия внутри каждой строки идут по алфавиту. У «Python» первым встало «Python. К вершинам мастерства», вторым «Изучаем Python». `ORDER BY` внутри агрегата сортирует значения до склейки. На строки выдачи он не влияет: их порядок задаёт внешний `ORDER BY` в конце запроса.
+
+Поменяй направление на `desc`, и порядок перевернётся внутри каждой строки. Строк выдачи останется 3.
+
+## array_agg: значения в массив
+
+**`array_agg`** собирает значения в массив:
+
+```sql run expect=rows:4
+select category_id, array_agg(title order by title) as titles
+from book
+group by category_id
+order by category_id;
+```
+
+4 строки: три категории и группа `NULL` с «Простым Python». В ячейке `titles` лежит массив, Postgres показывает его в фигурных скобках: `{Голова профессора Доуэля, Дети капитана Гранта, Остров погибших кораблей, Путешествие к центру Земли}`. У категории 3 четыре элемента, у 4 тоже четыре, у 6 два, у `NULL` один.
+
+С массивом дальше работают функции: `unnest` разворачивает его в строки, `array_length` считает длину, элемент берут по индексу. Это глава 5, здесь важно только то, что агрегат вернул одно значение вместо набора строк.
+
+## json_agg: массив объектов
+
+Для API удобнее JSON. **`json_build_object`** собирает объект из пар ключ-значение, **`json_agg`** складывает объекты в массив:
+
+```sql run expect=rows:3
+select c.name,
+       json_agg(json_build_object('title', b.title, 'price', b.price) order by b.price desc nulls last) as books
+from book_category c
+join book b using (category_id)
+group by c.name
+order by c.name;
+```
+
+3 строки. В каждой ячейке `books` JSON-массив объектов вида `{"title": "Изучаем Python", "price": 3200}`. Цена стала числом без хвоста `.00`: JSON не хранит `numeric` с его масштабом.
+
+Порядок задан по цене, самые дорогие впереди. `nulls last` отправляет «Остров погибших кораблей» без цены в конец «Фантастики». Без `nulls last` он встал бы первым: при `desc` Postgres по умолчанию ставит `NULL` в начало.
+
+Такая ячейка уходит в приложение готовой структурой. Приложению не нужно добирать книги отдельными запросами к каждой категории. Это заметно на больших списках, где ORM любит делать запрос на каждую строку.
+
+## Чего нет в выдаче и почему
+
+- ❌ 6 отзывов с оценкой ниже 5 в `great`: `FILTER` пропустил их только для этого агрегата, в `all_reviews` они остались.
+- ❌ «Простой Python» в списках по категориям через `JOIN`: у книги нет `category_id`, пары не нашлось.
+- ❌ Категории «Художественная литература», «Литература по программированию» и «Литература по фотографии»: у них нет своих книг, значит нет и строк для `JOIN`.
+- ❌ «Остров погибших кораблей» в `string_agg(price::text, ...)`: цена `NULL`, а `string_agg` пустые значения пропускает.
+- ❌ Книги без отзывов в запросе по `book_id`: в review нет ни одной их строки.
+
+## Ловушки
+
+<Callout kind="trap">
+`FILTER` входит в вызов агрегата и не работает сам по себе. Без агрегата он не разбирается:
+
+```sql run expectError=42601
+select rating filter (where rating >= 5) from review;
+```
+
+Код `42601`, `syntax error at or near "filter"`. Слева от `FILTER` должен стоять агрегат: `count(*)`, `sum(rating)`, `string_agg(...)`.
+</Callout>
+
+<Callout kind="trap">
+`count` считает любое непустое значение, даже ноль. Поэтому `else 0` в `CASE` тихо превращает условный счётчик в общий:
+
+```sql run expect=rows:1
+select count(case when rating >= 5 then 1 else 0 end) as wrong
+from review;
+```
+
+10 вместо 4. Ноль не `NULL`, `count` его не пропускает. Убирай `else` или ставь `FILTER`.
+</Callout>
+
+<Callout kind="trap">
+`string_agg` пропускает `NULL`, а `array_agg` и `json_agg` его сохраняют:
+
+```sql run expect=rows:1
+select category_id,
+       string_agg(price::text, ', ') as str,
+       array_agg(price) as arr
+from book
+where category_id = 3
+group by category_id;
+```
+
+В `str` три цены: `560.00, 610.00, 610.00`. В `arr` четыре элемента, среди них `NULL`: это цена «Острова погибших кораблей». Если `NULL` в массиве не нужен, добавь `filter (where price is not null)`.
+</Callout>
+
+<Callout kind="tip">
+Несколько `FILTER` в одной строке считают разные срезы за один проход по данным. Для отчёта это дешевле, чем три отдельных запроса с разными `WHERE`.
+</Callout>
+
+## Проверь себя
+
+1. Сколько отзывов вернёт `count(*) filter (where rating = 5)`? Сначала ответь, потом проверь на доске.
+2. Что вернёт `count(*) filter (where rating > 5)`: 0 или `NULL`? Почему?
+3. Добавь к запросу по review `where rating >= 4`. Сколько строк посчитают `good` и `all_reviews`? Сначала посчитай в уме.
+4. Сколько элементов будет в массиве `titles` для категории 4?
+
+<Cheatsheet>
+- `agg(x) filter (where условие)`: в агрегат идут строки, где условие дало `TRUE`.
+- `FILTER` действует на один агрегат, соседние агрегаты считают все строки.
+- `count(case when условие then 1 end)` заменяет `FILTER`, но длиннее. `else 0` ломает счётчик.
+- `string_agg(значение, разделитель order by ...)` склеивает текст.
+- `array_agg(значение order by ...)` собирает массив.
+- `json_agg(выражение order by ...)` собирает JSON-массив, объект делает `json_build_object`.
+- `order by` внутри агрегата задаёт порядок элементов, а не строк выдачи.
+- `string_agg` пропускает `NULL`. `array_agg` и `json_agg` сохраняют.
+- При `desc` Postgres ставит `NULL` первым, если не написать `nulls last`.
+</Cheatsheet>

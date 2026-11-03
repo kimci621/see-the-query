@@ -61,12 +61,13 @@ describe('стадия setop', () => {
       }),
     ));
 
-  it('ORDER BY над множеством уходит в final-only с причиной', () =>
+  it('ORDER BY над множеством сортирует готовый итог отдельной стадией', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
         const trace = await traceSql(db, 'select 2 union select 1 order by 1');
-        expect(trace.mode).toBe('final-only');
-        expect(trace.fallbackReason).toContain('ORDER BY');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(trace.stages.map((s) => s.kind)).toEqual(['setop', 'sort']);
+        expect(trace.stages.at(-1)?.output.rows.map((row) => row.values)).toEqual([[1], [2]]);
         expect(trace.result?.rows).toEqual([[1], [2]]);
       }),
     ));

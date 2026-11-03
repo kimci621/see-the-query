@@ -1,0 +1,137 @@
+---
+id: cte-materialization
+title: MATERIALIZED, NOT MATERIALIZED и DML в CTE
+chapter: subqueries
+number: "8.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.author, public.review]
+  layout:
+    author: { x: 0, y: 0 }
+    review: { x: 0, y: 380 }
+initialQuery: |
+  with a as materialized (select author_id from author)
+  select count(*) from a;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION
+    title: Материализация CTE
+  - url: https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING
+    title: Изменение данных в CTE
+tags: [cte, materialized, "not materialized", "изменение данных", with]
+mvp: false
+---
+
+<TlDr>`MATERIALIZED` считает тело CTE один раз и сохраняет результат, `NOT MATERIALIZED` разрешает встроить тело в основной запрос. DML внутри CTE меняет данные, но превью урока откатывает изменения до кнопки «Применить».</TlDr>
+
+## Что есть в данных
+
+В <T id="public.author">author</T> 6 авторов. У Бориса Пастернака нет книг, но в этом уроке это не важно: CTE берёт авторов целиком.
+
+В <T id="public.review">review</T> 10 отзывов. Оценка 2 только у одного: `review_id = 7`, книга 10 «Простой Python». Этот отзыв удалит последний пример.
+
+## MATERIALIZED: считаем один раз
+
+```sql run expect=rows:1
+with a as materialized (
+  select author_id from author
+)
+select count(*) from a;
+```
+
+1 строка, `count = 6`. Тело CTE выбирает шесть `author_id`, сохраняет их в отдельный результат `a`, а внешний `SELECT` считает строки. На доске появляется пунктирная таблица `a` с шестью строками, потом она сворачивается в одно число.
+
+`MATERIALIZED` говорит планировщику: не встраивай тело в основной запрос, посчитай его отдельно. Если `a` понадобится дважды, тело всё равно выполнится один раз. Это удобно, когда внутри дорогой расчёт или функция с побочным эффектом.
+
+## NOT MATERIALIZED: встраиваем
+
+{/* final-only: NOT MATERIALIZED пока не анимируется */}
+```sql run expect=rows:1 trace=final-only
+with a as not materialized (
+  select author_id from author
+)
+select count(*) from a;
+```
+
+Ответ тот же: 1 строка, `count = 6`. Меняется не результат, а план. `NOT MATERIALIZED` велит planner встроить тело CTE в основной запрос, как будто вместо `a` подставили `select author_id from author`. Тогда внешние условия могут дойти до таблицы, и лишние строки не будут считаться заранее.
+
+В трассировщике этот пример пока показывает только итог: отдельной стадии материализации здесь нет, и рисовать её было бы враньём. В 8.6 мы видели, что CTE можно использовать как таблицу. Здесь важно понять, что это не всегда отдельная таблица в плане.
+
+`NOT MATERIALIZED` - тоже указание, а не подсказка: planner встроит тело, если запрос это допускает. Но за встраивание можно заплатить повторным вычислением, если ссылок несколько. `MATERIALIZED`, наоборот, запрещает встраивание и фиксирует отдельный расчёт.
+
+## DML внутри CTE
+
+В `WITH` можно положить не только `SELECT`, но и `INSERT`, `UPDATE`, `DELETE` или `MERGE`. Так делают, когда нужно одной командой удалить строки и сразу использовать удалённое. Пример последний в уроке, потому что он меняет данные:
+
+{/* final-only: DML внутри CTE пока не анимируется */}
+```sql run apply expect=rows:1 trace=final-only
+with moved as (
+  delete from review where rating = 2
+  returning review_id
+)
+select count(*) from moved;
+```
+
+1 строка, `count = 1`. `DELETE` удаляет отзыв 7 и через `RETURNING` отдаёт его `review_id` во временный результат `moved`. Внешний `SELECT` считает, сколько строк пришло.
+
+Пока не нажата «Применить», запрос выполняется в транзакции и откатывается: в `review` остаются все 10 отзывов. Кнопка «Применить» коммитит `DELETE`, и в таблице остаётся 9 отзывов. Если запустить этот блок ещё раз, `count` будет 0: удалять уже нечего.
+
+DML в CTE выполняется ровно один раз и до конца, даже если внешний запрос прочитает не все его строки. Все подзапросы внутри одного `WITH` видят один снимок данных и не видят изменений друг друга. Поэтому передавать результат между ними можно только через `RETURNING`.
+
+## Чего нет в выдаче и почему
+
+- ❌ Пять авторов в `a`: в `author` шесть строк, фильтра нет.
+- ❌ Два удалённых отзыва в `moved`: оценка 2 только у одного, `review_id = 7`.
+- ❌ Список удалённых отзывов в результате: внешний `SELECT` считает только количество.
+- ❌ Остальные девять отзывов в `moved`: `DELETE` берёт только строки с `rating = 2`.
+- ❌ Повторный результат 1 после «Применить»: отзыв уже удалён, второй запуск вернёт 0.
+
+## Ловушки
+
+<Callout kind="trap">
+DML в CTE разрешён только на верхнем уровне:
+
+```sql run expectError=0A000
+select * from (
+  with moved as (
+    delete from review where rating = 2 returning review_id
+  )
+  select * from moved
+) x;
+```
+
+Код `0A000`, `WITH clause containing a data-modifying statement must be at the top level`. Нельзя спрятать `DELETE` в подзапрос `FROM`. `WITH` с изменением данных должен стоять в начале всего оператора.
+
+Вторая ошибка: ссылаться на CTE без `RETURNING`.
+
+```sql run expectError=0A000
+with moved as (
+  delete from review where rating = 2
+)
+select count(*) from moved;
+```
+
+`WITH query "moved" does not have a RETURNING clause`. Без `RETURNING` у CTE нет выходных строк, поэтому сослаться на `moved` нельзя. Если бы внешний запрос на него не ссылался, `DELETE` всё равно выполнился бы.
+</Callout>
+
+<Callout kind="tip">
+`MATERIALIZED` не бесплатный: Postgres считает тело отдельно и не может протолкнуть внешний фильтр внутрь. На большой таблице это лишняя работа. Ставь его, когда результат действительно нужен несколько раз или когда важно выполнить функцию один раз. Для простого фильтра `NOT MATERIALIZED` часто быстрее.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `select count(*) from a`, если убрать `materialized`? Результат тот же или нет?
+2. Сколько отзывов останется после «Применить»?
+3. Что вернёт повторный запуск блока с `DELETE`?
+4. Пастернак попадёт в `a`?
+
+<Cheatsheet>
+- `with a as materialized (select ...)`: посчитать тело один раз.
+- `with a as not materialized (select ...)`: попросить встроить тело в основной запрос.
+- По умолчанию planner решает сам; с PostgreSQL 12 простой CTE с одной ссылкой часто встраивается.
+- `MATERIALIZED` гарантирует отдельный расчёт, но может считать лишние строки.
+- DML в CTE: `insert`, `update`, `delete`, `merge` с `returning`.
+- DML CTE только на верхнем уровне оператора.
+- Превью откатывает, «Применить» коммитит.
+- DML в CTE выполняется один раз и до конца.
+</Cheatsheet>
