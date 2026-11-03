@@ -43,13 +43,13 @@ describe('traceStatement', () => {
   it('неподдерживаемый оператор: final-only с эталоном и touched', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
-        const trace = await traceSql(db, 'with t as (select count(*) from book) select * from t');
+        const trace = await traceSql(db, 'select * from book for update');
         expect(trace).toMatchObject({
           mode: 'final-only',
-          fallbackReason: 'Пока не анимируется: WITH',
+          fallbackReason: 'Пока не анимируется: FOR UPDATE',
           stages: [],
         });
-        expect(trace.result?.rows).toEqual([[11]]);
+        expect(trace.result?.rows).toHaveLength(11);
         expect(trace.touched.tableIds).toEqual(['public.book']);
       }),
     ));

@@ -2,6 +2,7 @@ import type { Node, SelectStmt } from '@pgsql/types';
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
+import { prepareSources } from './materialize/materialize';
 import type { Prober } from './probe';
 import { createProber, ProbeOverflow, sqlOf, TraceFallback, typeNames } from './probe';
 import { traceSpecial } from './route';
@@ -103,10 +104,20 @@ export async function traceStatement(
     finish({ mode: 'final-only', fallbackReason, stages: [], result: reference, error: null });
 
   if (typeof special === 'string') return finalOnly(special);
-  const reason = unsupportedReason(stmt);
-  if (reason !== null) return finalOnly(reason);
   if (!('SelectStmt' in stmt.ast)) return finalOnly('Пока не анимируется');
-  const sel = stmt.ast.SelectStmt;
+  let sel = stmt.ast.SelectStmt;
+  let schema = opts.schema;
+  let prefix: Stage[] = [];
+  if (sel.withClause || sel.fromClause?.length) {
+    const prepared = await prepareSources(stmt, sel, db, prober, opts, traceStatement);
+    if ('reason' in prepared) return finalOnly(prepared.reason);
+    sel = prepared.sel;
+    schema = prepared.schema;
+    prefix = prepared.stages;
+  }
+  // Проверяем уже переписанный SELECT: подзапрос в FROM стал TEMP-источником
+  const reason = unsupportedReason({ ...stmt, ast: { SelectStmt: sel } });
+  if (reason !== null) return finalOnly(reason);
   const volatile = selectFeatures(sel).has('volatile');
 
   // UNION / INTERSECT / EXCEPT: обе ветви трассируются отдельно, итог считается по кратностям
@@ -116,8 +127,8 @@ export async function traceStatement(
     if (sel.sortClause || sel.limitCount || sel.limitOffset)
       return finalOnly('ORDER BY или LIMIT над множествами пока не анимируется');
     if (setopDepth(sel) > 3) return finalOnly('Вложенность множеств глубже 3 не анимируется');
-    const left = await traceStatement(branchStatement(stmt, sel.larg), db, opts);
-    const right = await traceStatement(branchStatement(stmt, sel.rarg), db, opts);
+    const left = await traceStatement(branchStatement(stmt, sel.larg), db, { ...opts, schema });
+    const right = await traceStatement(branchStatement(stmt, sel.rarg), db, { ...opts, schema });
     if (left.mode !== 'full' || right.mode !== 'full')
       return finalOnly(
         `Ветвь множества не анимируется: ${left.fallbackReason ?? right.fallbackReason ?? 'причина не указана'}`,
@@ -157,19 +168,24 @@ export async function traceStatement(
     return finish({ mode: 'full', stages: [stage], result: reference, error: null });
   }
 
-  const from = flattenFrom(sel, opts.schema);
+  const from = flattenFrom(sel, schema);
   if (!from.ok) return finalOnly(from.reason);
 
   const { sources, joins } = from;
-  const args = { stmt, sel, prober, reference, volatile, sources, joins, schema: opts.schema };
-  let ctx = createSelectCtx(args);
+  const args = { stmt, sel, prober, reference, volatile, sources, joins, schema };
+  const createCtx = () => {
+    const next = createSelectCtx(args);
+    next.stages.push(...prefix);
+    return next;
+  };
+  let ctx = createCtx();
   let compressed: QueryResult | null = null;
   try {
     try {
       await runSelect(ctx);
     } catch (e) {
       if (!(e instanceof ProbeOverflow)) throw e;
-      ctx = createSelectCtx(args);
+      ctx = createCtx();
       compressed = await runCompressed(ctx);
     }
   } catch (e) {

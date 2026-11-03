@@ -103,6 +103,7 @@ export const SUPPORTED = new Set<Feature>([
   'having',
   'aggregate',
   'setop',
+  'cte',
 ]);
 
 const FEATURE_LABELS: Record<Feature, string> = {
