@@ -111,6 +111,39 @@ describe('groupAnimator', () => {
   });
 });
 
+describe('groupAnimator: ROLLUP и FILTER', () => {
+  it('итоговая строка ROLLUP получает бейдж «всего»', () => {
+    const trace = groupTrace();
+    trace.stages[1] = {
+      ...trace.stages[1],
+      groupingSets: [['author_id'], []],
+      grouping: { 'g:0': 0, 'g:1': 0, 'g:2': 1 },
+    } as StageOf<'group'>;
+    const p = groupAnimator(runUpTo(trace, 1, testCtx()), trace.stages[1] as StageOf<'group'>, 1, testCtx());
+    expect(p[2].frame.tables[0].rows.find((r) => r.key === 'g:2')?.badge).toBe('всего');
+    expect(p[2].frame.tables[0].rows.find((r) => r.key === 'g:0')?.badge).toBeUndefined();
+  });
+
+  it('FILTER гасит строки, не прошедшие условие, только для своего агрегата', () => {
+    const trace = groupTrace();
+    const filtered = {
+      ...trace.stages[1],
+      filters: [
+        {
+          aggregate: 'count(*) FILTER (WHERE author_id = 1)',
+          verdicts: { 'b=(0,1)': true, 'b=(0,3)': false, 'b=(0,4)': null, 'b=(0,10)': false },
+        },
+      ],
+    } as StageOf<'group'>;
+    const p = groupAnimator(runUpTo(trace, 1, testCtx()), filtered, 1, testCtx());
+    expect(p.map((x) => x.id)).toEqual(['1:color', '1:stack', '1:filter0', '1:collapse']);
+    const rows = p[2].frame.tables[0].rows;
+    expect(rows.find((r) => r.key === 'b=(0,1)')?.state).toBe('normal');
+    expect(rows.find((r) => r.key === 'b=(0,3)')?.badge).toBe('FILTER');
+    expect(rows.find((r) => r.key === 'b=(0,4)')?.state).toBe('unknown');
+  });
+});
+
 describe('groupAnimator: агрегат без GROUP BY', () => {
   const { stage, phases } = run(aggregateTrace());
 

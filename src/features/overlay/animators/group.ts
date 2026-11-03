@@ -24,6 +24,10 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   const clean = clearMarks(cur);
 
   const result = rebuildTable(cur, stage.output, undefined, stageRows(stage));
+  // ROLLUP / CUBE / GROUPING SETS: у итоговых строк GROUPING не ноль, помечаем их
+  const groupedResult = stage.grouping
+    ? mapRows(result, (r) => ((stage.grouping?.[r.key] ?? 0) > 0 ? { badge: 'всего' } : {}))
+    : result;
   // Без GROUP BY итог агрегатов виден прямо в подписи: count(*) = 4.
   // Колонки выхода тут ровно агрегаты по порядку, их тип нужен formatCell: min(date) без времени
   const aggText = (values: unknown[]) =>
@@ -37,8 +41,10 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
     caption: `${stage.caption}${totals}`,
     durationMs: 700,
     frame: {
-      tables: withTable(prev, result).tables,
-      decorations: [counterNear(result, `${stageIndex}:counter`, `${totalRows(cur)} → ${stageRows(stage)}`)],
+      tables: withTable(prev, groupedResult).tables,
+      decorations: [
+        counterNear(groupedResult, `${stageIndex}:counter`, `${totalRows(cur)} → ${stageRows(stage)}`),
+      ],
     },
   };
   // Сжатый режим Ф5: состава групп нет, только итог
@@ -115,6 +121,23 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
       };
     });
 
+  // FILTER (WHERE ...): строки, не прошедшие условие, гаснут только для своего агрегата
+  const filterPhases: Phase[] = (stage.filters ?? []).map((filter, fi) => {
+    const marked = mapRows(stacked, (r) => {
+      const verdict = filter.verdicts[r.key];
+      return verdict === true || verdict === undefined
+        ? { state: 'normal' as const }
+        : { state: 'unknown' as const, badge: 'FILTER' };
+    });
+    return {
+      id: `${stageIndex}:filter${fi}`,
+      stageIndex,
+      caption: `${filter.aggregate}: часть строк не идёт в счётчик`,
+      durationMs: 600,
+      frame: { tables: withTable(prev, marked).tables, decorations: brackets },
+    };
+  });
+
   return [
     {
       id: `${stageIndex}:color`,
@@ -130,6 +153,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
       durationMs: 800,
       frame: { tables: withTable(prev, stacked).tables, decorations: brackets },
     },
+    ...filterPhases,
     ...ticks,
     collapse,
   ];

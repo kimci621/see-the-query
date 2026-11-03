@@ -31,13 +31,11 @@ describe('buildPlayback', () => {
 
   it('стадия без своего аниматора идёт через generic', () => {
     const t = fullPipelineTrace();
-    const window = {
+    const future = {
       ...t.stages[2],
-      kind: 'window',
-      partitions: [],
-      computed: [],
+      kind: 'future',
     } as unknown as Trace['stages'][number];
-    const p = buildPlayback({ ...t, stages: [t.stages[0], window] }, testCtx());
+    const p = buildPlayback({ ...t, stages: [t.stages[0], future] }, testCtx());
     expect(p.phases[p.phases.length - 1].id).toBe('1:result');
   });
 

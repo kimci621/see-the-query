@@ -71,6 +71,24 @@ describe('projectAnimator', () => {
     );
   });
 
+  it('CASE WHEN: ветки подсвечивают свои строки', () => {
+    const branched = {
+      ...stage,
+      branches: [
+        {
+          column: 'sale',
+          labels: ['WHEN price < 1000 THEN 0', 'ELSE 1'],
+          fired: { 'b=(0,1)': 0, 'b=(0,2)': 1, 'b=(0,8)': 0 },
+        },
+      ],
+    };
+    const p = projectAnimator(afterWhere(), branched, 2, testCtx());
+    expect(p.map((x) => x.id)).toEqual(['2:case0:0', '2:case0:1', '2:mark', '2:collapse']);
+    expect(p[0].caption).toBe('CASE sale: WHEN price < 1000 THEN 0');
+    expect(p[0].frame.tables[0].rows.find((r) => r.key === 'b=(0,1)')?.badge).toBe('ветка 1');
+    expect(p[1].frame.tables[0].rows.find((r) => r.key === 'b=(0,2)')?.badge).toBe('ветка 2');
+  });
+
   it('два алиаса одной колонки: «оставляем» по числу колонок выдачи', () => {
     // select price as a, price as b: сводка трассировщика кладёт в renamed только последний алиас
     const col = (name: string) => ({ name, type: 'numeric', source: { alias: 'b', column: 'price' } });

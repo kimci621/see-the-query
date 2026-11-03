@@ -224,6 +224,62 @@ describe('стадия group', () => {
     ));
 });
 
+describe('ROLLUP, CUBE, GROUPING SETS и FILTER', () => {
+  it('ROLLUP: детальные группы и итог с GROUPING', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select category_id, count(*) from book group by rollup(category_id) order by grouping(category_id), category_id',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const group = stageOf(trace, 'group');
+        expect(group.groupingSets).toEqual([['category_id'], []]);
+        expect(group.keys).toEqual(['category_id']);
+        expect(group.output.rows).toHaveLength(5);
+        expect(column(group, 'count')).toEqual([4, 4, 2, 1, 11]);
+        expect(Object.values(group.grouping ?? {}).filter((n) => n === 1)).toHaveLength(1);
+        expect(group.groups.at(-1)?.members).toHaveLength(11);
+      }),
+    ));
+
+  it('CUBE и GROUPING SETS: наборы уровней и их число', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const cube = await traceSql(
+          db,
+          'select author_id, category_id, count(*) from book group by cube(author_id, category_id)',
+        );
+        expect(cube.mode, cube.fallbackReason).toBe('full');
+        expect(stageOf(cube, 'group').groupingSets).toHaveLength(4);
+        const sets = await traceSql(
+          db,
+          'select author_id, category_id, count(*) from book group by grouping sets ((author_id, category_id), (author_id), ())',
+        );
+        expect(sets.mode, sets.fallbackReason).toBe('full');
+        expect(stageOf(sets, 'group').groupingSets).toEqual([
+          ['author_id', 'category_id'],
+          ['author_id'],
+          [],
+        ]);
+      }),
+    ));
+
+  it('FILTER: агрегат считает только прошедшие строки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'select count(*) filter (where rating >= 5) as great, count(*) from review',
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const group = stageOf(trace, 'group');
+        expect(group.aggregates).toEqual(['count(*) FILTER (WHERE rating >= 5)', 'count(*)']);
+        expect(group.output.rows[0].values).toEqual([4, 10]);
+      }),
+    ));
+});
+
 describe('стадия having', () => {
   it('HAVING: фильтр по группам, вердикты по g:N', () =>
     withDataset('bookstore', (db) =>

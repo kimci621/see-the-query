@@ -59,6 +59,36 @@ describe('стадия materialize', () => {
       }),
     ));
 
+  it('VALUES в FROM становится таблицей из воздуха', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, "select * from (values (1, 'a'), (2, 'b')) as t(n, s) order by n");
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const materialize = stageOf(trace, 'materialize');
+        expect(materialize.name).toBe('t');
+        expect(materialize.output.columns.map((c) => c.name)).toEqual(['n', 's']);
+        expect(trace.result?.rows).toEqual([
+          [1, 'a'],
+          [2, 'b'],
+        ]);
+      }),
+    ));
+
+  it('generate_series в FROM размножает строки', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, 'select n, n * n from generate_series(1, 4) as n');
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(stageOf(trace, 'materialize').name).toBe('n');
+        expect(trace.result?.rows).toEqual([
+          [1, 1],
+          [2, 4],
+          [3, 9],
+          [4, 16],
+        ]);
+      }),
+    ));
+
   it('NOT MATERIALIZED пока уходит в final-only с причиной', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

@@ -75,6 +75,36 @@ describe('стадия project', () => {
         expect(project.output.rows.map((r) => r.key)).toEqual(['b=(0,4)', 'b=(0,6)', 'b=(0,8)', 'b=(0,9)']);
       }),
     ));
+  it('CASE WHEN: ветки подписаны, сработавшая ветка известна по строке', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const project = stageOf(
+          await traceSql(
+            db,
+            `select title,
+                    case when price < 500 then 'дёшево'
+                         when price < 1000 then 'средне'
+                         else 'дорого' end as bucket
+             from book order by book_id`,
+          ),
+          'project',
+        );
+        expect(project.branches).toHaveLength(1);
+        const branch = project.branches?.[0];
+        expect(branch?.column).toBe('bucket');
+        expect(branch?.labels).toEqual([
+          "WHEN price < 500 THEN 'дёшево'",
+          "WHEN price < 1000 THEN 'средне'",
+          "ELSE 'дорого'",
+        ]);
+        const fired = Object.values(branch?.fired ?? {});
+        expect(fired.filter((n) => n === 0)).toHaveLength(3);
+        expect(fired.filter((n) => n === 1)).toHaveLength(4);
+        expect(fired.filter((n) => n === 2)).toHaveLength(4);
+        expect(column(project, 'bucket')).toContain('дорого');
+      }),
+    ));
+
   it('SELECT без FROM: одна строка из эталона', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

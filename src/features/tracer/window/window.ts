@@ -66,7 +66,9 @@ export const windowStep: SelectStep = {
       'SortBy' in node && node.SortBy.node ? [sqlOf(node.SortBy.node)] : [],
     );
     const select = [...partitionSql, ...windows, `${ctx.sql.rowKey} AS __vs_key`];
-    const order = ` ORDER BY ${ctx.sql.rowKey}`;
+    // Порядок строк важен сцене: партиции идут по ключам, внутри по ORDER BY окна, ничьи по ctid
+    const orderParts = [...partitionSql, ...orderKeys];
+    const order = ` ORDER BY ${[...orderParts, ctx.sql.rowKey].join(', ')}`;
     const result = await ctx.prober.rows(
       `SELECT ${select.join(', ')}${ctx.sql.from}${ctx.sql.where}${ctx.sql.group}${order}`,
     );

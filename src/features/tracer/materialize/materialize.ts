@@ -5,6 +5,7 @@ import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from '../captions';
 import { ident, type Prober, sqlOf, typeNames } from '../probe';
 import { prepareRecursive } from '../recursion/recursion';
+import { rowKeyOf } from '../rowkey';
 import type { Stage, Trace, TraceOptions } from '../types';
 import { replaceRangeVars } from './replace';
 
@@ -73,8 +74,67 @@ export interface PreparedSources {
 function hasFromSubquery(node: unknown): boolean {
   if (Array.isArray(node)) return node.some(hasFromSubquery);
   if (!node || typeof node !== 'object') return false;
-  if ('RangeSubselect' in node) return true;
+  if ('RangeSubselect' in node || 'RangeFunction' in node) return true;
   return Object.values(node).some(hasFromSubquery);
+}
+
+// Источники без ctid (VALUES, generate_series) и VALUES-подзапросы тоже становятся TEMP-таблицами
+function isSpecialSource(node: Node): boolean {
+  if ('RangeFunction' in node) return true;
+  if (!('RangeSubselect' in node)) return false;
+  const body = node.RangeSubselect.subquery;
+  return Boolean(body && 'SelectStmt' in body && body.SelectStmt.valuesLists);
+}
+
+function sourceAlias(node: Node, fallback: string): string {
+  if ('RangeSubselect' in node) return node.RangeSubselect.alias?.aliasname ?? fallback;
+  if ('RangeFunction' in node) return node.RangeFunction.alias?.aliasname ?? fallback;
+  return fallback;
+}
+
+// Внутренняя трасса источника «из воздуха»: одна стадия scan по TEMP-таблице
+async function tempSourceTrace(
+  prober: Prober,
+  temp: string,
+  name: string,
+  types: Map<number, string>,
+): Promise<Trace> {
+  const r = await prober.rows(`SELECT ctid::text, * FROM ${ident(temp)} ORDER BY ctid`);
+  const fields = r.fields.slice(1);
+  const names = await typeNames(
+    prober,
+    fields.map((f) => f.dataTypeID),
+    types,
+  );
+  const columns = fields.map((f) => ({
+    name: f.name,
+    type: names.get(f.dataTypeID) ?? 'unknown',
+    source: { alias: name, column: f.name },
+  }));
+  const rows = r.rows.map((row) => ({
+    key: rowKeyOf({ [name]: row[0] as string }, [name]),
+    lineage: { [name]: row[0] as string },
+    values: row.slice(1),
+  }));
+  const stage: Stage = {
+    id: '0:scan',
+    kind: 'scan',
+    alias: name,
+    tableId: `pg_temp.${temp}`,
+    caption: captions.scan(name, name, rows.length),
+    output: { columns, rows },
+  };
+  return {
+    sql: '',
+    statementType: 'select',
+    mode: 'full',
+    touched: { tableIds: [], columns: [] },
+    stages: [stage],
+    result: null,
+    error: null,
+    notices: [],
+    timingMs: 0,
+  };
 }
 
 // CTE и подзапросы в FROM материализуем в TEMP-таблицы: дальше обычный SELECT читает их как источники.
@@ -106,7 +166,8 @@ export async function prepareSources(
   const names = new Map<string, string>();
   const stages: Stage[] = [];
   const types = new Map<number, string>();
-  if (!ctes.length && !hasFromSubquery(sel.fromClause)) return { sel, schema, stages };
+  if (!ctes.length && !(sel.fromClause ?? []).some(isSpecialSource) && !hasFromSubquery(sel.fromClause))
+    return { sel, schema, stages };
   for (const cte of ctes) {
     const name = cte.ctename;
     if (!name) return { reason: 'CTE без имени не анимируется' };
@@ -143,6 +204,36 @@ export async function prepareSources(
       const larg = je.larg ? await rewriteFrom(je.larg) : undefined;
       const rarg = je.rarg ? await rewriteFrom(je.rarg) : undefined;
       return { JoinExpr: { ...je, ...(larg ? { larg } : {}), ...(rarg ? { rarg } : {}) } as JoinExpr };
+    }
+    if (isSpecialSource(node)) {
+      const alias = sourceAlias(node, `__vs_from${stages.length}`);
+      const temp = `__vs_f${sequence++}`;
+      if ('RangeSubselect' in node) {
+        const rs = node.RangeSubselect;
+        const body = rs.subquery;
+        if (!body || !('SelectStmt' in body)) {
+          failure = 'Подзапрос в FROM без SELECT пока не анимируется';
+          return node;
+        }
+        const colnames = (rs.alias?.colnames ?? []).flatMap((n) =>
+          'String' in n && n.String.sval ? [n.String.sval] : [],
+        );
+        const cols = colnames.length ? `(${colnames.map(ident).join(', ')})` : '';
+        await prober.run(`CREATE TEMP TABLE ${ident(temp)}${cols} AS ${sqlOf(body)}`);
+      } else {
+        await prober.run(`CREATE TEMP TABLE ${ident(temp)} AS SELECT * FROM ${sqlOf(node)}`);
+      }
+      const table = await tempTable(prober, temp, types);
+      schema = { ...schema, tables: [...schema.tables, table] };
+      const inner = await tempSourceTrace(prober, temp, alias, types);
+      stages.push(materializeStage(alias, inner, `${stages.length}:materialize`));
+      return {
+        RangeVar: {
+          schemaname: 'pg_temp',
+          relname: temp,
+          alias: { aliasname: alias },
+        },
+      };
     }
     if (!('RangeSubselect' in node)) return node;
     const rs = node.RangeSubselect;

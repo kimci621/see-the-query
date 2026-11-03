@@ -15,6 +15,7 @@ import { flattenFrom, joinStep } from './select/join';
 import { runSelect } from './select/pipeline';
 import { scanStep } from './select/scan';
 import { type SetopOp, setopStage } from './setop/setop';
+import { hasLateral, traceLateral } from './subquery/lateral';
 import type { Relation, Stage, Trace, TraceOptions } from './types';
 import { rowCanon, sameResult } from './verify';
 import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason, volatileSort } from './whitelist';
@@ -108,6 +109,14 @@ export async function traceStatement(
   let sel = stmt.ast.SelectStmt;
   let schema = opts.schema;
   let prefix: Stage[] = [];
+  // LATERAL видит строки предыдущих источников: материализовать его в TEMP нельзя
+  if (hasLateral(sel)) {
+    const lateral = await traceLateral(stmt, sel, reference, prober, opts, (child, extra) =>
+      traceStatement(child, db, { ...opts, ...extra }),
+    );
+    if ('reason' in lateral) return finalOnly(lateral.reason);
+    return finish({ mode: 'full', stages: lateral.stages, result: reference, error: null });
+  }
   if (sel.withClause || sel.fromClause?.length) {
     const prepared = await prepareSources(stmt, sel, db, prober, opts, traceStatement);
     if ('reason' in prepared) return finalOnly(prepared.reason);

@@ -82,6 +82,48 @@ describe('подзапросы', () => {
       }),
     ));
 
+  it('ANY и ALL с подзапросом дают вердикты по строкам', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const any = await traceSql(
+          db,
+          'select title from book where price > any (select price from book where category_id = 6)',
+        );
+        expect(any.mode, any.fallbackReason).toBe('full');
+        const anyStage = stageOf(any, 'subquery');
+        expect(anyStage.mode).toBe('any');
+        expect(any.result?.rows).toHaveLength(1);
+        const all = await traceSql(
+          db,
+          'select title from book where price > all (select price from book where category_id = 6)',
+        );
+        expect(all.mode, all.fallbackReason).toBe('full');
+        const allStage = stageOf(all, 'subquery');
+        expect(allStage.mode).toBe('all');
+        expect(all.result?.rows).toEqual([]);
+      }),
+    ));
+
+  it('LATERAL даёт мини-сцены и склеенный итог', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          `select a.name, t.title
+           from author a,
+                lateral (select title from book b where b.author_id = a.author_id order by price desc nulls last limit 1) t
+           order by a.name`,
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const subquery = stageOf(trace, 'subquery');
+        expect(subquery.mode).toBe('lateral');
+        expect(subquery.samples).toHaveLength(3);
+        expect(subquery.limit3).toBe(true);
+        expect(trace.result?.rows).toHaveLength(5);
+        expect(trace.stages.at(-1)?.output.rows).toHaveLength(5);
+      }),
+    ));
+
   it('некоррелированный EXISTS отмечает все строки', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

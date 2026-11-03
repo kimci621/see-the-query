@@ -94,9 +94,10 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       aggregates: parts.aggregates,
       aggregateColumns: parts.aggregateColumns,
       nullSkipColumns: parts.nullSkipColumns,
+      ...(parts.groupingSets ? { groupingSets: parts.groupingSets } : {}),
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, parts.keys.length ? 'group' : 'select'),
-      caption: groupCaption(parts.keys, n, before),
+      caption: groupCaption(parts.keys, n, before, parts.groupingLabel),
     });
   }
   if (sel.havingClause) {

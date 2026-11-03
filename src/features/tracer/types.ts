@@ -61,6 +61,8 @@ export type Stage = StageBase &
         aggregateColumns: number[]; // номера колонок входа внутри агрегатов: их оверлей не перечёркивает
         nullSkipColumns: number[]; // колонки входа count(col), sum(col) и т. п.: NULL в них не засчитывается
         groupingSets?: string[][]; // Ф10: ROLLUP / CUBE / GROUPING SETS
+        grouping?: Record<RowKey, number>; // битовая маска GROUPING: какие ключи свернуты в этой строке
+        filters?: Array<{ aggregate: string; verdicts: Record<RowKey, boolean | null> }>; // FILTER (WHERE ...)
         running?: unknown[][]; // без GROUP BY: значения агрегатов после каждого члена стопки
       }
     | {
@@ -77,6 +79,8 @@ export type Stage = StageBase &
         removed: string[];
         computed: string[];
         renamed: Record<string, string>;
+        // Ф10: CASE WHEN, какая ветка сработала в каждой строке
+        branches?: Array<{ column: string; labels: string[]; fired: Record<RowKey, number> }>;
       }
     | { kind: 'distinct'; on: string[] | null; stacks: Array<{ winner: RowKey; members: RowKey[] }> }
     | { kind: 'sort'; order: RowKey[]; sortKeys: string[]; keyColumns: number[] } // keyColumns: номера колонок выхода под ключами
@@ -97,7 +101,7 @@ export type Stage = StageBase &
     | { kind: 'recursion'; name: string; iterations: Relation[] }
     | {
         kind: 'subquery';
-        mode: 'scalar' | 'in' | 'exists' | 'correlated' | 'lateral';
+        mode: 'scalar' | 'in' | 'any' | 'all' | 'exists' | 'correlated' | 'lateral';
         samples: Array<{ outer: RowKey; inner: Trace }>;
         limit3: boolean; // первые 3 внешние строки подробно, остальные из итога
         value?: unknown; // скалярный: единственное значение подзапроса

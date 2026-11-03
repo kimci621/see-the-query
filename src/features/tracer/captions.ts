@@ -34,6 +34,8 @@ export const captions = {
     `SELECT: ${colsWord(kept)} из ${from}${computed ? `, вычислено ${computed}` : ''}`,
   group: (keys: string[], groups: number, rows: number) =>
     `GROUP BY ${keyList(keys)}: ${rowsWord(rows)} → ${groups} ${plural(groups, 'группа', 'группы', 'групп')}`,
+  groupBy: (clause: string, groups: number, rows: number) =>
+    `GROUP BY ${clause}: ${rowsWord(rows)} → ${groups} ${plural(groups, 'группа', 'группы', 'групп')}`,
   having: (before: number, after: number, unknown: number) =>
     `HAVING: осталось ${after} из ${before} ${plural(before, 'группы', 'групп', 'групп')}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   aggregateNoGroup: (rows: number) => `Агрегат без GROUP BY: ${rowsWord(rows)} → 1 строка`,
@@ -44,6 +46,10 @@ export const captions = {
   subqueryIn: (yes: number, unknown: number) =>
     `IN: совпало ${yes}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
   subqueryExists: (yes: number) => `EXISTS: совпало ${yes}`,
+  subqueryAnyAll: (label: string, yes: number, unknown: number) =>
+    `${label}: прошло ${yes}${unknown ? `, UNKNOWN у ${unknown}` : ''}`,
+  subqueryLateral: (samples: number, outer: number, rows: number) =>
+    `LATERAL: ${samples} из ${ofRows(outer)} подробно, всего ${rowsWord(rows)}`,
   projectNoFrom: (n: number) => `SELECT без FROM: ${rowsWord(n)}`,
   distinct: (before: number, after: number) =>
     `DISTINCT: ${rowsWord(before)} → ${after} ${plural(after, 'уникальная', 'уникальные', 'уникальных')}`,

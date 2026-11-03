@@ -3,6 +3,7 @@ import {
   columnIds,
   currentTable,
   mapColumns,
+  mapRows,
   rebuildTable,
   stageRows,
   withTable,
@@ -54,7 +55,24 @@ export const projectAnimator: Animator<StageOf<'project'>> = (prev, stage, stage
   if (stage.computed.length) parts.push(`вычисляем ${stage.computed.join(', ')}`);
   if (stage.removed.length) parts.push(`убираем ${stage.removed.join(', ')}`);
 
+  // CASE WHEN: по очереди подсвечиваем строки, где сработала каждая ветка
+  const casePhases = (stage.branches ?? []).flatMap((branch, bi) =>
+    branch.labels.map((label, li) => {
+      const markedBranch = mapRows(clearMarks(cur), (r) =>
+        branch.fired[r.key] === li ? { badge: `ветка ${li + 1}` } : {},
+      );
+      return {
+        id: `${stageIndex}:case${bi}:${li}`,
+        stageIndex,
+        caption: `CASE ${branch.column}: ${label}`,
+        durationMs: 500,
+        frame: { tables: withTable(prev, markedBranch).tables, decorations: [] },
+      };
+    }),
+  );
+
   return [
+    ...casePhases,
     {
       id: `${stageIndex}:mark`,
       stageIndex,

@@ -265,8 +265,7 @@ export function unsupportedReason(stmt: ParsedStatement): string | null {
   walk(stmt.ast, (key, value) => {
     if (key !== 'SubLink') return;
     const type = (value as { subLinkType?: string }).subLinkType;
-    if (type === 'ALL_SUBLINK') unsupported = 'Пока не анимируется: ANY / ALL с подзапросом';
-    else if (type === 'ARRAY_SUBLINK') unsupported = 'Пока не анимируется: ARRAY с подзапросом';
+    if (type === 'ARRAY_SUBLINK') unsupported = 'Пока не анимируется: ARRAY с подзапросом';
   });
   return unsupported;
 }
