@@ -1,0 +1,100 @@
+---
+id: upsert
+title: INSERT ... ON CONFLICT
+chapter: dml
+number: "3.5"
+order: 5
+dataset: bookstore
+initialQuery: |
+  select customer_id, name, email, bonus from customer order by customer_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-insert.html
+    title: INSERT и ON CONFLICT
+course: ["11.14"]
+tags: [upsert, on conflict, excluded, unique]
+---
+
+<TlDr>`ON CONFLICT` говорит, что делать, если строка с уникальным ключом уже есть: пропустить или обновить. Это upsert одной командой.</TlDr>
+
+## Что есть в данных
+
+В `customer` шесть покупателей. У Анны Смирновой `customer_id = 1`, email `anna@example.com` уникален, бонус 120. Имя не уникально: в таблице два Ивана Петрова. Поэтому конфликт по имени объявить нельзя.
+
+## DO NOTHING
+
+```sql run expect=rows:0
+insert into customer (name, email, bonus, created_at)
+values ('Анна Смирнова', 'anna@example.com', 0, now())
+on conflict (email) do nothing
+returning customer_id;
+```
+
+Вставка находит существующий email и пропускает строку. На доске входящая строка подлетает к `customer`, упирается в конфликт и отскакивает. В результате ноль строк: новой записи нет, старая не изменилась.
+
+## DO UPDATE
+
+Чаще нужно не пропустить, а обновить существующую строку:
+
+```sql run expect=rows:1
+insert into customer (name, email, bonus, created_at)
+values ('Анна Смирнова', 'anna@example.com', 0, now())
+on conflict (email) do update set bonus = customer.bonus + 200
+returning customer_id, bonus;
+```
+
+Анна уже есть, поэтому срабатывает `DO UPDATE`: бонус становится 120 + 200 = 320. На доске две строки соединяются линией конфликта, ячейка `bonus` переворачивается со старого значения на новое.
+
+В `DO UPDATE` доступны две версии строки: `customer` это текущая строка в таблице, `excluded` это строка, которую пытались вставить. Здесь `excluded.bonus` равен 0, а `customer.bonus` равен 120.
+
+## Ключ конфликта
+
+```sql run expectError=42P10
+insert into customer (name, email, created_at)
+values ('Иван Петров', 'new@example.com', now())
+on conflict (name) do nothing;
+```
+
+Postgres возвращает `42P10`: для `name` нет уникального ограничения. `ON CONFLICT (колонка)` принимает только колонки с `UNIQUE`, первичным ключом или уникальным индексом. Иначе база не смогла бы быстро найти конфликт.
+
+Если уникального ограничения нет, но конфликт нужен по сочетанию колонок, создай уникальный индекс:
+
+```sql noexec
+create unique index customer_email_lower_idx on customer (lower(email));
+```
+
+Тогда целью конфликта может быть выражение: `on conflict (lower(email))`.
+
+## Чего нет в выдаче и почему
+
+- ❌ Новой строки после `DO NOTHING` нет: конфликт пропущен.
+- ❌ Второй Анны нет после `DO UPDATE`: строка обновилась, а не добавилась.
+- ❌ Строки с конфликтом по `name` нет: Postgres не нашёл уникального ограничения и вернул ошибку.
+
+## Ловушки
+
+<Callout kind="trap">
+`DO UPDATE` затирает текущие значения целиком, если не добавить условие. Два процесса могут одновременно обновлять бонус, и последний перезапишет чужой результат. Защищайся условием:
+
+```sql noexec
+on conflict (email) do update set bonus = customer.bonus + 200
+where customer.bonus < 1000;
+```
+</Callout>
+
+<Callout kind="tip">
+`ON CONFLICT` атомарен: Postgres сам разрешает гонку между вставкой и обновлением. Не пиши «сначала `SELECT`, потом `INSERT` или `UPDATE`»: между двумя запросами другой процесс успеет вставить строку. Upsert делает то же одним оператором.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк вернёт `DO NOTHING` при конфликте?
+2. Чему равен `bonus` после `DO UPDATE` с `customer.bonus + 200`?
+3. Почему `on conflict (name)` падает?
+
+<Cheatsheet>
+- `insert ... on conflict (ключ) do nothing;` пропускает конфликт.
+- `do update set колонка = значение` обновляет существующую строку.
+- `excluded` это строка, которую пытались вставить.
+- Цель конфликта должна иметь `UNIQUE`, PK или уникальный индекс.
+- `ON CONFLICT` атомарен, отдельные `SELECT` и `INSERT` не заменяют его.
+</Cheatsheet>

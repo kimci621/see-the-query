@@ -391,7 +391,7 @@
 - ✅ (2026-11-03) **L3.2** 3.2 RETURNING
 - ✅ (2026-11-03) **L3.3** 3.3 UPDATE, UPDATE ... FROM
 - ✅ (2026-11-03) **L3.4** 3.4 DELETE, DELETE ... USING, vs TRUNCATE
-- ⬜ **L3.5** 3.5 INSERT ... ON CONFLICT
+- ✅ (2026-11-03) **L3.5** 3.5 INSERT ... ON CONFLICT
 - ⬜ **L3.6** 3.6 MERGE
 
 ## Ф10 Подзапросы, множества, CTE, окна
