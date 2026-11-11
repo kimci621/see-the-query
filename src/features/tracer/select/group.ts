@@ -198,7 +198,9 @@ export const groupStep: SelectStep = {
     const parts = groupParts(ctx);
     const { keys, keyColumns, aggregates, aggregateColumns, nullSkipColumns, groupingSets } = parts;
     const n = keys.length + aggregates.length;
-    const ctids = ctx.aliasOrder.map((a) => `${ident(a)}.ctid`).join(', ');
+    const ctids = ctx.sources
+      .map((source) => `${ident(source.alias)}.${source.srf ? ident(source.srf.ordinalColumn) : 'ctid'}`)
+      .join(', ');
     const groupingSql = groupingSets ? `, GROUPING(${keys.join(', ')})::int` : '';
     const order = groupingSets
       ? ` ORDER BY GROUPING(${keys.join(', ')}), ${keys.map((_, i) => i + 1).join(', ')}`

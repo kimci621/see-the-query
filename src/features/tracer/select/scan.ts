@@ -1,5 +1,5 @@
 import { captions } from '../captions';
-import { ident } from '../probe';
+import { ident, sqlOf } from '../probe';
 import { rowKeyOf } from '../rowkey';
 import type { Row } from '../types';
 import { rangeOf, stageId } from './context';
@@ -57,6 +57,22 @@ export const scanStep: SelectStep = {
         caption: captions.scan(table.name, alias, rows.length),
         output: { columns, rows },
       });
+    }
+    if (ctx.sources.some((source) => source.srf)) {
+      ctx.sql.targets = (ctx.sel.targetList ?? [])
+        .flatMap((target) => {
+          const val = 'ResTarget' in target ? target.ResTarget.val : undefined;
+          const fields = val && 'ColumnRef' in val ? val.ColumnRef.fields : undefined;
+          if (!fields?.length || !('A_Star' in fields[fields.length - 1])) return [sqlOf(target)];
+          const first = fields.length === 2 ? fields[0] : undefined;
+          const alias = first && 'String' in first ? first.String.sval : undefined;
+          return ctx.sources.flatMap((source, i) =>
+            alias && alias !== source.alias
+              ? []
+              : ctx.sourceColumns[i].map((column) => `${ident(source.alias)}.${ident(column.name)}`),
+          );
+        })
+        .join(', ');
     }
   },
 };

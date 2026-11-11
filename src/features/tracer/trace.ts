@@ -125,24 +125,7 @@ export async function traceStatement(
     (srfItems.length !== 1 || sel.fromClause?.length !== 2 || !srfNode || !('RangeFunction' in srfNode))
   )
     return finalOnly('Такая комбинация функций в FROM пока не анимируется');
-  if (
-    srf &&
-    (sel.groupClause ||
-      sel.havingClause ||
-      sel.windowClause ||
-      sel.withClause ||
-      selectFeatures(sel).has('aggregate') ||
-      selectFeatures(sel).has('window'))
-  )
-    return finalOnly('Функция в FROM с группировкой или WITH пока не анимируется');
-  if (srf && srfNode) {
-    let star = false;
-    walk(sel.targetList, (key) => {
-      if (key === 'A_Star') star = true;
-    });
-    if (star) return finalOnly('Звёздочка с функцией в FROM пока не анимируется');
-    sel = { ...sel, fromClause: sel.fromClause?.slice(0, 1) };
-  }
+  if (srf && srfNode) sel = { ...sel, fromClause: sel.fromClause?.slice(0, 1) };
   let schema = opts.schema;
   let prefix: Stage[] = [];
   // LATERAL видит строки предыдущих источников: материализовать его в TEMP нельзя

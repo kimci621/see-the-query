@@ -79,6 +79,39 @@ describe('стадия expand', () => {
       }),
     ));
 
+  it.each([
+    'select u.tag, count(*) from book b, unnest(b.tags) as u(tag) group by u.tag order by u.tag',
+    'select count(*) from book b, unnest(b.tags) as u(tag) where b.book_id = 5',
+    'with chosen as (select book_id, tags from book where book_id = 5) select c.book_id, u.tag from chosen c, unnest(c.tags) as u(tag)',
+    'select b.book_id, u.tag, row_number() over (order by b.book_id, u.tag) from book b, unnest(b.tags) as u(tag) where b.book_id = 5',
+  ])('раскрытие работает с группировкой, WITH и окнами: %s', (sql) =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, sql);
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(trace.stages.some((stage) => stage.kind === 'expand')).toBe(true);
+      }),
+    ),
+  );
+
+  it.each([
+    'select * from book b, unnest(b.tags) as u(tag) where b.book_id = 5',
+    'select b.*, u.* from book b, unnest(b.tags) as u(tag) where b.book_id = 5',
+    'select u.* from book b, unnest(b.tags) with ordinality as u(tag, pos) where b.book_id = 5',
+  ])('звёздочка раскрывает только колонки исходного запроса: %s', (sql) =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, sql);
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const direct = await db.query(sql);
+        expect(trace.result?.fields.map((field) => field.name)).toEqual(
+          direct.fields.map((field) => field.name),
+        );
+        expect(trace.stages.at(-1)?.output.rows.map((row) => row.values)).toEqual(direct.rows);
+      }),
+    ),
+  );
+
   it('имя функции используется как алиас, если алиас не задан', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
