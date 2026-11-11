@@ -1,0 +1,139 @@
+---
+id: strings
+title: Строки
+chapter: types
+number: "5.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+initialQuery: |
+  select title from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-character.html
+    title: Строковые типы
+  - url: https://www.postgresql.org/docs/current/functions-string.html
+    title: Функции и операторы для строк
+course: ["11.27"]
+tags: [строки, text, varchar, char, ilike, format]
+---
+
+<TlDr>Для текста обычно подходят text и varchar. У char(n) есть особенность: значения дополняются пробелами.</TlDr>
+
+## Что есть в данных
+
+Названия книг в <C id="public.book.title">title</C> и имена покупателей в <C id="public.customer.name">name</C>: оба text. В именах есть полный тёзка: два «Ивана Петрова». Все адреса в примере записаны строчными буквами. В названиях трёх книг есть слово Python.
+
+## text против varchar и char
+
+Три строковых типа:
+
+- `text`: строка без объявленного ограничения длины.
+- `varchar(n)`: строка не длиннее `n` символов.
+- `char(n)`: дополняет значение пробелами до `n` символов при хранении.
+
+<Callout kind="analogy">
+В анкете на пять клеток слово «кот» займёт три, а две клетки останутся пустыми. `char(5)` дополняет короткую строку пробелами до пяти символов; `text` сохраняет введённую длину. При некоторых операциях конечные пробелы `char` отбрасываются.
+</Callout>
+
+Проверим «дополнение пробелами» char:
+
+```sql run expect=rows:1
+select 'ab'::char(5) || '|' as glued, length('ab'::char(5)) as len;
+```
+
+Сюрприз: `glued` это `ab|`, а не `ab   |`. Хвостовые пробелы срезаются, как только значение выходит в text (а `||` возвращает text). При приведении значения `char` к `text` конечные пробелы убираются. Поэтому результат функции может выглядеть иначе, чем значение внутри поля.
+
+<DontDoThis href="https://wiki.postgresql.org/wiki/Don't_Do_This#Don't_use_char(n)">
+Не выбирай `char(n)` ради скорости: в PostgreSQL он дополняет значения пробелами и не быстрее `text`. Обычно удобнее `text` или `varchar(n)`, если ограничение длины действительно нужно. `char(n)` может пригодиться для совместимости с существующей схемой или стандартом, но его поведение с пробелами нужно учитывать.
+</DontDoThis>
+
+## Склейка и повтор
+
+Строки склеиваются оператором `||`:
+
+```sql run expect=rows:1
+select 'Тихий' || ' ' || 'Дон' as full_title;
+```
+
+Повтор и изменение регистра:
+
+```sql run expect=rows:1
+select initcap('hello world') as titled, repeat('=', 10) as line;
+```
+
+`initcap` поднимает первую букву каждого слова: «Hello World».
+
+## Регистр и пробелы
+
+```sql run expect=rows:1
+select upper('тихий дон') as up, lower('Python') as down, btrim('  привет  ') as trimmed;
+```
+
+Обычное сравнение строк регистрозависимо: `'ABC' = 'abc'` это false. Регистронезависимый поиск делает `ilike`:
+
+```sql run expect=rows:3
+select title, price from book where title ilike '%python%' order by book_id;
+```
+
+Вернулись 3 книги с «Python» в названии. `ILIKE` сравнивает без учёта регистра по правилам локали базы.
+
+## Куски строки
+
+```sql run expect=rows:1
+select left('Привет', 3) as l, right('Привет', 2) as r, position('он' in 'Тихий Дон') as at;
+```
+
+`left` и `right` отрезают по N символов, `position` ищет подстроку: «он» внутри «Тихий Дон» на позиции 8. Длина:
+
+```sql run expect=rows:1
+select length('Привет') as chars, octet_length('Привет') as bytes;
+```
+
+Здесь 6 символов и 12 байт: `length` считает символы, а `octet_length` байты. Размер в байтах зависит от кодировки и самих символов; этот пример использует UTF-8.
+
+## format: строка из кусочков
+
+`format` собирает строку по шаблону:
+
+```sql run expect=rows:1
+select format('%s (%s ₽)', title, price) as label from book where book_id = 1;
+```
+
+«Тихий Дон (890.00 ₽)»: `%s` подставляет значение как text. Шаблон помогает увидеть, где окажется каждое значение, если частей много.
+
+## Чего нет в выдаче и почему
+
+- ❌ Книги без «Python» в `ilike`-примере: подстроки нет.
+- ❌ «Простой Python» в `like '%python%'` без i: заглавная `P` не совпадает со строчной `p`.
+- ❌ Пробелы char(5): срезаны при выходе в text.
+
+## Ловушки
+
+<Callout kind="trap">
+`LIKE` использует шаблоны `%` и `_`, а не синтаксис регулярных выражений. Пробелы тоже важны:
+
+```sql run expect=rows:1
+select ' a@b.ru ' = 'a@b.ru' as raw, btrim(' a@b.ru ') = 'a@b.ru' as trimmed;
+```
+
+Первое сравнение возвращает false, второе true. Обрезай пробелы на входе, если они не должны быть частью значения; для уже сохранённых данных можно применить `btrim`.
+</Callout>
+
+<Callout kind="tip">
+В продакшене email и логины часто ищут без регистра: `where lower(email) = lower($1)`. Глава 12 покажет, как не убить этим производительность (индекс по выражению).
+</Callout>
+
+## Проверь себя
+
+1. Что вернёт `select left(title, 7) from book where book_id = 1`?
+2. Сколько книг найдёт `title like '%о%'`? А с `ilike`?
+3. Как собрать строку «Покупатель N делает заказ M» из двух колонок через format?
+
+<Cheatsheet>
+- text без объявленного лимита, varchar(n) с лимитом символов. У char(n) учитывай пробелы.
+- `||` склейка, `format('%s...', ...)` шаблон.
+- `upper/lower/initcap/btrim/left/right/position/length`.
+- `like` регистрозависим, `ilike` нет. `%` и `_`, не регэкспы.
+- length считает символы, octet_length байты.
+</Cheatsheet>
