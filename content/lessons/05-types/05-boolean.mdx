@@ -1,0 +1,121 @@
+---
+id: boolean
+title: boolean
+chapter: types
+number: "5.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.customer]
+initialQuery: |
+  select name, bonus from customer;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-boolean.html
+    title: Логический тип
+  - url: https://www.postgresql.org/docs/current/functions-logical.html
+    title: Логические операторы
+  - url: https://www.postgresql.org/docs/current/functions-comparison.html
+    title: Операторы сравнения
+course: ["11.30"]
+tags: [boolean, "true", "false", "null", filter, is distinct from]
+---
+
+<TlDr>boolean выражает true или false. Если значение неизвестно, SQL использует NULL; AND, OR и NOT учитывают это третье состояние.</TlDr>
+
+## Что есть в данных
+
+У покупателей есть <C id="public.customer.bonus">bonus</C>: целое число, 0 и больше. `NOT NULL` запрещает отсутствие значения, а `CHECK` не пропускает отрицательные числа. «Есть бонус» это уже не колонка, а выражение `bonus > 0`. У троих из шести есть. У одной покупательницы город не указан: в колонке city стоит NULL.
+
+## Значение true и false в выражении
+
+**Булево выражение** возвращает true, false или неизвестный результат NULL. Его можно вывести как колонку:
+
+```sql run expect=rows:6
+select name, bonus > 0 as has_bonus from customer order by customer_id;
+```
+
+Шесть строк, в колонке `has_bonus` true/false. На доске видно, как выражение вычисляется построчно.
+
+<Callout kind="analogy">
+В списке проверок у каждого пункта можно поставить «да» или «нет». Пустая отметка не означает «нет»: проверку могли ещё не провести. Так же NULL в условии не превращается автоматически в false.
+</Callout>
+
+## Таблица AND и OR с NULL
+
+В уроке 4.5 ты уже видел, что сравнение с NULL может дать неизвестный результат. Посмотрим четыре случая для AND и OR:
+
+```sql run expect=rows:1
+select true and null as tan, false and null as fan, true or null as ton, false or null as fon;
+```
+
+Четыре ответа: NULL, false, true, NULL. Если у `AND` одна сторона false, весь результат false, даже когда другая сторона неизвестна. Для `OR` достаточно одной стороны true. В остальных двух показанных случаях результат неизвестен.
+
+## FILTER: счёт по условию
+
+Агрегат с `filter` считает только строки, прошедшие условие:
+
+```sql run expect=rows:1
+select count(*) filter (where bonus > 0) as with_bonus, count(*) as total from customer;
+```
+
+3 из 6. Это то же самое, что `count(case when bonus > 0 then 1 end)`, но `FILTER` явно отделяет условие от агрегата.
+
+## Диапазон и отдельные значения
+
+```sql run expect=rows:1
+select name from customer where bonus between 100 and 200;
+```
+
+Один покупатель в диапазоне. `BETWEEN` включает обе границы. Если значение неизвестно, результат сравнения тоже может быть неизвестен.
+
+## Сравнение с NULL: is distinct from
+
+Обычное `city <> null` даёт NULL и строку отбрасывает. Если нужно проверить, что город указан:
+
+```sql run expect=rows:1
+select count(*) as with_city from customer where city is distinct from null;
+```
+
+5 покупателей с городом. `IS DISTINCT FROM` считает два NULL одинаковыми, а NULL и известное значение разными. В этом примере тот же результат даст более привычная проверка `city IS NOT NULL`.
+
+```sql run expect=rows:6
+select name, coalesce(city, 'не указан') as city from customer order by customer_id;
+```
+
+`COALESCE` возвращает первое значение, которое не является NULL. У покупательницы без города появится подпись «не указан».
+
+## Чего нет в выдаче и почему
+
+- ❌ Покупатель без города в `city is distinct from null`: NULL это не значение, «distinct от null» ложен.
+- ❌ Строки с NULL-бонусом в `where bonus > 0`: таких в датасете нет (колонка объявлена NOT NULL, а CHECK ограничивает диапазон), но в таблице с NULL-бонусом они молча выпали бы и из `bonus > 0`, и из `not (bonus > 0)`.
+- ❌ «Пять без города» через `city <> null`: сравнение с NULL всегда NULL, строк нет; для проверки есть `IS NOT NULL` и `IS DISTINCT FROM NULL`.
+
+## Ловушки
+
+<Callout kind="trap">
+`NOT` не превращает неизвестное значение в true. Сравни две проверки:
+
+```sql run expect=rows:1
+select not null::boolean as negated, null::boolean is not true as not_true;
+```
+
+В первой колонке NULL, во второй true. Поэтому `where not (bonus > 0)` и `where bonus > 0` обе отбросят строку с NULL. Если нужно включить неизвестные значения, используй проверку `IS NOT TRUE` или отдельное условие.
+</Callout>
+
+<Callout kind="tip">
+Давай флагам имена, на которые можно ответить «да» или «нет»: `is_active`, `has_discount`. Если неизвестное состояние не нужно, добавь `NOT NULL`; подходящее значение по умолчанию задавай отдельно через `DEFAULT`.
+</Callout>
+
+## Проверь себя
+
+1. Что вернёт `select count(*) from customer where not (bonus > 0)`? А сколько строк потерялось бы, если бы у кого-то bonus был NULL? Сначала руками, потом доска.
+2. Сколько покупателей с `city is distinct from 'Москва'`? Чем отличается от `city <> 'Москва'`?
+3. `select null and null`? Сначала таблица, потом доска.
+
+<Cheatsheet>
+- boolean: true или false. NULL в булевом выражении означает неизвестный результат.
+- false AND NULL даёт false; true OR NULL даёт true. В остальных случаях с одним NULL ответ может быть неизвестен.
+- `count(*) filter (where ...)`: счёт по условию без подзапроса.
+- `is distinct from`: сравнение, где NULL обычное значение.
+- NOT от NULL это NULL: «не условие» теряет NULL-строки.
+</Cheatsheet>

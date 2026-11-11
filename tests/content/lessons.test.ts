@@ -78,6 +78,7 @@ const GUIDE_LESSONS: string[] = [
   'numbers',
   'strings',
   'dates-time',
+  'boolean',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
