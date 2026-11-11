@@ -75,6 +75,15 @@ describe('TableNode', () => {
     expect(within(screen.getByTestId('table-node-shop.cart')).getByText('пусто')).toBeInTheDocument();
   });
 
+  it('крупная таблица показывает пять строк и число остальных', () => {
+    const sampleRows = Array.from({ length: 15 }, (_, i) => [i + 1, `Книга ${i + 1}`]);
+    const large = { ...book, rowCount: 100000, sampleRows };
+    render(<ReactFlowProvider>{node(large)}</ReactFlowProvider>);
+    const el = screen.getByTestId('table-node-public.book');
+    expect(el.querySelectorAll('.vs-rows[data-row]')).toHaveLength(5);
+    expect(within(el).getByText(/ещё 99\s995 строк/)).toBeInTheDocument();
+  });
+
   it('фокус перерисовывает только свою таблицу', () => {
     const renders = { book: 0, author: 0 };
     render(

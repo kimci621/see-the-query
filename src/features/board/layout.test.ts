@@ -44,6 +44,15 @@ describe('размеры таблицы', () => {
     expect(tableHeight(table('public.big', [col('id', 'int')], rows, 40))).toBe(36 + 40 + 15 * 24 + 24);
   });
 
+  it('крупные таблицы занимают место для пяти доступных строк и полосы', () => {
+    const rows = Array.from({ length: 15 }, (_, i) => [i]);
+    expect(tableHeight(table('public.big', [col('id', 'int')], rows, 1000))).toBe(36 + 40 + 15 * 24 + 24);
+    expect(tableHeight(table('public.big', [col('id', 'int')], rows, 1001))).toBe(36 + 40 + 5 * 24 + 24);
+    expect(tableHeight(table('public.big', [col('id', 'int')], rows.slice(0, 2), 1001))).toBe(
+      36 + 40 + 2 * 24 + 24,
+    );
+  });
+
   it('ширина по числу колонок, не меньше TABLE_WIDTH', () => {
     expect(tableWidth(book)).toBe(6 * COLUMN_WIDTH);
     expect(tableWidth(table('public.one', [col('id', 'int')]))).toBe(TABLE_WIDTH);

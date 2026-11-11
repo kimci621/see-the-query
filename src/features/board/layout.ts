@@ -1,6 +1,7 @@
 import dagre from '@dagrejs/dagre';
 import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { readRootFont } from '@/hooks/use-root-font';
+import { COMPRESSED_ROWS, isCompressed } from './compressed';
 
 // Длины доски и призраков в rem (спека 3.4, WCAG 1.4.4): растут вместе с настройкой шрифта браузера.
 // React Flow, dagre и оверлей считают в px, поэтому rem переводится в px только здесь, от текущего
@@ -114,7 +115,7 @@ export function foldWidth(f: Fold): number {
 
 // Шапка + заголовки колонок + видимые строки + строка «+ ещё N» или «пусто»
 export function tableHeight(t: TableInfo): number {
-  const visible = Math.min(t.sampleRows.length, MAX_VISIBLE_ROWS);
+  const visible = Math.min(t.sampleRows.length, isCompressed(t) ? COMPRESSED_ROWS : MAX_VISIBLE_ROWS);
   const footer = t.rowCount > visible || t.rowCount === 0 ? ROW_HEIGHT : 0;
   return HEADER_HEIGHT + COLUMN_HEADER_HEIGHT + visible * ROW_HEIGHT + footer;
 }

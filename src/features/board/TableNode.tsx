@@ -10,6 +10,7 @@ import { bumpRenderCount } from '@/lib/renderCount';
 import { cn } from '@/lib/utils';
 import { type AppliedWrite, useBoardStore } from '@/stores/board';
 import { CellValue } from './CellValue';
+import { COMPRESSED_ROWS, hiddenRowsLabel, isCompressed } from './compressed';
 import {
   COLUMN_HEADER_HEIGHT,
   COLUMN_WIDTH,
@@ -137,11 +138,13 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   const stub = fold.hidden.length;
   // Подсвеченная колонка свёрнута: подсвечиваем заглушку, размер ноды не меняется
   const stubHighlighted = fold.hidden.some((c) => highlighted.includes(c.name));
-  const rows = table.sampleRows.slice(0, MAX_VISIBLE_ROWS).map((values, i) => ({
-    key: table.sampleCtids[i] ?? String(i),
-    values,
-    mark: rowMark(table.sampleXmins?.[i], writes),
-  }));
+  const rows = table.sampleRows
+    .slice(0, isCompressed(table) ? COMPRESSED_ROWS : MAX_VISIBLE_ROWS)
+    .map((values, i) => ({
+      key: table.sampleCtids[i] ?? String(i),
+      values,
+      mark: rowMark(table.sampleXmins?.[i], writes),
+    }));
   const hiddenRows = table.rowCount - rows.length;
   const footer = { height: ROW_HEIGHT, lineHeight: `${ROW_HEIGHT}px` };
 
@@ -240,7 +243,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       ))}
       {hiddenRows > 0 && (
         <div className="vs-rows px-3 text-xs text-muted-foreground" style={footer}>
-          + ещё {hiddenRows}
+          {isCompressed(table) ? hiddenRowsLabel(table) : `+ ещё ${hiddenRows}`}
         </div>
       )}
       {table.rowCount === 0 && (
