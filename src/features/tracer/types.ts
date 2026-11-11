@@ -36,6 +36,14 @@ export type Stage = StageBase &
   (
     | { kind: 'scan'; alias: string; tableId: string }
     | {
+        kind: 'expand';
+        fn: string;
+        alias: string;
+        sourceAlias: string;
+        sourceColumn: string;
+        children: Array<{ parent: RowKey; keys: RowKey[] }>;
+      }
+    | {
         kind: 'join';
         joinType: 'inner' | 'left' | 'right' | 'full' | 'cross';
         leftAliases: string[];

@@ -3,6 +3,7 @@ import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import { captions } from '../captions';
 import { ident, sqlOf } from '../probe';
 import { rowKeyOf } from '../rowkey';
+import type { SrfFromItem } from '../srf';
 import type { Column, Lineage, RowKey } from '../types';
 import { findTable, walk } from '../whitelist';
 import { rangeOf, type SelectCtx, stageId } from './context';
@@ -12,6 +13,7 @@ export interface Source {
   alias: string; // алиас или имя таблицы, ключ lineage
   table: TableInfo;
   rv: Node;
+  srf?: SrfFromItem;
 }
 
 export interface JoinNode {
@@ -33,6 +35,7 @@ const JOIN_TYPES: Record<string, JoinNode['jointype']> = {
 export function flattenFrom(
   sel: SelectStmt,
   schema: SchemaSnapshot,
+  srf?: SrfFromItem,
 ): { ok: true; sources: Source[]; joins: JoinNode[] } | { ok: false; reason: string } {
   const sources: Source[] = [];
   const joins: JoinNode[] = [];
@@ -81,6 +84,22 @@ export function flattenFrom(
   for (const [i, item] of (sel.fromClause ?? []).entries()) {
     // Запятая в FROM - это CROSS JOIN со следующей таблицей. JOIN после запятой меняет видимость алиасов
     if (i > 0) {
+      if (
+        'RangeFunction' in item &&
+        srf &&
+        i === 1 &&
+        sources.length === 1 &&
+        sources[0].alias === srf.sourceAlias
+      ) {
+        sources.push({
+          alias: srf.alias,
+          table: { ...sources[0].table, name: srf.alias, columns: [] },
+          rv: item,
+          srf,
+        });
+        joins.push({ jointype: 'cross', right: sources[1], on: null, using: null, natural: false });
+        continue;
+      }
       if (!('RangeVar' in item)) return { ok: false, reason: complex };
       const err = pushSource(item.RangeVar);
       if (err) return { ok: false, reason: err };
@@ -173,9 +192,26 @@ export const joinStep: SelectStep = {
     for (const [k, j] of ctx.joins.entries()) {
       const aliases = ctx.aliasOrder.slice(0, k + 2);
       const leftAliases = aliases.slice(0, -1);
-      const lineageSql = aliases.map((a) => `${ident(a)}.ctid::text`).join(', ');
-      const colsSql = aliases.map((a) => `${ident(a)}.*`).join(', ');
-      const orderSql = aliases.map((a) => `${ident(a)}.ctid`).join(', ');
+      const lineageSql = ctx.sources
+        .slice(0, k + 2)
+        .map((s) =>
+          s.srf
+            ? `'#' || ${ident(s.alias)}.${ident(s.srf.ordinalColumn)}::text`
+            : `${ident(s.alias)}.ctid::text`,
+        )
+        .join(', ');
+      const colsSql = ctx.sources
+        .slice(0, k + 2)
+        .map((s, i) =>
+          s.srf
+            ? ctx.sourceColumns[i].map((c) => `${ident(s.alias)}.${ident(c.name)}`).join(', ')
+            : `${ident(s.alias)}.*`,
+        )
+        .join(', ');
+      const orderSql = ctx.sources
+        .slice(0, k + 2)
+        .map((s) => `${ident(s.alias)}.${s.srf ? ident(s.srf.ordinalColumn) : 'ctid'}`)
+        .join(', ');
       const r = await ctx.prober.rows(
         `SELECT ${lineageSql}, ${colsSql}${ctx.sql.fromUpTo(k)} ORDER BY ${orderSql}`,
       );
@@ -193,6 +229,29 @@ export const joinStep: SelectStep = {
         return { key: rowKeyOf(lineage, aliases), lineage, values: layout.values(row.slice(aliases.length)) };
       });
       ctx.columns = layout.columns;
+      if (j.right.srf) {
+        const item = j.right.srf;
+        const grouped = new Map<string, string[]>();
+        for (const row of ctx.rows) {
+          const parent = rowKeyOf(row.lineage, [item.sourceAlias]);
+          const keys = grouped.get(parent) ?? [];
+          keys.push(row.lineage[item.alias] ?? '');
+          grouped.set(parent, keys);
+        }
+        ctx.stages.push({
+          id: stageId(ctx, 'expand'),
+          kind: 'expand',
+          fn: item.fn,
+          alias: item.alias,
+          sourceAlias: item.sourceAlias,
+          sourceColumn: item.sourceColumn,
+          children: [...grouped].map(([parent, keys]) => ({ parent, keys })),
+          caption: captions.expand(item.fn, leftCount, ctx.rows.length),
+          output: { columns: ctx.columns, rows: ctx.rows },
+        });
+        leftCount = ctx.rows.length;
+        continue;
+      }
       // [left, null]: левой строке не нашлась пара; [null, right]: правой
       const lonelyLeft = pairs.filter(([, rr]) => rr === null).length;
       const lonelyRight = pairs.filter(([l]) => l === null).length;

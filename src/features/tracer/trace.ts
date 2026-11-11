@@ -1,4 +1,4 @@
-import type { Node, SelectStmt } from '@pgsql/types';
+import type { FuncCall, Node, SelectStmt } from '@pgsql/types';
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
@@ -15,10 +15,19 @@ import { flattenFrom, joinStep } from './select/join';
 import { runSelect } from './select/pipeline';
 import { scanStep } from './select/scan';
 import { type SetopOp, setopStage } from './setop/setop';
+import { findSrfFromItems, hasSrfTarget, withSrfOrdinal } from './srf';
 import { hasLateral, traceLateral } from './subquery/lateral';
 import type { Relation, Stage, Trace, TraceOptions } from './types';
 import { rowCanon, sameResult } from './verify';
-import { groupingErrorFocus, selectFeatures, touchedOf, unsupportedReason, volatileSort } from './whitelist';
+import {
+  funcName,
+  groupingErrorFocus,
+  selectFeatures,
+  touchedOf,
+  unsupportedReason,
+  volatileSort,
+  walk,
+} from './whitelist';
 
 const SETOPS: Record<string, SetopOp> = {
   SETOP_UNION: 'union',
@@ -107,6 +116,33 @@ export async function traceStatement(
   if (typeof special === 'string') return finalOnly(special);
   if (!('SelectStmt' in stmt.ast)) return finalOnly('Пока не анимируется');
   let sel = stmt.ast.SelectStmt;
+  if (hasSrfTarget(sel)) return finalOnly('set-returning функция в списке SELECT');
+  const srfItems = findSrfFromItems(stmt);
+  const srf = srfItems[0];
+  const srfNode = srf && sel.fromClause?.[1];
+  if (
+    srf &&
+    (srfItems.length !== 1 || sel.fromClause?.length !== 2 || !srfNode || !('RangeFunction' in srfNode))
+  )
+    return finalOnly('Такая комбинация функций в FROM пока не анимируется');
+  if (
+    srf &&
+    (sel.groupClause ||
+      sel.havingClause ||
+      sel.windowClause ||
+      sel.withClause ||
+      selectFeatures(sel).has('aggregate') ||
+      selectFeatures(sel).has('window'))
+  )
+    return finalOnly('Функция в FROM с группировкой или WITH пока не анимируется');
+  if (srf && srfNode) {
+    let star = false;
+    walk(sel.targetList, (key) => {
+      if (key === 'A_Star') star = true;
+    });
+    if (star) return finalOnly('Звёздочка с функцией в FROM пока не анимируется');
+    sel = { ...sel, fromClause: sel.fromClause?.slice(0, 1) };
+  }
   let schema = opts.schema;
   let prefix: Stage[] = [];
   // LATERAL видит строки предыдущих источников: материализовать его в TEMP нельзя
@@ -118,14 +154,31 @@ export async function traceStatement(
     return finish({ mode: 'full', stages: lateral.stages, result: reference, error: null });
   }
   if (sel.withClause || sel.fromClause?.length) {
-    const prepared = await prepareSources(stmt, sel, db, prober, opts, traceStatement);
+    let prepared: Awaited<ReturnType<typeof prepareSources>>;
+    try {
+      prepared = await prepareSources(stmt, sel, db, prober, opts, traceStatement);
+    } catch (e) {
+      if (e instanceof DbException) {
+        let name = '';
+        walk(sel.fromClause, (key, value) => {
+          if (!name && key === 'FuncCall') name = funcName(value as FuncCall);
+        });
+        return finalOnly(
+          name
+            ? `Функция ${name} в FROM пока не анимируется`
+            : `Источник в FROM пока не анимируется: ${e.db.message}`,
+        );
+      }
+      throw e;
+    }
     if ('reason' in prepared) return finalOnly(prepared.reason);
     sel = prepared.sel;
     schema = prepared.schema;
     prefix = prepared.stages;
   }
+  if (srf && srfNode) sel = { ...sel, fromClause: [...(sel.fromClause ?? []), withSrfOrdinal(srfNode, srf)] };
   // Проверяем уже переписанный SELECT: подзапрос в FROM стал TEMP-источником
-  const reason = unsupportedReason({ ...stmt, ast: { SelectStmt: sel } });
+  const reason = unsupportedReason({ ...stmt, ast: { SelectStmt: sel } }, Boolean(srf));
   if (reason !== null) return finalOnly(reason);
   const volatile = selectFeatures(sel).has('volatile');
 
@@ -230,7 +283,7 @@ export async function traceStatement(
     return finish({ mode: 'full', stages: [stage], result: reference, error: null });
   }
 
-  const from = flattenFrom(sel, schema);
+  const from = flattenFrom(sel, schema, srf);
   if (!from.ok) return finalOnly(from.reason);
 
   const { sources, joins } = from;
@@ -258,6 +311,7 @@ export async function traceStatement(
       await runSelect(ctx);
     } catch (e) {
       if (!(e instanceof ProbeOverflow)) throw e;
+      if (srf) return finalOnly('Слишком много строк для функции в FROM');
       ctx = createCtx();
       compressed = await runCompressed(ctx);
     }

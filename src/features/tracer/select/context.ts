@@ -105,7 +105,7 @@ export function createSelectCtx(args: {
     ...args,
     aliasOrder,
     sql: {
-      rowKey: rowKeySql(aliasOrder),
+      rowKey: rowKeySql(aliasOrder, sources),
       from: fromUpTo(joins.length - 1),
       fromUpTo,
       fromSource: (i) => ` FROM ${sqlOf(sources[i].rv)}`,
@@ -128,10 +128,12 @@ export function createSelectCtx(args: {
 }
 
 // RowKey прямо в SQL, как rowKeyOf: 'b=(0,3)|a=∅'
-export function rowKeySql(aliases: string[]): string {
+export function rowKeySql(aliases: string[], sources: Source[] = []): string {
   const parts = aliases.map((a, i) => {
     const label = `${i ? '|' : ''}${a}=`.replaceAll("'", "''");
-    return `'${label}', coalesce(${ident(a)}.ctid::text, '∅')`;
+    const srf = sources.find((source) => source.alias === a)?.srf;
+    const key = srf ? `'#' || ${ident(a)}.${ident(srf.ordinalColumn)}::text` : `${ident(a)}.ctid::text`;
+    return `'${label}', coalesce(${key}, '∅')`;
   });
   return `concat(${parts.join(', ')})`;
 }
@@ -307,7 +309,10 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
     }
   }
   // ctid (у групп ключи группы) последним ключом: порядок равных строк детерминирован
-  orderParts.push(...(ctx.grouped?.keys ?? ctx.aliasOrder.map((a) => `${ident(a)}.ctid`)));
+  orderParts.push(
+    ...(ctx.grouped?.keys ??
+      ctx.sources.map((s) => `${ident(s.alias)}.${s.srf ? ident(s.srf.ordinalColumn) : 'ctid'}`)),
+  );
   const extraSql = extra.map((e) => `, ${e}`).join('');
   const orderSql = orderParts.length ? ` ORDER BY ${orderParts.join(', ')}` : '';
   const r = await ctx.prober.rows(

@@ -260,10 +260,12 @@ export function volatileSort(sel: SelectStmt): boolean {
 }
 
 // null = оператор трассируется полностью
-export function unsupportedReason(stmt: ParsedStatement): string | null {
+export function unsupportedReason(stmt: ParsedStatement, allowSrf = false): string | null {
   if (stmt.kind !== 'select' || !('SelectStmt' in stmt.ast))
     return `Пока не анимируется: ${KIND_LABELS[stmt.kind]}`;
-  const bad = [...selectFeatures(stmt.ast.SelectStmt)].filter((f) => !SUPPORTED.has(f));
+  const bad = [...selectFeatures(stmt.ast.SelectStmt)].filter(
+    (f) => !SUPPORTED.has(f) && !(allowSrf && f === 'function-from'),
+  );
   if (bad.length) return `Пока не анимируется: ${bad.map((f) => FEATURE_LABELS[f]).join(', ')}`;
   let unsupported: string | null = null;
   walk(stmt.ast, (key, value) => {

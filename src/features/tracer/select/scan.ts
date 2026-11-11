@@ -13,6 +13,19 @@ export const scanStep: SelectStep = {
     for (const [i, source] of ctx.sources.entries()) {
       const { alias, table } = source;
       const a = ident(alias);
+      if (source.srf) {
+        const r = await ctx.prober.run(`SELECT ${a}.*${ctx.sql.fromUpTo(i - 1)} LIMIT 0`);
+        const fields = source.srf.ordinalVisible ? r.fields : r.fields.slice(0, -1);
+        const types = await ctx.typeNames(fields.map((f) => f.dataTypeID));
+        const columns = fields.map((f) => ({
+          name: f.name,
+          type: types.get(f.dataTypeID) ?? 'unknown',
+          source: { alias, column: f.name },
+        }));
+        ctx.sourceColumns.push(columns);
+        ctx.scanColumns.push(...columns.map((c) => c.name));
+        continue;
+      }
       const r = await ctx.prober.rows(
         `SELECT ${a}.ctid::text, ${a}.*${ctx.sql.fromSource(i)} ORDER BY ${a}.ctid`,
       );

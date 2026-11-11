@@ -5,6 +5,8 @@ export function stageLabel(stage: Stage): string {
   switch (stage.kind) {
     case 'scan':
       return 'FROM';
+    case 'expand':
+      return stage.fn.toUpperCase();
     case 'join':
       return stage.joinType === 'cross' ? 'CROSS JOIN' : `${stage.joinType.toUpperCase()} JOIN`;
     case 'filter':

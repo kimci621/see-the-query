@@ -70,6 +70,7 @@ export const captions = {
   dmlTruncate: (table: string, before: number) =>
     `TRUNCATE ${table}: таблица пуста, было ${rowsWord(before)}`,
   ddl: () => 'DDL: схема обновлена',
+  expand: (fn: string, before: number, after: number) => `${fn}: ${rowsWord(before)} → ${rowsWord(after)}`,
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };
