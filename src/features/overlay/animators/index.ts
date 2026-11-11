@@ -4,6 +4,7 @@ import { ddlAnimator } from './ddl';
 import { distinctAnimator } from './distinct';
 import { dmlAnimator } from './dml';
 import { errorAnimator } from './error';
+import { expandAnimator } from './expand';
 import { filterAnimator } from './filter';
 import { groupAnimator } from './group';
 import { joinAnimator } from './join';
@@ -20,6 +21,7 @@ import { windowAnimator } from './window';
 // Реестр аниматоров по виду стадии. Виды без аниматора идут через genericAnimator
 export const ANIMATORS: { [K in Stage['kind']]?: Animator<Extract<Stage, { kind: K }>> } = {
   scan: scanAnimator,
+  expand: expandAnimator,
   join: joinAnimator,
   filter: filterAnimator,
   group: groupAnimator,

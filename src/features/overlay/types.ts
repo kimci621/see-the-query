@@ -28,6 +28,7 @@ export interface GhostRow {
   key: RowKey;
   values: unknown[];
   state: RowState;
+  origin?: { x: number; y: number };
   group?: number;
   badge?: string;
   cellNotes?: Record<number, string>;

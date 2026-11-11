@@ -58,8 +58,12 @@ const GhostRowView = memo(function GhostRowView({
           ? { ['--vs-group' as string]: `var(--group-${(row.group % 8) + 1})` }
           : {}),
       }}
-      initial={{ opacity: 0, y: rowTop(index) + (row.state === 'new' ? ROW_H : 0) }}
-      animate={{ opacity: STATE_OPACITY[row.state] ?? 1, y: rowTop(index) }}
+      initial={{
+        opacity: 0,
+        x: row.origin?.x ?? 0,
+        y: row.origin?.y ?? rowTop(index) + (row.state === 'new' ? ROW_H : 0),
+      }}
+      animate={{ opacity: STATE_OPACITY[row.state] ?? 1, x: 0, y: rowTop(index) }}
       exit={{ opacity: 0, y: rowTop(index) + ROW_H / 2 }}
     >
       <AnimatePresence initial={false}>
