@@ -77,6 +77,7 @@ const GUIDE_LESSONS: string[] = [
   'types-casting',
   'numbers',
   'strings',
+  'dates-time',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX

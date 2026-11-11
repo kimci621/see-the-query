@@ -1,0 +1,153 @@
+---
+id: dates-time
+title: Дата и время
+chapter: types
+number: "5.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.orders, public.book]
+initialQuery: |
+  select order_id, created_at from orders;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-datetime.html
+    title: Типы даты и времени
+  - url: https://www.postgresql.org/docs/current/functions-datetime.html
+    title: Функции и операторы для дат и времени
+course: ["11.29"]
+tags: [дата, время, timestamp, timestamptz, interval, часовой пояс]
+---
+
+<TlDr>date хранит календарный день, timestamp дату и время без пояса, timestamptz конкретный момент. interval задаёт промежуток.</TlDr>
+
+## Что есть в данных
+
+У заказов в <C id="public.orders.created_at">created_at</C> стоит timestamptz, у книг в <C id="public.book.published_at">published_at</C> date. Все времена записаны со смещением `+03`. Особый заказ: номер 7, создан `2024-05-01 00:10+03`. По Москве это первое мая, а по UTC ещё тридцатое апреля. Запомни его.
+
+## Три типа на каждый день
+
+- `date`: календарный день, без времени и пояса. `published_at` книги.
+- `timestamp`: дата и время на часах без часового пояса. Само значение не определяет конкретный момент.
+- `timestamptz`: конкретный момент. Postgres хранит его в UTC, показывает в поясе сессии и не сохраняет исходное имя пояса. Такой тип у `created_at` заказов.
+
+## Дата плюс интервал
+
+`interval` задаёт промежуток в месяцах, днях и времени. Его можно прибавить к дате или времени. Месяцы имеют разную длину, поэтому интервал с месяцами нельзя всегда свести к фиксированному числу дней:
+
+```sql run expect=rows:1
+select published_at, (published_at + interval '90 days')::date as later from book where book_id = 7;
+```
+
+«Остров погибших кораблей» вышел 1926-01-01, через 90 дней 1926-04-01. Postgres учитывает длину месяцев и високосные годы.
+
+```sql run expect=rows:1
+select interval '1 day 2 hours' as i;
+```
+
+## Достать часть: extract и date_trunc
+
+`extract` достает поле (год, месяц, час) из даты:
+
+```sql run expect=rows:2
+select book_id, extract(year from published_at) as year from book where book_id in (1, 2) order by book_id;
+```
+
+1940 и 2022. `date_trunc` приводит значение к началу указанной единицы времени:
+
+```sql run expect=rows:1
+select date_trunc('month', published_at)::date as month_start from book where book_id = 2;
+```
+
+Книга вышла 2022-03-01, поэтому начало её месяца та же дата. Если бы день был другим, результатом всё равно было бы первое марта.
+
+## Сколько прошло: age
+
+```sql run expect=rows:1
+select age(timestamp '2026-01-01', timestamp '1990-05-15') as a;
+```
+
+`35 years 7 mons 17 days`: `age` показывает календарную разницу в годах, месяцах и днях. Такой результат отличается от простого числа суток, потому что месяцы разной длины.
+
+<Callout kind="analogy">
+Представь видеозвонок между Москвой и Лондоном. Он начинается одновременно для участников, но их часы показывают разное местное время. `timestamptz` хранит момент звонка, а пояс нужен, чтобы показать его на местных часах.
+</Callout>
+
+## timestamptz: один момент, разная запись
+
+Возвращаемся к заказу 7. Один и тот же момент покажем в двух поясах:
+
+```sql run expect=rows:1
+select order_id,
+       to_char(created_at at time zone 'Europe/Moscow', 'YYYY-MM-DD HH24:MI') as msk,
+       to_char(created_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') as utc
+from orders where order_id = 7;
+```
+
+По Москве `2024-05-01 00:10`, по UTC `2024-04-30 21:10`. Дата заказа зависит от выбранного пояса. Сначала выведем только московский день:
+
+```sql run expect=rows:1
+select to_char(created_at at time zone 'Europe/Moscow', 'YYYY-MM-DD') as day_msk from orders where order_id = 7;
+```
+
+Чтобы выбрать все заказы за первое мая по Москве, задай начало этого дня и начало следующего:
+
+```sql run expect=rows:1
+select order_id from orders
+where created_at >= timestamptz '2024-05-01 00:00+03'
+  and created_at < timestamptz '2024-05-02 00:00+03'
+order by order_id;
+```
+
+Вернётся заказ 7. Нижняя граница включена, верхняя нет, поэтому полночь следующего дня попадёт в следующий диапазон. В примерах пояс задан явно, а не берётся из настроек сессии.
+
+<DontDoThis href="https://wiki.postgresql.org/wiki/Don't_Do_This#Don't_use_timestamp_(without_time_zone)">
+Для всего, что случилось «в реальном мире» (заказы, платежи, логи), бери `timestamptz`. Голый `timestamp` оставь для договорённых «настенных часов»: расписание смен, время будильника. Для суток удобно использовать полуинтервал `>= начало and < начало_следующих_суток`. В отличие от `BETWEEN`, он не включает полночь следующего дня и не зависит от точности долей секунды.
+</DontDoThis>
+
+## Кривая дата
+
+Postgres проверяет даты на правдивость:
+
+```sql run expectError=22008
+select '2024-02-31'::date;
+```
+
+`22008 datetime_field_out_of_range`: тридцать первого февраля не бывает.
+
+## Чего нет в выдаче и почему
+
+- ❌ Заказ 7 «первомайский» по UTC: он апрельский. Момент один, записи две.
+- ❌ `published_at` с временем: date хранит только день.
+- ❌ Заказ 8 в первомайской выборке: по Москве он создан 3 мая.
+
+## Ловушки
+
+<Callout kind="trap">
+Если явно указать `timestamp` без пояса, Postgres проигнорирует смещение в строке. Сравни два результата:
+
+```sql run expect=rows:1
+select to_char(timestamp '2024-05-01 00:10+03', 'YYYY-MM-DD HH24:MI') as plain,
+       to_char(timestamptz '2024-05-01 00:10+03' at time zone 'UTC', 'YYYY-MM-DD HH24:MI') as utc;
+```
+
+Первое значение оставляет поля даты и времени `2024-05-01 00:10`, не задавая конкретный момент. Второе показывает момент со смещением `+03` как `2024-04-30 21:10` по UTC. Литерал даты без пояса при сравнении с timestamptz тоже зависит от настроек сессии. Для границ указывай смещение или часовой пояс явно.
+</Callout>
+
+<Callout kind="tip">
+`now()` возвращает время начала текущей транзакции, а `clock_timestamp()` время вызова. Для отметки создания часто используют `default now()`, учитывая, что все строки одной транзакции получат одно и то же значение.
+</Callout>
+
+## Проверь себя
+
+1. Сколько дней между `published_at` книг 1 и 2? Подсказка: вычти даты.
+2. Какой год у самой старой книги? `extract` плюс `order by ... limit 1`.
+3. Что вернёт `created_at at time zone 'Asia/Tokyo'` для заказа 7?
+
+<Cheatsheet>
+- date: день. timestamp: дата и время без пояса. timestamptz: момент без сохранения исходного пояса. interval: промежуток.
+- `+ interval '90 days'`, `extract(year from x)`, `date_trunc('month', x)`, `age(a, b)`.
+- `at time zone 'Europe/Moscow'`: перевод момента в настенное время города.
+- Литералы с датами в timestamptz: со смещением `+03` или явным поясом.
+- Сутки: `>= начало and < начало_следующих_суток`.
+- Кривая дата: `22008`.
+</Cheatsheet>
