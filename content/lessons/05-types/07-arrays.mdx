@@ -1,0 +1,124 @@
+---
+  id: arrays
+  title: Массивы
+  chapter: types
+  number: "5.7"
+  order: 7
+  dataset: bookstore
+  board:
+    tables: [public.book]
+  initialQuery: |
+    select book_id, title, tags from book order by book_id;
+  docs:
+    - url: https://www.postgresql.org/docs/current/arrays.html
+      title: Массивы
+    - url: https://www.postgresql.org/docs/current/functions-array.html
+      title: Функции и операторы массивов
+  course: ["11.31"]
+  tags: [массив, array, unnest, any]
+---
+
+<TlDr>Массив хранит несколько элементов одного типа в одном значении. `unnest` превращает элементы в отдельные строки.</TlDr>
+
+## Что есть в данных
+
+У каждой из одиннадцати книг есть <C id="public.book.tags">tags</C> типа `text[]`. Массив хранит теги одной книги:
+
+```sql run expect=rows:1
+select title, tags from book where book_id = 1;
+```
+
+У «Тихого Дона» два тега: `классика` и `роман`. Фигурные скобки показывают массив; это одна ячейка, а не две строки.
+
+<Callout kind="analogy">
+У книги есть карточка с несколькими наклейками. Пока наклейки на карточке, мы рассматриваем книгу целиком. Если разложить наклейки отдельно, можно посчитать или отфильтровать каждую, сохранив связь с книгой.
+</Callout>
+
+## Элемент и размер
+
+```sql run expect=rows:1
+select tags[1] as first_tag, cardinality(tags) as n from book where book_id = 1;
+```
+
+Первый тег `классика`, всего два. У этих массивов нумерация начинается с 1. PostgreSQL допускает и другие нижние границы массива, поэтому для произвольных данных их можно проверить через `array_lower`.
+
+```sql run expect=rows:11
+select book_id, array_length(tags, 1) as n from book order by book_id;
+```
+
+`array_length(tags, 1)` показывает размер первого измерения. В наших данных от одного до трёх тегов. Для пустого массива `array_length` вернёт NULL, а `cardinality` вернёт 0.
+
+## Найти книгу по тегу
+
+```sql run expect=rows:3
+select book_id, title from book where tags @> '{python}' order by book_id;
+```
+
+`@>` проверяет, содержит ли левый массив все элементы правого. Здесь найдены книги 2, 10 и 11.
+
+```sql run expect=rows:2
+select book_id, title from book where 'beginner' = any(tags) order by book_id;
+```
+
+`= ANY` проверяет, равен ли элемент хотя бы одному значению массива. Тег `beginner` есть у книг 10 и 11.
+
+## Раскрыть массив в строки
+
+```sql run expect=rows:3
+select b.title, u.tag from book b, unnest(b.tags) as u(tag) where b.book_id = 5;
+```
+
+У «Сказки о рыбаке и рыбке» три тега: `классика`, `сказка`, `детям`. Из одной строки книги получаются три строки, по одной на тег. На доске `UNNEST` сначала раскрывает теги всех одиннадцати книг в 21 строку. Скобки связывают строки с исходными книгами; затем `WHERE` оставляет три тега книги 5.
+
+```sql run expect=rows:3
+select b.title, u.tag from book b, unnest(b.tags) as u(tag) where u.tag = 'python' order by b.book_id;
+```
+
+Теперь раскрываются теги всех книг, а условие оставляет только строки с `python`. Название книги повторяется рядом с её тегом. Пустой массив при таком соединении не даст строк; чтобы сохранить и такую книгу, пригодится `LEFT JOIN LATERAL`.
+
+## Массив или отдельная таблица
+
+Массив удобен, когда список небольшой и его часто читают вместе с книгой. Если тегам нужны свои свойства, ограничения или связи с другими объектами, отдельная таблица тегов и таблица связей обычно удобнее. Для некоторых поисков по массивам PostgreSQL умеет использовать GIN-индекс.
+
+## Чего нет в выдаче и почему
+
+- ❌ Остальных книг в поиске `@> '{python}'`: их массивы не содержат этот элемент.
+- ❌ Других тегов в раскрытой выдаче с `u.tag = 'python'`: условие отфильтровало отдельные строки после раскрытия.
+- ❌ Строк пустого массива при `unnest` в этом `FROM`: у массива нет элементов для раскрытия.
+
+## Ловушки
+
+<Callout kind="trap">
+Нельзя вложить `unnest` непосредственно в аргумент агрегата:
+
+```sql run expectError=0A000
+select array_agg(distinct unnest(tags)) as all_tags from book;
+```
+
+PostgreSQL выдаст `0A000`. Сначала раскрой массив в `FROM`, затем собирай значения через `array_agg`.
+</Callout>
+
+Функцию можно вызвать и в списке `SELECT`, но этот вариант приложение показывает только в панели результата, без пошагового раскрытия на доске:
+
+{/* final-only: set-returning функция в списке SELECT */}
+```sql run trace=final-only expect=rows:3
+select unnest(tags) as tag from book where book_id = 5;
+```
+
+<Callout kind="tip">
+Для проверки элемента вне диапазона не путай NULL с пустой строкой: если индекс не существует, чтение элемента вернёт NULL.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк создаст `unnest` для книги с тремя тегами?
+2. Чем пустой массив отличается от NULL при подсчёте через `cardinality`?
+3. Каким запросом найти книги с тегом `beginner`?
+
+<Cheatsheet>
+- `text[]` хранит массив текстовых элементов.
+- `tags[1]` читает элемент по индексу; нижняя граница массива может отличаться от 1.
+- `cardinality(tags)` считает элементы; `array_length(tags, 1)` возвращает размер первого измерения.
+- `tags @> '{python}'` и `'python' = any(tags)` проверяют наличие тега.
+- `unnest(tags)` в `FROM` раскрывает элементы в строки.
+</Cheatsheet>
