@@ -1,4 +1,5 @@
 import { act, render } from '@testing-library/react';
+import { useReactFlow } from '@xyflow/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SchemaSnapshot } from '@/features/db/introspect';
@@ -100,5 +101,37 @@ describe('OverlayLayer: сцена стартового запроса урок�
       useSceneStore.setState({ trace: { stages: [], touched: { columns: [] } } as unknown as Trace }),
     );
     expect(useSceneStore.getState().hidden).toBe(true);
+  });
+});
+
+describe('OverlayLayer: камера новой трассы', () => {
+  afterEach(() => {
+    useSceneStore.setState({
+      trace: null,
+      playback: null,
+      hidden: false,
+      lessonQuery: null,
+      startQuery: null,
+    });
+  });
+
+  it('наводит камеру повторно, когда новый запрос даёт кадр прежних размеров', () => {
+    useEditorStore.setState({ text: 'select 1' });
+    useSceneStore.setState({
+      lessonQuery: 'select 1',
+      startQuery: null,
+      followCamera: true,
+      autoplay: false,
+      hidden: false,
+    });
+    useBoardStore.setState({ schema: {} as SchemaSnapshot });
+    const flow = useReactFlow();
+    vi.mocked(flow.setViewport).mockClear();
+    render(<OverlayLayer />);
+    const trace = { stages: [], touched: { columns: [], tableIds: [] } } as unknown as Trace;
+    act(() => useSceneStore.setState({ trace }));
+    expect(flow.setViewport).toHaveBeenCalledTimes(1);
+    act(() => useSceneStore.setState({ trace: { ...trace } }));
+    expect(flow.setViewport).toHaveBeenCalledTimes(2);
   });
 });

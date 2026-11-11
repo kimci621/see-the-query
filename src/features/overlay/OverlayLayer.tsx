@@ -71,7 +71,7 @@ export function OverlayLayer() {
   const rf = useReactFlow();
   const flowStore = useStoreApi();
   const reduced = useReducedMotion() ?? false;
-  const lastCamera = useRef('');
+  const lastCamera = useRef<{ key: string; trace: Trace | null } | null>(null);
 
   // новая трасса → новое проигрывание
   // biome-ignore lint/correctness/useExhaustiveDependencies: rootFont служит только триггером, размеры читаются из board/layout
@@ -118,8 +118,8 @@ export function OverlayLayer() {
     const b = frameBounds(phase.frame);
     if (!b) return;
     const key = `${Math.round(b.x)}:${Math.round(b.y)}:${Math.round(b.width)}:${Math.round(b.height)}`;
-    if (key === lastCamera.current) return;
-    lastCamera.current = key;
+    if (key === lastCamera.current?.key && trace === lastCamera.current.trace) return;
+    lastCamera.current = { key, trace };
     // Снизу полоса под хром доски, как у focusFrame/boardFrame: fitBounds берёт только число
     const { width, height, minZoom, maxZoom } = flowStore.getState();
     const conflict = trace?.stages.some((stage) => stage.kind === 'dml' && stage.conflicts.length > 0);
@@ -138,7 +138,7 @@ export function OverlayLayer() {
   // С задержкой: недописанное имя даёт ошибку на миг, новая сцена отменяет полёт
   useEffect(() => {
     if (phase || !lastCamera.current) return;
-    lastCamera.current = '';
+    lastCamera.current = null;
     if (!followCamera || !userDrivesScene()) return;
     const { fitRequest, startRequest } = useBoardStore.getState();
     const timer = setTimeout(() => {

@@ -315,3 +315,38 @@ test('широкое окно: камера сцены держит в кадр�
     'join',
   );
 });
+
+test('камера следует за новым запросом при одинаковом размере сцен', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'vs-scene',
+      JSON.stringify({ state: { speed: 1, autoplay: false, followCamera: true }, version: 0 }),
+    );
+  });
+  await openBoard(page);
+  const queries = [
+    { sql: 'select 7 / 2 as a, 7::numeric / 2 as b', result: '3.5000000000000000' },
+    { sql: 'select pages, pages::numeric / 100 as hundreds from book where book_id = 3', result: '0.640000' },
+    { sql: 'select sum(price) as total, avg(price) as middle from book', result: '11380.00' },
+  ];
+  for (const query of queries) {
+    await page.locator('.cm-content').focus();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText(query.sql);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async () => {
+            const modulePath = '/src/stores/scene.ts';
+            const store = await import(modulePath);
+            return store.useSceneStore.getState().trace?.sql;
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(query.sql);
+    const ghost = page.getByTestId('ghost-table').filter({ hasText: query.result }).last();
+    await expect(ghost).toBeVisible({ timeout: 15_000 });
+    await expect(ghost).toBeInViewport({ timeout: 15_000 });
+  }
+});
