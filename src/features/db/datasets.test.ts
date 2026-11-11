@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { withDataset } from '../../../tests/helpers/db';
-import { loadDatasetSql } from './datasets';
+import { type DatasetId, loadDatasetSql } from './datasets';
 
 const one = async (db: import('./types').DbClient, sql: string) => (await db.query(sql)).rows;
 
@@ -10,7 +10,8 @@ describe('датасет bookstore', () => {
     const extended = await loadDatasetSql('events');
     expect(extended).toContain('create table book');
     expect(extended).toContain('create table event');
-    await expect(loadDatasetSql('big_bookstore')).rejects.toThrow('Датасет big_bookstore не найден');
+    expect(await loadDatasetSql('big_bookstore')).toContain('create table book');
+    await expect(loadDatasetSql('unknown' as DatasetId)).rejects.toThrow('Датасет unknown не найден');
   });
 
   it('число строк совпадает с docs/datasets.md', async () => {
