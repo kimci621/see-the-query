@@ -9,6 +9,9 @@
 .vs-ghost-head { position: absolute; left: 0; right: 0; border-bottom: 1px solid var(--border); background: var(--muted); }
 /* Блок, а не flex: у flex-контейнера text-overflow не срабатывает и текст режется по краю. line-height задаёт разметка */
 .vs-colhead, .vs-cell { position: absolute; top: 0; height: 100%; display: block; padding: 0 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform var(--vs-dur) ease-in-out, opacity var(--vs-dur) ease-in-out; }
+.vs-cell { pointer-events: auto; }
+.vs-cell:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.vs-cell-tooltip { position: fixed; z-index: 100; max-width: min(36rem, 95vw); overflow-wrap: anywhere; padding: 0.25rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--popover); color: var(--popover-foreground); font: 0.75rem var(--font-mono, monospace); pointer-events: none; }
 .vs-row { position: absolute; left: 0; right: 0; top: 0; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
 .vs-row--kept { background: color-mix(in oklab, var(--kept) 18%, transparent); }
 .vs-row--dropped { background: color-mix(in oklab, var(--dropped) 18%, transparent); }

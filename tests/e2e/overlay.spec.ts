@@ -165,6 +165,7 @@ test('вердикты WHERE: значок и плашка UNKNOWN не ложа
 test('вердикты WHERE: текст отсеянных строк зачёркнут', async ({ page }) => {
   await openBoard(page);
   await typeQuery(page, 'select title, price from book where price > 500');
+  await expect(page.getByTestId('stage-chip')).toHaveText(['FROM', 'WHERE', 'SELECT'], { timeout: 10_000 });
   await expect(page.getByTestId('player-toggle')).toHaveAttribute('aria-label', 'Играть', {
     timeout: 15_000,
   });

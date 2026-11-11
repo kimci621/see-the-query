@@ -50,6 +50,34 @@ describe('windowAnimator', () => {
     );
   });
 
+  it('не показывает неподтверждённую рамку RANGE как ROWS', () => {
+    const phases = windowAnimator(
+      prev,
+      { ...stage, frame: 'RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW' },
+      1,
+      testCtx(),
+    );
+    expect(phases.filter((p) => p.id.includes(':frame:'))).toHaveLength(0);
+  });
+
+  it('RANGE включает всех ровесников текущей строки', () => {
+    const phases = windowAnimator(
+      prev,
+      {
+        ...stage,
+        frame: 'RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW',
+        partitions: [
+          { members: ['b=(0,1)', 'b=(0,2)', 'b=(0,3)'], peers: [['b=(0,1)'], ['b=(0,2)', 'b=(0,3)']] },
+        ],
+      },
+      1,
+      testCtx(),
+    );
+    expect(phases.find((p) => p.id === '1:frame:1')?.frame.decorations).toContainEqual(
+      expect.objectContaining({ kind: 'bracket', fromRow: 0, toRow: 2 }),
+    );
+  });
+
   it('вычисленная колонка появляется отдельной фазой', () => {
     const phases = windowAnimator(prev, stage, 1, testCtx());
     const last = phases.at(-1) as { frame: { tables: GhostTable[] } };

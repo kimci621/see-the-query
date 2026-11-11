@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { formatCell } from '@/features/board/format';
 import { STUB_WIDTH } from '@/features/board/layout';
 import { plural } from '@/lib/plural';
@@ -34,6 +35,7 @@ const GhostRowView = memo(function GhostRowView({
   keys,
   widths,
   lefts,
+  visible,
 }: {
   row: GhostRow;
   index: number;
@@ -41,6 +43,7 @@ const GhostRowView = memo(function GhostRowView({
   keys: string[];
   widths: number[];
   lefts: number[];
+  visible: boolean;
 }) {
   const icon = ROW_ICONS[row.state];
   return (
@@ -75,7 +78,8 @@ const GhostRowView = memo(function GhostRowView({
               }
               animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.35 : 1, x: lefts[ci] }}
               exit={{ opacity: 0 }}
-              title={row.cellNotes?.[ci]}
+              title={row.cellNotes?.[ci] ? `${text}: ${row.cellNotes[ci]}` : text}
+              tabIndex={visible && index === 0 && ci === 0 ? 0 : -1}
             >
               {row.cellMarks?.[ci] === 'changed' ? (
                 <motion.span
@@ -104,6 +108,7 @@ const GhostRowView = memo(function GhostRowView({
 
 // Призрачная таблица: двигается целиком, строки двигаются внутри неё
 export const GhostTableView = memo(function GhostTableView({ table }: { table: GhostTable }) {
+  const [focusedCell, setFocusedCell] = useState<{ text: string; x: number; y: number } | null>(null);
   const keys = columnKeys(table.columns);
   const widths = table.columns.map((_, ci) => columnWidth(table, ci));
   const lefts = table.columns.map((_, ci) => cellLeft(table, ci));
@@ -117,7 +122,43 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
       initial={{ opacity: 0, x: table.x, y: table.y }}
       animate={{ opacity: table.opacity ?? 1, x: table.x, y: table.y }}
       exit={{ opacity: 0 }}
+      onFocus={(event) => {
+        const cell = (event.target as HTMLElement).closest<HTMLElement>('.vs-cell');
+        if (!cell) return;
+        const rect = cell.getBoundingClientRect();
+        setFocusedCell({
+          text: cell.title,
+          x: Math.min(rect.left, window.innerWidth - 240),
+          y: Math.max(0, rect.top - 36),
+        });
+      }}
+      onBlur={() => setFocusedCell(null)}
+      onKeyDown={(event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        const cells = [...event.currentTarget.querySelectorAll<HTMLElement>('.vs-cell')];
+        const index = cells.indexOf(event.target as HTMLElement);
+        if (index < 0) return;
+        const delta =
+          event.key === 'ArrowLeft'
+            ? -1
+            : event.key === 'ArrowRight'
+              ? 1
+              : event.key === 'ArrowUp'
+                ? -table.columns.length
+                : table.columns.length;
+        const next = cells[index + delta];
+        if (next) next.focus();
+        event.preventDefault();
+        event.stopPropagation();
+      }}
     >
+      {focusedCell &&
+        createPortal(
+          <div role="tooltip" className="vs-cell-tooltip" style={{ left: focusedCell.x, top: focusedCell.y }}>
+            {focusedCell.text}
+          </div>,
+          document.body,
+        )}
       <div className="vs-ghost-title" style={{ height: TITLE_HEIGHT }}>
         {table.title}
       </div>
@@ -166,6 +207,7 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
             keys={keys}
             widths={widths}
             lefts={lefts}
+            visible={table.opacity !== 0}
           />
         ))}
       </AnimatePresence>

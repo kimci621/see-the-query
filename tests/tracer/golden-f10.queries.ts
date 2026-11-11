@@ -90,6 +90,11 @@ export const GOLDEN_F10: Array<{
     stages: 'scan:21 > filter:3 > window:3 > project:3 > sort:3',
   },
   {
+    dataset: 'events',
+    sql: 'select kind, count(*) over (order by happened_at range between unbounded preceding and current row) as range_cnt from event where order_id = 3 order by happened_at',
+    stages: 'scan:21 > filter:3 > window:3 > project:3 > sort:3',
+  },
+  {
     dataset: 'bookstore',
     sql: 'select category_id, count(*) from book group by rollup(category_id) order by grouping(category_id), category_id',
     stages: 'scan:11 > group:5 > project:5 > sort:5',

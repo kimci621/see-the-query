@@ -122,7 +122,8 @@ export function OverlayLayer() {
     lastCamera.current = key;
     // Снизу полоса под хром доски, как у focusFrame/boardFrame: fitBounds берёт только число
     const { width, height, minZoom, maxZoom } = flowStore.getState();
-    const padding = { x: 0.2, top: 0.2, bottom: chromeBottom() };
+    const conflict = trace?.stages.some((stage) => stage.kind === 'dml' && stage.conflicts.length > 0);
+    const padding = { x: conflict ? 0.1 : 0.2, top: 0.2, bottom: chromeBottom() };
     const viewportFor = (r: typeof b) => getViewportForBounds(r, width, height, minZoom, maxZoom, padding);
     // Исходные таблицы в кадре вместе с призраком, если оба читаются (зум не мельче FIT_MIN_ZOOM):
     // видно, откуда строки и куда едут. Не влезают - камера только за призраком (P8.80)

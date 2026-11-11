@@ -202,6 +202,10 @@ describe('dmlAnimator', () => {
     expect(phases[1].frame.decorations).toContainEqual(
       expect.objectContaining({ kind: 'pair-line', from: expect.objectContaining({ table: 'i:0' }) }),
     );
+    const incoming = phases[1].frame.tables.find((table) => table.id === 'i:0');
+    const target = phases[1].frame.tables.find((table) => table.id === 't:public.book');
+    expect(incoming?.x).toBe(target?.x);
+    expect(incoming?.y).toBeLessThan(target?.y ?? 0);
   });
 });
 

@@ -225,16 +225,19 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
   const incoming = current?.dashed ? current : incomingTable(stage, stageIndex, ctx);
   const decorations = conflictLines(incoming, marked, stage);
   const targetFrame = withTable({ ...prev, decorations }, marked);
-  const sourceFrame = incoming && incoming !== current ? withTable(targetFrame, incoming) : targetFrame;
-  // Входящая строка стоит слева от цели: иначе таблицы накладываются и конфликт не прочитать
+  // Входящая строка над целью: обе таблицы помещаются при читаемом масштабе.
   const movedIncoming = incoming
     ? {
         ...incoming,
-        x: stage.conflicts.length ? marked.x - ghostWidth(incoming) - TABLE_GAP : marked.x,
-        y: marked.y,
+        x: marked.x,
+        y: stage.conflicts.length ? marked.y - ghostHeight(incoming) - TABLE_GAP : marked.y,
         opacity: stage.conflicts.length ? 0.9 : 0,
       }
     : null;
+  const sourceFrame =
+    incoming && incoming !== current
+      ? withTable(targetFrame, stage.conflicts.length && movedIncoming ? movedIncoming : incoming)
+      : targetFrame;
   const frame = movedIncoming ? withTable(targetFrame, movedIncoming) : targetFrame;
   const final: Phase = {
     id: `${stageIndex}:dml`,

@@ -17,6 +17,12 @@ function load(autoplay = false) {
 describe('Timeline', () => {
   beforeEach(() => useSceneStore.setState(useSceneStore.getInitialState(), true));
 
+  it('ползунок позиции доступен по имени', () => {
+    load();
+    render(<Timeline />);
+    expect(screen.getByRole('slider', { name: 'Позиция в сцене' })).toBeTruthy();
+  });
+
   it('чипы стадий в логическом порядке, активна последняя', () => {
     load();
     render(<Timeline />);

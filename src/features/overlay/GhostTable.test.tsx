@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { STUB_WIDTH } from '@/features/board/layout';
 import { GhostTableView } from './GhostTable';
@@ -25,6 +25,19 @@ const table: GhostTable = {
 };
 
 describe('GhostTableView', () => {
+  it('полное значение ячейки доступно для чтения', () => {
+    render(<GhostTableView table={table} />);
+    const cell = screen.getByText('Тихий Дон');
+    expect(cell.getAttribute('title')).toBe('Тихий Дон');
+    fireEvent.focus(cell);
+    expect(screen.getByRole('tooltip').textContent).toBe('Тихий Дон');
+    fireEvent.keyDown(cell, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('890.00');
+  });
+  it('невидимая таблица не получает фокус', () => {
+    render(<GhostTableView table={{ ...table, opacity: 0 }} />);
+    expect(screen.getByText('Тихий Дон').getAttribute('tabindex')).toBe('-1');
+  });
   it('рисует заголовок, колонки и строки', () => {
     render(<GhostTableView table={table} />);
     expect(screen.getByTestId('ghost-table').getAttribute('data-table-id')).toBe('t:b');

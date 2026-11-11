@@ -2,7 +2,7 @@ import { Database, MessageSquare, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { rem } from '@/features/board/layout';
 import { GROUP_LABEL, GROUP_PADDING } from '@/features/board/model';
-import { ghostWidth, ROW_H, rowAnchor, rowTop } from './geometry';
+import { ghostHeight, ghostWidth, ROW_H, rowAnchor, rowTop } from './geometry';
 import type { Decoration, Frame, GhostTable } from './types';
 
 function findTable(frame: Frame, id: string): GhostTable | undefined {
@@ -109,11 +109,12 @@ function SvgLayer({ frame }: { frame: Frame }) {
       const tt = findTable(frame, d.to.table);
       if (!ft || !tt) return [];
       // Линия идёт между обращёнными друг к другу краями; ключи подсвечены колонкой 'key'
+      const stacked = ft.y + ghostHeight(ft) <= tt.y || tt.y + ghostHeight(tt) <= ft.y;
       const forward = ft.x <= tt.x;
-      const a = rowAnchor(ft, d.from.row, forward ? 'right' : 'left');
-      const b = rowAnchor(tt, d.to.row, forward ? 'left' : 'right');
+      const a = rowAnchor(ft, d.from.row, stacked ? 'left' : forward ? 'right' : 'left');
+      const b = rowAnchor(tt, d.to.row, stacked ? 'left' : forward ? 'left' : 'right');
       if (!a || !b) return [];
-      const mx = (a.x + b.x) / 2;
+      const mx = stacked ? Math.min(a.x, b.x) - rem(2) : (a.x + b.x) / 2;
       return [
         <path
           key={d.id}

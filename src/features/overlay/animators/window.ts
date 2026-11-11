@@ -5,6 +5,7 @@ import type { Animator, Decoration, GhostRow, Phase, StageOf } from '../types';
 import { genericAnimator } from './generic';
 
 function boundsOf(frame: string, index: number, size: number): [number, number] | null {
+  if (!frame.startsWith('ROWS ')) return null;
   const text = frame.replace(/^ROWS\s+/, '').replace(/^BETWEEN\s+/, '');
   if (!/^ROWS|BETWEEN|CURRENT|PRECEDING|FOLLOWING/.test(frame)) return null;
   const parts = text.split(/\s+AND\s+/);
@@ -20,6 +21,23 @@ function boundsOf(frame: string, index: number, size: number): [number, number] 
   const end = parts.length > 1 ? bound(parts[1]) : index;
   if (start === null || end === null) return null;
   return [Math.max(0, Math.min(size - 1, start)), Math.max(0, Math.min(size - 1, end))];
+}
+
+function rangeBounds(
+  frame: string,
+  index: number,
+  peers: RowKey[][],
+  members: RowKey[],
+): [number, number] | null {
+  const peer = peers.find((group) => group.includes(members[index]));
+  if (!peer) return null;
+  const first = members.indexOf(peer[0]);
+  const last = members.indexOf(peer[peer.length - 1]);
+  const match = frame.match(
+    /^RANGE BETWEEN (UNBOUNDED PRECEDING|CURRENT ROW) AND (CURRENT ROW|UNBOUNDED FOLLOWING)$/,
+  );
+  if (!match) return null;
+  return [match[1] === 'CURRENT ROW' ? first : 0, match[2] === 'CURRENT ROW' ? last : members.length - 1];
 }
 
 // PARTITION BY: строки окрашиваются по партициям, но не схлопываются; рамка едет по строкам
@@ -61,7 +79,7 @@ export const windowAnimator: Animator<StageOf<'window'>> = (prev, stage, stageIn
   ];
 
   // Рамка: скобка вокруг строк, которые участвуют в вычислении текущей строки.
-  // ponytail: числовые RANGE-рамки считаем по строкам, точные значения видит проба и итог
+  // ponytail: RANGE со смещением не рисуем; для поддержки нужны границы из PostgreSQL.
   const first = stage.partitions[0]?.members ?? [];
   const framePhases: Phase[] = [];
   if (stage.frame && first.length > 1) {
@@ -69,7 +87,11 @@ export const windowAnimator: Animator<StageOf<'window'>> = (prev, stage, stageIn
     const step = Math.max(1, Math.ceil(indexes.length / 8));
     for (let at = 0; at < indexes.length; at += step) {
       const start = indexes[at];
-      const range = boundsOf(stage.frame, start, first.length);
+      const peers = stage.partitions[0]?.peers;
+      const range =
+        stage.frame.startsWith('RANGE ') && peers
+          ? rangeBounds(stage.frame, start, peers, first)
+          : boundsOf(stage.frame, start, first.length);
       if (!range) break;
       const from = rows.findIndex((r) => r.key === first[range[0]]);
       const to = rows.findIndex((r) => r.key === first[range[1]]);

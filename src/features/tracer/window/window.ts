@@ -80,29 +80,59 @@ export const windowStep: SelectStep = {
     const orderKeys = (calls[0]?.over?.orderClause ?? []).flatMap((node) =>
       'SortBy' in node && node.SortBy.node ? [sqlOf(node.SortBy.node)] : [],
     );
-    const select = [...partitionSql, ...windows, `${ctx.sql.rowKey} AS __vs_key`];
+    const orderTerms = (calls[0]?.over?.orderClause ?? []).flatMap((node) => {
+      if (!('SortBy' in node) || !node.SortBy.node) return [];
+      const sort = node.SortBy;
+      const expression = sort.node;
+      if (!expression) return [];
+      const direction =
+        sort.sortby_dir === 'SORTBY_DESC' ? ' DESC' : sort.sortby_dir === 'SORTBY_ASC' ? ' ASC' : '';
+      const nulls =
+        sort.sortby_nulls === 'SORTBY_NULLS_FIRST'
+          ? ' NULLS FIRST'
+          : sort.sortby_nulls === 'SORTBY_NULLS_LAST'
+            ? ' NULLS LAST'
+            : '';
+      return [`${sqlOf(expression)}${direction}${nulls}`];
+    });
+    const peerWindow = [
+      partitionSql.length ? `PARTITION BY ${partitionSql.join(', ')}` : '',
+      orderTerms.length ? `ORDER BY ${orderTerms.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const select = [
+      ...partitionSql,
+      ...windows,
+      `dense_rank() OVER (${peerWindow}) AS __vs_peer`,
+      `${ctx.sql.rowKey} AS __vs_key`,
+    ];
     // Порядок строк важен сцене: партиции идут по ключам, внутри по ORDER BY окна, ничьи по ctid
-    const orderParts = [...partitionSql, ...orderKeys];
+    const orderParts = [...partitionSql, ...orderTerms];
     const order = ` ORDER BY ${[...orderParts, ctx.sql.rowKey].join(', ')}`;
     const result = await ctx.prober.rows(
       `SELECT ${select.join(', ')}${ctx.sql.from}${ctx.sql.where}${ctx.sql.group}${order}`,
     );
     const p = partitionSql.length;
     const n = windows.length;
-    const keyIndex = p + n;
+    const keyIndex = p + n + 1;
     const types = await ctx.typeNames(result.fields.map((f) => f.dataTypeID));
     const computed: Column[] = result.fields.slice(p, p + n).map((field) => ({
       name: field.name,
       type: types.get(field.dataTypeID) ?? 'unknown',
     }));
-    const partitionMembers = new Map<string, RowKey[]>();
+    const partitionMembers = new Map<string, { members: RowKey[]; peers: Map<string, RowKey[]> }>();
     const values = new Map<RowKey, unknown[]>();
     for (const row of result.rows) {
       const key = row[keyIndex] as RowKey;
       const partition = rowCanon(row.slice(0, p));
-      const members = partitionMembers.get(partition) ?? [];
-      members.push(key);
-      partitionMembers.set(partition, members);
+      const group = partitionMembers.get(partition) ?? { members: [], peers: new Map<string, RowKey[]>() };
+      group.members.push(key);
+      const peerRank = String(row[p + n]);
+      const peers = group.peers.get(peerRank) ?? [];
+      peers.push(key);
+      group.peers.set(peerRank, peers);
+      partitionMembers.set(partition, group);
       values.set(key, row.slice(p, p + n));
     }
     const input = ctx.columns;
@@ -121,13 +151,14 @@ export const windowStep: SelectStep = {
           ? 'RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW'
           : 'RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING'
         : undefined);
-    const groups = partitionSql.length
-      ? [...partitionMembers.values()]
-      : [result.rows.map((row) => row[keyIndex] as RowKey)];
+    const groups = [...partitionMembers.values()].map(({ members, peers }) => ({
+      members,
+      peers: [...peers.values()],
+    }));
     ctx.stages.push({
       id: stageId(ctx, 'window'),
       kind: 'window',
-      partitions: groups.map((members) => ({ members })),
+      partitions: groups,
       computed: computed.map((column) => column.name),
       functions: calls.map(funcName),
       orderKeys,

@@ -42,7 +42,9 @@ describe('OverlayLayer: возврат камеры после ухода сце
     useSceneStore.setState({ lessonQuery: 'select 1', followCamera: true, autoplay: false });
     useBoardStore.setState({ schema: {} as SchemaSnapshot, frameRequest: 0 });
     render(<OverlayLayer />);
-    act(() => useSceneStore.setState({ trace: { touched: { columns: [] } } as unknown as Trace }));
+    act(() =>
+      useSceneStore.setState({ trace: { stages: [], touched: { columns: [] } } as unknown as Trace }),
+    );
     // сцена ушла (Esc): через паузу камера должна вернуться к таблицам
     act(() => useSceneStore.getState().hide());
   });
@@ -94,7 +96,9 @@ describe('OverlayLayer: сцена стартового запроса урок�
     useSceneStore.setState({ startQuery: 'select 1', lessonQuery: null, hidden: false, autoplay: false });
     useBoardStore.setState({ schema: {} as SchemaSnapshot });
     render(<OverlayLayer />);
-    act(() => useSceneStore.setState({ trace: { touched: { columns: [] } } as unknown as Trace }));
+    act(() =>
+      useSceneStore.setState({ trace: { stages: [], touched: { columns: [] } } as unknown as Trace }),
+    );
     expect(useSceneStore.getState().hidden).toBe(true);
   });
 });

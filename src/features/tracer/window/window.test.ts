@@ -3,6 +3,21 @@ import { inPreview, withDataset } from '../../../../tests/helpers/db';
 import { column, stageOf, traceSql } from '../../../../tests/helpers/trace';
 
 describe('стадия window', () => {
+  it('сохраняет направление сортировки окна при построении партиции', () =>
+    withDataset('events', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          "select amount, sum(amount) over (order by amount desc rows between unbounded preceding and current row) from event where kind = 'paid'",
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const stage = stageOf(trace, 'window');
+        const amountIndex = stage.output.columns.findIndex((c) => c.name === 'amount');
+        const rows = new Map(stage.output.rows.map((r) => [r.key, r]));
+        const amounts = stage.partitions[0].members.map((key) => Number(rows.get(key)?.values[amountIndex]));
+        expect(amounts).toEqual([4390, 3620, 2400, 2110, 1780, 1730, 1400]);
+      }),
+    ));
   it('row_number по партициям должностей', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
@@ -59,6 +74,7 @@ describe('стадия window', () => {
           'select kind, count(*) over (order by happened_at range between unbounded preceding and current row) from event where order_id = 3',
         );
         expect(range.mode, range.fallbackReason).toBe('full');
+        expect(stageOf(range, 'window').partitions[0].peers?.map((p) => p.length)).toEqual([1, 2]);
         expect(column(stageOf(range, 'window'), 'count').map(Number).sort()).toEqual([1, 3, 3]);
         const rows = await traceSql(
           db,

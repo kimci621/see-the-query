@@ -67,7 +67,7 @@ export type Stage = StageBase &
       }
     | {
         kind: 'window';
-        partitions: Array<{ members: RowKey[] }>;
+        partitions: Array<{ members: RowKey[]; peers?: RowKey[][] }>;
         computed: string[];
         frame?: string;
         functions: string[]; // имена оконных функций из SELECT
