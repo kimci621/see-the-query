@@ -60,3 +60,20 @@ test('журнал урока переживает перезагрузку ст
   await waitReady(page);
   expect(await countReviews(page)).toBe(0);
 });
+
+test('контрибы доступны внутри браузерной песочницы', async ({ page }) => {
+  await page.goto('/l/select-basics');
+  await waitReady(page);
+  const result = await page.evaluate(() =>
+    (window as WithSandbox).__vsSandbox?.preview(async (db) => {
+      await db.query('create extension pg_trgm');
+      await db.query('create extension pageinspect');
+      const similarity = await db.query("select round(similarity('Пушкин', 'Пушкинн')::numeric, 2)::text");
+      const pageItems = await db.query(
+        "select count(*)::int from heap_page_items(get_raw_page('review', 0))",
+      );
+      return [similarity.rows[0][0], pageItems.rows[0][0]];
+    }),
+  );
+  expect(result).toEqual(['0.67', 10]);
+});

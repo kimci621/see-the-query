@@ -1,4 +1,5 @@
 import { PGlite, type Results } from '@electric-sql/pglite';
+import { SANDBOX_EXTENSIONS } from './extensions';
 import { toDbError, type WorkerRequest, type WorkerResponse } from './protocol';
 import type { QueryResult } from './types';
 
@@ -18,7 +19,10 @@ export function createRequestHandler() {
 
   async function run(req: WorkerRequest): Promise<unknown> {
     if (req.type === 'init') {
-      pg = new PGlite(req.dataDir ? { loadDataDir: req.dataDir } : {});
+      pg = new PGlite({
+        extensions: SANDBOX_EXTENSIONS,
+        ...(req.dataDir ? { loadDataDir: req.dataDir } : {}),
+      });
       await pg.waitReady;
       return null;
     }
