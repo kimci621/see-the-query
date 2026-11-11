@@ -74,6 +74,7 @@ const GUIDE_LESSONS: string[] = [
   'lag-lead',
   'window-frame',
   'top-n',
+  'types-casting',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
