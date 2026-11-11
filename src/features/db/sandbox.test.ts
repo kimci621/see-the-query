@@ -335,6 +335,24 @@ describe('sandbox: транзакции ученика', () => {
   );
 
   it(
+    'ошибка внутри явной транзакции откатывает изменения и не меняет журнал',
+    async () => {
+      const { sandbox } = await bookstore();
+      await expect(
+        sandbox.apply(
+          'begin; update customer set bonus = 123 where customer_id = 1; update customer set bonus = -500 where customer_id = 2; commit;',
+        ),
+      ).rejects.toMatchObject({ db: { code: '23514' } });
+      const result = await sandbox
+        .client()
+        .query('select bonus from customer where customer_id in (1, 2) order by customer_id');
+      expect(result.rows).toEqual([[120], [0]]);
+      expect(sandbox.journal()).toEqual([]);
+    },
+    T,
+  );
+
+  it(
     'apply с упавшей транзакцией не ломает следующее превью',
     async () => {
       const { sandbox } = await bookstore();
