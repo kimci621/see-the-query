@@ -1,0 +1,115 @@
+---
+id: enum
+title: enum
+chapter: types
+number: "5.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.orders]
+initialQuery: |
+  select order_id, status from orders order by order_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-enum.html
+    title: Перечисляемые типы
+  - url: https://www.postgresql.org/docs/current/sql-altertype.html
+    title: Изменение типа
+course: ["11.28"]
+tags: [enum, перечисление, статус, alter type]
+---
+
+<TlDr>Enum ограничивает значение заранее заданным списком. Порядок списка влияет на сравнения и сортировку.</TlDr>
+
+## Что есть в данных
+
+В восьми заказах <C id="public.orders.status">status</C> имеет тип `order_status`. У него четыре допустимых значения. Посмотреть их можно через `enum_range`:
+
+```sql run expect=rows:1
+select enum_range(null::order_status) as statuses;
+```
+
+Получаем `new`, `paid`, `shipped`, `cancelled` в порядке объявления. `NULL` здесь помогает указать тип аргумента, а не обозначает один из статусов.
+
+<Callout kind="analogy">
+Представь шкалу этапов с подписанными делениями. Деления заданы заранее и идут в выбранном порядке. Так и значения enum имеют собственный порядок, даже если названия по алфавиту расположены иначе.
+</Callout>
+
+## Сколько заказов в каждом статусе
+
+```sql run expect=rows:4
+select status, count(*) as n from orders group by status order by status;
+```
+
+Два заказа `new`, четыре `paid`, один `shipped` и один `cancelled`. Группы отсортированы по порядку enum, а не по алфавиту.
+
+```sql run expect=rows:3
+select status, order_id from orders order by status, order_id limit 3;
+```
+
+Сначала идут заказы 5 и 8 со статусом `new`, затем заказ 1 со статусом `paid`. Внутри статуса порядок задаёт `order_id`.
+
+## Сравнение и сортировка как текста
+
+```sql run expect=rows:4
+select status, status > 'paid' as after_paid from orders group by status order by status;
+```
+
+После `paid` в перечислении стоят `shipped` и `cancelled`, поэтому их сравнение даёт true. Сравнение не означает, что отмена обязательно следует за отправкой в реальном процессе: порядок задаёт автор типа.
+
+```sql run expect=rows:1
+select status from orders order by status::text limit 1;
+```
+
+После приведения к `text` сортируются названия. Здесь первым будет `cancelled`, а не `new`.
+
+## Если значение написано с ошибкой
+
+```sql run expectError=22P02
+insert into orders (customer_id, status, created_at) values (6, 'payed', '2024-05-04 12:00:00+03');
+```
+
+PostgreSQL выдаёт `22P02`: значения `payed` нет в типе. В превью данные не сохраняются.
+
+## Как изменить список
+
+Новое значение можно добавить в конец или указать место через `BEFORE` / `AFTER`. Кнопка «Применить» сохранит изменение в учебной базе:
+
+```sql apply expect=rows:0
+alter type order_status add value if not exists 'returned' after 'shipped';
+```
+
+После применения можно снова запустить первый запрос и увидеть `returned` между `shipped` и `cancelled`. Если команда выполняется внутри транзакции, новое значение нельзя использовать до её завершения. Сброс базы вернёт исходный список.
+
+## Когда выбрать enum
+
+Enum удобен для небольшого набора, который меняется редко: тип проверяет значения и хранит их порядок. `text` с `CHECK` тоже ограничивает ввод, но правило нужно менять отдельно. Таблица-справочник с внешним ключом подходит, если значения часто меняются или им нужны дополнительные поля, например название для пользователя.
+
+## Чего нет в выдаче и почему
+
+- ❌ Алфавитного порядка в `order by status`: у enum собственная последовательность.
+- ❌ Заказа со статусом `payed`: тип не допускает неизвестную метку.
+- ❌ `returned` в исходной базе: он появится только после применения команды добавления.
+
+## Ловушки
+
+<Callout kind="trap">
+При вставке нескольких строк одна неверная метка остановит всю команду: остальные строки этой команды тоже не сохранятся. Учитывай регистр и пробелы в названиях enum.
+</Callout>
+
+<Callout kind="tip">
+Добавить или переименовать метку можно через `ALTER TYPE`, но удалить существующую метку или переставить старые напрямую нельзя: понадобится пересоздать тип. Выбирай enum, когда это ограничение приемлемо.
+</Callout>
+
+## Проверь себя
+
+1. Как изменится порядок `order by status`, если привести статус к `text`?
+2. Почему `cancelled > paid` истинно для этого типа?
+3. Что произойдёт при вставке статуса `payed`?
+
+<Cheatsheet>
+- `CREATE TYPE ... AS ENUM` задаёт тип и порядок его значений.
+- `enum_range(null::order_status)` возвращает список значений типа.
+- `ORDER BY status` использует порядок enum, `ORDER BY status::text` сортирует названия.
+- `ALTER TYPE ... ADD VALUE` добавляет метку; новое значение внутри транзакции доступно после её завершения.
+- `text` с `CHECK` и таблица-справочник помогают ограничить набор значений другими способами.
+</Cheatsheet>
