@@ -87,6 +87,7 @@ const GUIDE_LESSONS: string[] = [
   'materialized-view',
   'transactions',
   'savepoint',
+  'mvcc',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
