@@ -115,7 +115,10 @@ async function runPreview(
     const traced = schema
       ? await sandbox.preview(async (db): Promise<Trace | null> => {
           try {
-            return await traceStatement(stmt, db, { schema });
+            return await traceStatement(stmt, db, {
+              schema,
+              ...(sandbox.datasetId === 'big_bookstore' ? { includePlan: true } : {}),
+            });
           } catch (e) {
             // Ошибку базы показываем как есть, баг трассировщика не должен прятать итог
             if (e instanceof DbException) throw e;

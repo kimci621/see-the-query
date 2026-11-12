@@ -5,6 +5,8 @@ import type { Trace } from '@/features/tracer/types';
 
 export interface SceneStore {
   trace: Trace | null;
+  hoveredStage: number | null;
+  setHoveredStage(index: number | null): void;
   generation: number;
   status: 'idle' | 'tracing' | 'ready' | 'error';
   stale: boolean; // ввод невалиден, сцена погашена
@@ -49,6 +51,8 @@ export const useSceneStore = create<SceneStore>()(
   persist(
     (set, get) => ({
       trace: null,
+      hoveredStage: null,
+      setHoveredStage: (hoveredStage) => set({ hoveredStage }),
       generation: 0,
       status: 'idle',
       stale: false,
@@ -71,7 +75,7 @@ export const useSceneStore = create<SceneStore>()(
       setTrace: (trace, generation) => {
         if (generation < get().generation) return;
         // Проигрывание не трогаем: новое придёт через setPlayback, оверлей не мигает
-        set({ trace, generation, status: 'ready', stale: false });
+        set({ trace, generation, status: 'ready', stale: false, hoveredStage: null });
       },
       setStatus: (status) => set({ status }),
       setStale: (stale) => set({ stale }),
@@ -131,6 +135,7 @@ export const useSceneStore = create<SceneStore>()(
       close: () =>
         set({
           trace: null,
+          hoveredStage: null,
           playback: null,
           hidden: false,
           status: 'idle',

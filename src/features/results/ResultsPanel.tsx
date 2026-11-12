@@ -10,9 +10,10 @@ import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { ErrorCard } from './ErrorCard';
 import { MessagesList } from './MessagesList';
+import { PlanTree } from './PlanTree';
 import { ResultGrid } from './ResultGrid';
 
-// Панель результата: вкладки Результат / Сообщения (План появится в Ф11).
+// Панель результата: вкладки Результат, Сообщения и доступный план.
 // При stale (недописанный запрос) панель погашена, но не пуста: без мигания.
 export function ResultsPanel() {
   const sceneTrace = useSceneStore((s) => s.trace);
@@ -51,6 +52,10 @@ export function ResultsPanel() {
   }, [parseDbError, text, trace, schema, result, isDml, counted, count]);
   // Задержка 1000 мс: пока человек печатает, превью пересчитывается на каждый символ, а объявлять нужно итог
   const [announced, setAnnounced] = useState('');
+  const [tab, setTab] = useState('result');
+  useEffect(() => {
+    if (!trace?.plan) setTab((current) => (current === 'plan' ? 'result' : current));
+  }, [trace?.plan]);
   useEffect(() => {
     const t = setTimeout(() => setAnnounced(spoken), 1000);
     return () => clearTimeout(t);
@@ -65,7 +70,14 @@ export function ResultsPanel() {
       <p data-testid="results-live" aria-live="polite" className="sr-only">
         {announced}
       </p>
-      <Tabs defaultValue="result" className="flex h-full flex-col">
+      <Tabs
+        value={tab === 'plan' && !trace?.plan ? 'result' : tab}
+        onValueChange={(value) => {
+          if (value !== 'plan') useSceneStore.getState().setHoveredStage(null);
+          setTab(value);
+        }}
+        className="flex h-full flex-col"
+      >
         <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1">
           <TabsList className="h-7">
             <TabsTrigger value="result" className="text-xs">
@@ -74,6 +86,11 @@ export function ResultsPanel() {
             <TabsTrigger value="messages" className="text-xs">
               Сообщения
             </TabsTrigger>
+            {trace?.plan && (
+              <TabsTrigger value="plan" className="text-xs">
+                План
+              </TabsTrigger>
+            )}
           </TabsList>
           {result && (
             <Badge variant="secondary" data-testid="result-count">
@@ -109,6 +126,11 @@ export function ResultsPanel() {
             </div>
           )}
         </TabsContent>
+        {trace?.plan && (
+          <TabsContent value="plan" tabIndex={-1} className="mt-0 min-h-0 flex-1">
+            <PlanTree plan={trace.plan} stages={trace.stages} />
+          </TabsContent>
+        )}
         <TabsContent value="messages" tabIndex={-1} className="mt-0 min-h-0 flex-1">
           <MessagesList trace={trace} parseError={parseDbError ? { error: parseDbError, sql: text } : null} />
         </TabsContent>

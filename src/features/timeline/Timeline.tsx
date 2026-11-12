@@ -22,6 +22,7 @@ export function Timeline() {
   const trace = useSceneStore((s) => s.trace);
   const playback = useSceneStore((s) => s.playback);
   const phaseIndex = useSceneStore((s) => s.phaseIndex);
+  const hoveredStage = useSceneStore((s) => s.hoveredStage);
   const playing = useSceneStore((s) => s.playing);
   const speed = useSceneStore((s) => s.speed);
   const autoplay = useSceneStore((s) => s.autoplay);
@@ -76,8 +77,9 @@ export function Timeline() {
                 type="button"
                 data-testid="stage-chip"
                 data-active={i === activeStage}
+                data-plan-hover={i === hoveredStage}
                 aria-current={i === activeStage ? 'step' : undefined}
-                className="rounded-md border px-2 py-0.5 font-mono text-xs data-[active=true]:border-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
+                className="rounded-md border px-2 py-0.5 font-mono text-xs data-[active=true]:border-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[plan-hover=true]:ring-2 data-[plan-hover=true]:ring-primary data-[plan-hover=true]:ring-offset-2"
                 // Значения volatile-функций посчитаны один раз и могут отличаться от панели результата (спека 5.6)
                 title={
                   stage.volatile

@@ -2,6 +2,7 @@ import type { FuncCall, Node, SelectStmt } from '@pgsql/types';
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { captions } from './captions';
+import { explainPlan } from './explain';
 import { prepareSources } from './materialize/materialize';
 import type { Prober } from './probe';
 import { createProber, ProbeOverflow, sqlOf, TraceFallback, typeNames } from './probe';
@@ -57,6 +58,14 @@ export async function traceStatement(
   db: DbClient,
   opts: TraceOptions,
 ): Promise<Trace> {
+  const trace = await traceCore(stmt, db, { ...opts, includePlan: false });
+  if (!opts.includePlan || stmt.kind !== 'select' || trace.error) return trace;
+  const started = performance.now();
+  const plan = await explainPlan(db, stmt.text);
+  return { ...trace, plan, timingMs: trace.timingMs + Math.round(performance.now() - started) };
+}
+
+async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions): Promise<Trace> {
   const started = performance.now();
   const prober = createProber(db, { signal: opts.signal, maxRows: opts.maxRows ?? 2000 });
   const touched = touchedOf(stmt.ast, opts.schema);

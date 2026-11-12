@@ -1,6 +1,7 @@
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { DbError, QueryResult } from '@/features/db/types';
 import type { StatementKind } from '@/features/sql/types';
+import type { PlanNode } from './explain';
 
 export type Lineage = Record<string, string | null>; // алиас → ctid ('(0,3)') или null
 export type RowKey = string; // см. rowkey.ts
@@ -182,9 +183,11 @@ export interface Trace {
   error: DbError | null;
   notices: string[];
   timingMs: number;
+  plan?: PlanNode | null;
 }
 
 export interface TraceOptions {
+  includePlan?: boolean;
   signal?: AbortSignal;
   maxRows?: number;
   schema: SchemaSnapshot;
