@@ -474,7 +474,7 @@
 - ✅ (2026-11-12) **L10.1** 10.1 VIEW
 - ✅ (2026-11-12) **L10.2** 10.2 MATERIALIZED VIEW
 - ✅ (2026-11-12) **L11.1** 11.1 BEGIN, COMMIT, ROLLBACK, ACID
-- ⬜ **L11.2** 11.2 SAVEPOINT
+- ✅ (2026-11-12) **L11.2** 11.2 SAVEPOINT
 - ⬜ **L11.3** 11.3 MVCC
 - ⬜ **L11.4** 11.4 Уровни изоляции
 - ⬜ **L11.5** 11.5 Блокировки, FOR UPDATE, deadlock
