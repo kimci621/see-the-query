@@ -1,5 +1,6 @@
 import { BTreeScene } from './BTreeScene';
 import { Callout, Cheatsheet, DontDoThis, TlDr } from './Callouts';
+import { LexemeScene } from './LexemeScene';
 import { MvccPage } from './MvccPage';
 import { Nesting } from './Nesting';
 import { Scene, Step } from './Scene';
@@ -12,6 +13,7 @@ import { TwoSessionsBlock } from './TwoSessionsBlock';
 export const mdxComponents = {
   BTreeScene,
   SplitScene,
+  LexemeScene,
   pre: SqlBlock,
   TlDr,
   Callout,
