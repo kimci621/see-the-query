@@ -83,6 +83,7 @@ const GUIDE_LESSONS: string[] = [
   'arrays',
   'jsonb',
   'uuid-pk',
+  'view',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
