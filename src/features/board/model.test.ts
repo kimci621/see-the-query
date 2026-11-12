@@ -94,10 +94,27 @@ describe('buildNodes', () => {
 });
 
 describe('buildEdges', () => {
+  it('зависимость представления идёт от источника к представлению и не рисуется со скрытым концом', () => {
+    const view = { ...book, id: 'public.v_book', name: 'v_book', kind: 'view' as const };
+    const schema = {
+      ...SCHEMA,
+      tables: [...SCHEMA.tables, view],
+      viewDeps: [{ tableId: book.id, viewId: view.id }],
+    };
+    const edge = buildEdges(schema, null).find((e) => e.source === book.id && e.target === view.id);
+    expect(edge).toMatchObject({
+      type: 'smoothstep',
+      source: book.id,
+      target: view.id,
+      style: { strokeDasharray: '5 4' },
+    });
+    expect(buildEdges(schema, [view.id]).some((e) => e.target === view.id)).toBe(false);
+  });
   it('ребро идёт от таблицы, на которую ссылаются, к таблице с FK', () => {
     const edge = buildEdges(SCHEMA, null).find((e) => e.id === 'book_author_id_fkey:public.book');
     expect(edge).toMatchObject({ type: 'fk', source: 'public.author', target: 'public.book' });
-    expect(edge?.data?.fk.name).toBe('book_author_id_fkey');
+    if (edge?.type !== 'fk') throw new Error('нет ребра внешнего ключа');
+    expect(edge.data?.fk.name).toBe('book_author_id_fkey');
   });
 
   it('ребро со скрытым концом не строится', () => {

@@ -1,5 +1,5 @@
 import { Handle, type NodeProps, Position } from '@xyflow/react';
-import { KeyRound, Link2 } from 'lucide-react';
+import { Camera, Eye, KeyRound, Link2 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '@/components/ui/badge';
@@ -152,8 +152,11 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
     <div
       data-testid={`table-node-${id}`}
       data-focused={focused || undefined}
+      data-kind={table.kind}
       className={cn(
         'vs-table h-full overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm',
+        table.kind === 'view' && 'vs-view border-primary/40 bg-card/90',
+        table.kind === 'matview' && 'vs-matview border-dashed',
         focused && 'ring-2 ring-touched',
       )}
       style={{ width: foldWidth(fold) }}
@@ -176,13 +179,51 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
         className="flex items-center justify-between gap-2 border-b px-3"
         style={{ height: HEADER_HEIGHT }}
       >
-        <span className="vs-table-name truncate font-mono text-sm font-semibold">
-          {table.schema}.{table.name}
+        <span className="flex min-w-0 items-center gap-1.5">
+          {table.kind === 'view' && <Eye className="size-3.5 shrink-0" aria-hidden />}
+          {table.kind === 'matview' && <Camera className="size-3.5 shrink-0" aria-hidden />}
+          <span className="vs-table-name truncate font-mono text-sm font-semibold">
+            {table.schema}.{table.name}
+          </span>
+          {(table.kind === 'view' || table.kind === 'matview') && (
+            <span className="shrink-0 text-[0.625rem] font-medium text-muted-foreground">
+              {table.kind === 'view' ? 'VIEW' : 'MATVIEW'}
+            </span>
+          )}
         </span>
         <Badge variant="secondary" data-testid="row-count" title="Строк в таблице">
           {table.rowCount}
         </Badge>
       </header>
+      {(table.kind === 'view' || table.kind === 'matview') && (
+        <div
+          className="flex items-center gap-2 border-b bg-muted/30 px-3 text-xs"
+          style={{ height: ROW_HEIGHT }}
+        >
+          {table.kind === 'matview' && table.matviewLag != null && (
+            <span
+              className={cn(
+                'shrink-0 font-medium',
+                table.matviewLag > 0
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-green-700 dark:text-green-300',
+              )}
+              title="Различия между снимком и текущим результатом запроса"
+            >
+              {table.matviewLag === 0
+                ? 'Совпадает'
+                : `${table.matviewLag} ${plural(table.matviewLag, 'различие', 'различия', 'различий')}`}
+            </span>
+          )}
+          <code
+            data-testid="view-definition"
+            className="min-w-0 truncate text-muted-foreground"
+            title={table.viewDefinition ?? undefined}
+          >
+            {table.viewDefinition ?? 'Определение недоступно'}
+          </code>
+        </div>
+      )}
       <div className="flex border-b bg-muted/50" style={{ height: COLUMN_HEADER_HEIGHT }}>
         {shown.map(({ c }) => (
           <ColumnHead key={c.name} column={c} highlighted={highlighted.includes(c.name)} />

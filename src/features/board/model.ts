@@ -30,12 +30,26 @@ export type TableFlowNode = Node<TableNodeData, 'table'>;
 export type SchemaFlowNode = Node<SchemaGroupData, 'schemaGroup'>;
 export type BoardNode = TableFlowNode | SchemaFlowNode;
 export type FkFlowEdge = Edge<FkEdgeData, 'fk'>;
+type ViewFlowEdge = Edge<Record<string, unknown>, 'smoothstep'>;
 
 export { GROUP_LABEL, GROUP_PADDING } from './layout';
 
 // Подпись ноды для скринридера: таблица, строк всего (не только показанных), все колонки
 export function tableAriaLabel(t: TableInfo): string {
-  return `Таблица ${t.schema}.${t.name}, ${rowsWord(t.rowCount)}, колонки: ${t.columns.map((c) => c.name).join(', ')}`;
+  const kind =
+    t.kind === 'view'
+      ? 'Представление'
+      : t.kind === 'matview'
+        ? 'Материализованное представление'
+        : 'Таблица';
+  const definition = t.viewDefinition ? `, запрос: ${t.viewDefinition}` : '';
+  const lag =
+    t.kind === 'matview' && t.matviewLag != null
+      ? t.matviewLag === 0
+        ? ', снимок совпадает'
+        : `, различий с текущим результатом: ${t.matviewLag}`
+      : '';
+  return `${kind} ${t.schema}.${t.name}, ${rowsWord(t.rowCount)}, колонки: ${t.columns.map((c) => c.name).join(', ')}${lag}${definition}`;
 }
 
 export function normalizeTableId(name: string): string {
@@ -114,7 +128,9 @@ export function buildNodes(
         // Фокус при Tab попадает на обёртку ноды React Flow, подпись нужна ей
         ariaLabel: tableAriaLabel(b.t),
         // По умолчанию React Flow называет роль «node»
-        domAttributes: { 'aria-roledescription': 'таблица' },
+        domAttributes: {
+          'aria-roledescription': b.t.kind === 'view' || b.t.kind === 'matview' ? 'представление' : 'таблица',
+        },
         // Ширину задаёт сама нода (свёртка зависит от запроса), React Flow её замеряет.
         // initialWidth (свёрнутая ширина без запроса) нужна только до замера: для отсечения
         // невидимых нод при onlyRenderVisibleElements.
@@ -131,9 +147,9 @@ export function buildNodes(
   return [...groups, ...tables];
 }
 
-export function buildEdges(schema: SchemaSnapshot, visible: string[] | null): FkFlowEdge[] {
+export function buildEdges(schema: SchemaSnapshot, visible: string[] | null): (FkFlowEdge | ViewFlowEdge)[] {
   const known = new Set(schema.tables.map((t) => t.id));
-  return schema.fks
+  const fks: FkFlowEdge[] = schema.fks
     .filter((fk) => known.has(fk.from.tableId) && known.has(fk.to.tableId))
     .filter((fk) => isTableVisible(visible, fk.from.tableId) && isTableVisible(visible, fk.to.tableId))
     .map((fk) => ({
@@ -145,4 +161,18 @@ export function buildEdges(schema: SchemaSnapshot, visible: string[] | null): Fk
       selectable: false,
       focusable: false,
     }));
+  const views: ViewFlowEdge[] = (schema.viewDeps ?? [])
+    .filter(({ tableId, viewId }) => known.has(tableId) && known.has(viewId))
+    .filter(({ tableId, viewId }) => isTableVisible(visible, tableId) && isTableVisible(visible, viewId))
+    .map(({ tableId, viewId }) => ({
+      id: `view:${tableId}:${viewId}`,
+      type: 'smoothstep',
+      source: tableId,
+      target: viewId,
+      style: { stroke: 'var(--muted-foreground)', strokeDasharray: '5 4' },
+      ariaLabel: `Представление ${viewId} использует ${tableId}`,
+      selectable: false,
+      focusable: false,
+    }));
+  return [...fks, ...views];
 }

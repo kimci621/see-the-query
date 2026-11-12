@@ -117,7 +117,8 @@ export function foldWidth(f: Fold): number {
 export function tableHeight(t: TableInfo): number {
   const visible = Math.min(t.sampleRows.length, isCompressed(t) ? COMPRESSED_ROWS : MAX_VISIBLE_ROWS);
   const footer = t.rowCount > visible || t.rowCount === 0 ? ROW_HEIGHT : 0;
-  return HEADER_HEIGHT + COLUMN_HEADER_HEIGHT + visible * ROW_HEIGHT + footer;
+  const definition = t.kind === 'view' || t.kind === 'matview' ? ROW_HEIGHT : 0;
+  return HEADER_HEIGHT + definition + COLUMN_HEADER_HEIGHT + visible * ROW_HEIGHT + footer;
 }
 
 export function isTableVisible(visible: string[] | null, id: string): boolean {
@@ -148,6 +149,8 @@ export function autoLayout(schema: SchemaSnapshot, visible: string[] | null): Po
       // ребро от таблицы, на которую ссылаются, поэтому она оказывается левее
       if (from !== to && g.hasNode(from) && g.hasNode(to)) g.setEdge(to, from);
     }
+    for (const { tableId, viewId } of schema.viewDeps ?? [])
+      if (tableId !== viewId && g.hasNode(tableId) && g.hasNode(viewId)) g.setEdge(tableId, viewId);
     dagre.layout(g);
 
     const local = tables.map((t) => {

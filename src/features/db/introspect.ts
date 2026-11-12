@@ -1,4 +1,5 @@
 import type { DbClient } from './types';
+import { matviewLag, viewDefinition } from './views';
 
 export type FkAction = 'NO ACTION' | 'RESTRICT' | 'CASCADE' | 'SET NULL' | 'SET DEFAULT';
 export interface ColumnInfo {
@@ -33,6 +34,8 @@ export interface TableInfo {
   indexes: IndexInfo[];
   constraints: Array<{ name: string; kind: 'p' | 'u' | 'f' | 'c'; columns: string[] }>; // NOT NULL здесь нет: см. nullable
   comment: string | null;
+  matviewLag?: number | null;
+  viewDefinition?: string | null;
 }
 export interface FkInfo {
   name: string;
@@ -45,6 +48,7 @@ export interface SchemaSnapshot {
   schemas: string[];
   tables: TableInfo[];
   fks: FkInfo[];
+  viewDeps?: Array<{ viewId: string; tableId: string }>;
   sequences: Array<{ schema: string; name: string; lastValue: number | null }>;
 }
 
@@ -151,6 +155,15 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
     'select schemaname::text, sequencename::text, last_value from pg_sequences order by 1, 2',
   );
 
+  const dependencies = await rows<[number, number]>(`
+    select distinct v.oid::int, t.oid::int
+    from pg_rewrite r
+    join pg_depend d on d.classid = 'pg_rewrite'::regclass and d.objid = r.oid
+      and d.refclassid = 'pg_class'::regclass and d.deptype = 'n'
+    join pg_class v on v.oid = r.ev_class and v.relkind in ('v', 'm')
+    join pg_class t on t.oid = d.refobjid and t.relkind in ('r', 'p', 'v', 'm') and t.oid <> v.oid
+    where r.rulename = '_RETURN'`);
+
   const byOid = new Map(
     tableRows.map(([oid, schema, name]) => [oid, { schema: schemaName(schema), table: name }]),
   );
@@ -163,7 +176,7 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
     const own = constraints.filter((c) => c[0] === oid);
     const has = (type: string, col: string, alone = false) =>
       own.some(([, , t, cols]) => t === type && cols.includes(col) && (!alone || cols.length === 1));
-    const kind = persistence === 't' ? 'temp' : KINDS[relkind];
+    const kind = persistence === 't' && relkind === 'r' ? 'temp' : KINDS[relkind];
     const from = `${ident(schema)}.${ident(name)}`;
     let sampleRows: unknown[][] = [];
     let sampleCtids: string[] = [];
@@ -184,7 +197,7 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
         sampleCtids = sampleRows.map((_, i) => `row:${i}`);
       }
     }
-    tables.push({
+    const table: TableInfo = {
       id: idOf(oid) as string,
       schema: schemaName(schema),
       name,
@@ -221,7 +234,10 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
         columns: cols,
       })),
       comment,
-    });
+    };
+    if (kind === 'view' || kind === 'matview') table.viewDefinition = await viewDefinition(db, table.id);
+    if (kind === 'matview') table.matviewLag = populated ? await matviewLag(db, table) : null;
+    tables.push(table);
   }
 
   const fks: FkInfo[] = constraints
@@ -238,6 +254,11 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
     schemas,
     tables,
     fks,
+    viewDeps: dependencies.flatMap(([view, table]) => {
+      const viewId = idOf(view);
+      const tableId = idOf(table);
+      return viewId && tableId ? [{ viewId, tableId }] : [];
+    }),
     sequences: sequences.map(([schema, name, lastValue]) => ({
       schema: schemaName(schema),
       name,
