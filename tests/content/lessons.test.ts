@@ -84,6 +84,7 @@ const GUIDE_LESSONS: string[] = [
   'jsonb',
   'uuid-pk',
   'view',
+  'materialized-view',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
@@ -95,14 +96,30 @@ const withoutCode = (mdx: string) => mdx.replace(/^ {0,3}```[\s\S]*?^ {0,3}```[ 
 // Таблицы и колонки базы в формате id доски: 'public.book', 'public.book.title'
 async function knownObjects(db: DbClient): Promise<Set<string>> {
   const result = await db.query(
-    `select table_schema || '.' || table_name from information_schema.tables
-      where table_schema not in ('pg_catalog', 'information_schema')
+    `with relations as (
+       select c.oid, case when n.nspname like 'pg_temp_%' then 'pg_temp' else n.nspname end as schema,
+              c.relname as name
+       from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where c.relkind in ('r', 'p', 'v', 'm')
+         and n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg_toast%'
+     )
+     select schema || '.' || name from relations
      union all
-     select table_schema || '.' || table_name || '.' || column_name from information_schema.columns
-      where table_schema not in ('pg_catalog', 'information_schema')`,
+     select r.schema || '.' || r.name || '.' || a.attname
+     from relations r join pg_attribute a on a.attrelid = r.oid
+     where a.attnum > 0 and not a.attisdropped`,
   );
   return new Set(result.rows.map((r) => String(r[0])));
 }
+
+it('урок materialized-view: раннер видит снимки и их колонки', () =>
+  withDataset('bookstore', async (db) => {
+    await db.query('create materialized view mv_test as select book_id, title from book');
+    const known = await knownObjects(db);
+    expect(known.has('public.mv_test')).toBe(true);
+    expect(known.has('public.mv_test.book_id')).toBe(true);
+    expect(known.has('public.mv_test.title')).toBe(true);
+  }));
 
 describe('уроки по гайду', () => {
   for (const id of GUIDE_LESSONS) {

@@ -1,0 +1,134 @@
+---
+id: materialized-view
+title: MATERIALIZED VIEW и REFRESH
+chapter: views
+number: "10.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-creatematerializedview.html
+    title: CREATE MATERIALIZED VIEW
+  - url: https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html
+    title: REFRESH MATERIALIZED VIEW
+  - url: https://www.postgresql.org/docs/current/rules-materializedviews.html
+    title: Материализованные представления
+course: ["12.6"]
+tags: [materialized view, refresh, снимок, индекс]
+---
+
+<TlDr>MATERIALIZED VIEW сохраняет результат запроса. После изменения исходных данных снимок обновляют командой `REFRESH`.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> одиннадцать книг, три дороже 1000 рублей. Создадим материализованное представление с дорогими книгами. Выполняй примеры по порядку.
+
+```sql apply expect=rows:0
+create materialized view expensive_mv as select book_id, title, price from book where price > 1000;
+```
+
+При создании PostgreSQL выполняет запрос и сохраняет его результат. На доске появляется снимок <T id="public.expensive_mv">expensive_mv</T>: он связан с исходной таблицей пунктиром, а подпись «Совпадает» означает, что сейчас сохранённые строки совпадают с результатом запроса.
+
+<Callout kind="analogy">
+Представь напечатанный список цен. Его удобно читать без повторного поиска в каталоге, но правки каталога не появятся на бумаге сами. Чтобы получить новые цены, нужно напечатать список ещё раз.
+</Callout>
+
+## Прочитать снимок
+
+```sql run expect=rows:3
+select book_id, title from expensive_mv order by book_id;
+```
+
+Здесь книги 2, 10 и 11. Запрос читает сохранённые строки, а не пересчитывает определение представления.
+
+```sql run expect=rows:1
+select count(*) as n from expensive_mv;
+```
+
+Счётчик показывает 3. `count(*)` возвращает одну строку с числом, а не три строки.
+
+## Изменить источник
+
+```sql apply expect=rows:1
+update book set price = 1500 where book_id = 6 returning title, price;
+```
+
+В таблице цена «Головы профессора Доуэля» стала 1500 рублей. Теперь дорогих книг четыре:
+
+```sql run expect=rows:1
+select count(*) as n from book where price > 1000;
+```
+
+На доске у снимка появилась подпись «1 различие»: текущий запрос находит дополнительную строку. Если снимок не в кадре, нажми на его название выше. Данные самого снимка при этом не изменились.
+
+## Ловушка: старый снимок
+
+<Callout kind="trap">
+Изменение исходной таблицы не обновляет материализованное представление автоматически:
+
+```sql run expect=rows:1
+select count(*) as snapshot_count from expensive_mv;
+```
+
+В снимке по-прежнему 3 строки, хотя в таблице условие проходит уже 4. Если смотреть только на снимок, новую цену легко пропустить.
+</Callout>
+
+## Обновить снимок
+
+```sql apply expect=rows:0
+refresh materialized view expensive_mv;
+```
+
+`REFRESH` заново выполняет определение и заменяет содержимое снимка. Доска снова показывает «Совпадает».
+
+```sql run expect=rows:1
+select count(*) as refreshed_count from expensive_mv;
+```
+
+Теперь в снимке 4 строки. Сравнение на доске считает несовпадающие строки с обеих сторон: если изменилось значение существующей строки, старая и новая версии дают два различия. Для некоторых типов такое сравнение недоступно, и подпись не показывается.
+
+## Индексы и одновременное чтение
+
+На материализованном представлении можно создать индекс:
+
+```sql apply expect=rows:0
+create index expensive_mv_price_idx on expensive_mv (price);
+```
+
+Он помогает некоторым запросам по цене; выбор индекса проверяют по плану конкретного запроса.
+
+Обычный `REFRESH` может заблокировать параллельное чтение снимка. `REFRESH ... CONCURRENTLY` позволяет читать его во время обновления, но требует уже заполненного снимка и подходящего `UNIQUE`-индекса по обычным колонкам без условия `WHERE`. Например:
+
+```sql noexec
+create unique index expensive_mv_id_idx on expensive_mv (book_id);
+refresh materialized view concurrently expensive_mv;
+```
+
+Это пример синтаксиса для отдельной базы: здесь две команды, а кнопка урока применяет по одной. Даже с `CONCURRENTLY` для одного снимка одновременно выполняется только один `REFRESH`.
+
+## Чего нет в выдаче и почему
+
+- ❌ Книги 6 в исходном снимке: при создании её цена была 560 рублей.
+- ❌ Четвёртой строки в снимке сразу после `UPDATE`: он не обновляется автоматически.
+- ❌ Гарантии постоянной актуальности от подписи «Совпадает»: она показывает результат сравнения на момент обновления доски.
+
+<Callout kind="tip">
+Материализованный снимок полезен, когда результат читают часто и допустима задержка обновления. Обычный VIEW удобнее, когда нужны текущие данные при каждом чтении. Стоимость пересчёта и расписание проверяй на своих данных.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк в снимке после изменения цены, но до `REFRESH`?
+2. Что нужно добавить для `REFRESH ... CONCURRENTLY`?
+3. Почему одно изменение строки может дать два различия на доске?
+
+<Cheatsheet>
+- `CREATE MATERIALIZED VIEW ... AS SELECT ...` сохраняет запрос и его результат.
+- Изменения исходной таблицы не обновляют снимок автоматически.
+- `REFRESH MATERIALIZED VIEW` пересчитывает снимок.
+- `CONCURRENTLY` допускает параллельное чтение при выполнении условий для уникального индекса.
+- Индекс можно создать на колонках материализованного представления.
+</Cheatsheet>
