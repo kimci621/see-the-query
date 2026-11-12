@@ -21,6 +21,7 @@ import { rowsWord } from '@/lib/plural';
 import { cn, modKey } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { applyCurrent } from './applyCurrent';
 import { notifyApplied, notifyDbError, undoLast } from './notifyDbError';
 import { appliedTrace } from './useLiveTrace';
 import { useParsedText } from './useParsedText';
@@ -102,6 +103,10 @@ export function EditorToolbar({
 
   const applyAll = () =>
     void run(async () => {
+      if (sandbox && statements.some((statement) => statement.kind === 'tcl')) {
+        await applyCurrent(sandbox, true);
+        return;
+      }
       const results: QueryResult[] = [];
       for (const s of statements) {
         const started = performance.now();

@@ -47,7 +47,7 @@ export function SqlBlock(props: PreProps) {
     sendToBoard(sql, lessonId);
     setBusy(true);
     try {
-      await applyCurrent(sandbox);
+      await applyCurrent(sandbox, true);
     } finally {
       setBusy(false);
     }

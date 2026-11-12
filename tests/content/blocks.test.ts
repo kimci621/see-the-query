@@ -151,14 +151,26 @@ describe('checkBlocks', () => {
     expect(problems).toEqual(['строка 1: в run-блоке должен быть один оператор, а их 2']);
   });
 
-  it('два оператора в apply-блоке нельзя: кнопка урока применяет оператор под курсором', async () => {
+  it('apply исполняет весь блок и после ошибки откатывает открытую транзакцию', async () => {
     const blocks = extractSqlBlocks(
       mdx(
-        "~~~sql apply expect=rows:1\ninsert into book_category (name) values ('x'); insert into book_category (name) values ('y');\n~~~\n",
+        [
+          '~~~sql apply expect=rows:1',
+          'begin; update book set price = 7 where book_id = 2; commit; select price from book where book_id = 2;',
+          '~~~',
+          '',
+          '~~~sql apply expectError=23514',
+          'begin; update customer set bonus = bonus - 500 where customer_id = 2; commit;',
+          '~~~',
+          '',
+          '~~~sql run expect=rows:1',
+          'select * from book where book_id = 2 and price = 7;',
+          '~~~',
+        ].join('\n'),
       ),
     );
     const problems = await withDataset('bookstore', (db) => checkBlocks(blocks, db, { trace: false }));
-    expect(problems).toEqual(['строка 1: в apply-блоке должен быть один оператор, а их 2']);
+    expect(problems).toEqual([]);
   });
 
   it('COMMIT в блоке без apply ловится и не протекает в следующие блоки', async () => {

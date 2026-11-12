@@ -106,12 +106,6 @@ export async function checkBlocks(
       );
       continue;
     }
-    // Кнопка урока применяет один оператор под курсором: блок из нескольких разошёлся бы с раннером
-    if (meta.apply && parsed.ok && parsed.statements.length !== 1) {
-      problems.push(`${at}: в apply-блоке должен быть один оператор, а их ${parsed.statements.length}`);
-      continue;
-    }
-
     // Трасса до выполнения: apply-блок ещё не закоммичен, данные те же, что увидит пользователь
     if (meta.run) {
       if (!parsed.ok) {
@@ -140,7 +134,10 @@ export async function checkBlocks(
     }
 
     const outcome = meta.apply ? await run(db, sql) : await inPreview(db, () => run(db, sql));
-    if (meta.apply && outcome.ok) schema = null;
+    if (meta.apply) {
+      await db.query(outcome.ok ? 'commit' : 'rollback');
+      if (outcome.ok) schema = null;
+    }
 
     if (meta.expectError !== undefined) {
       if (outcome.ok) problems.push(`${at}: ожидалась ошибка ${meta.expectError}, а запрос выполнился`);

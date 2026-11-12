@@ -76,6 +76,23 @@ describe('SqlBlock', () => {
     expect(useEditorStore.getState().applied[0]?.result).toEqual(results[0]);
   });
 
+  it('apply: выполняет весь блок транзакции и показывает последний результат', async () => {
+    const sql =
+      'begin; update book set price = 7 where book_id = 2; commit; select price from book where book_id = 2;';
+    const results = [
+      { command: 'BEGIN', rows: [], fields: [] },
+      { command: 'UPDATE', rowCount: 1, rows: [], fields: [] },
+      { command: 'COMMIT', rows: [], fields: [] },
+      { command: 'SELECT', rows: [[7]], fields: [{ name: 'price' }] },
+    ];
+    apply.mockResolvedValue(results);
+    renderBlock({ 'data-lang': 'sql', 'data-meta': 'apply expect=rows:1', 'data-code': sql });
+    fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(apply).toHaveBeenCalledWith(sql));
+    await waitFor(() => expect(useEditorStore.getState().applied[3]?.result).toEqual(results[3]));
+    expect(Object.keys(useEditorStore.getState().applied)).toHaveLength(4);
+  });
+
   it('apply: двойной клик применяет один раз, пока база отвечает кнопка занята', async () => {
     let resolve: (r: unknown[]) => void = () => undefined;
     apply.mockReturnValue(new Promise((r) => (resolve = r)));

@@ -169,6 +169,18 @@ describe('EditorToolbar', () => {
     expect(applied).toEqual(['select 1', 'select 2']);
   });
 
+  it('«Применить всё» выполняет транзакцию целиком и не повторяет её без правки', async () => {
+    const sql = 'begin; update book set price = 9 where book_id = 2; rollback;';
+    const applied: string[] = [];
+    useEditorStore.getState().insertQuery(sql);
+    const user = userEvent.setup();
+    render(<EditorToolbar sandbox={fakeSandbox(applied)} onApplyCurrent={() => undefined} />);
+    await user.click(screen.getByTestId('apply-all-button'));
+    expect(applied).toEqual([sql]);
+    await user.click(screen.getByTestId('apply-all-button'));
+    expect(applied).toEqual([sql]);
+  });
+
   it('при одном операторе кнопки «Применить всё» нет', () => {
     useEditorStore.getState().setText('select 1');
     render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);

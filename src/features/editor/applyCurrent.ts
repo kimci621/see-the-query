@@ -48,24 +48,45 @@ function frameAfterDdl(stmt: ParsedStatement): void {
 let inFlight: Promise<void> | null = null;
 
 // Единый путь «Применить» для кнопки тулбара, ⌘⏎ и кнопки примера урока: применяет оператор под курсором
-export function applyCurrent(sandbox: Sandbox): Promise<void> {
-  inFlight ??= applyStatement(sandbox).finally(() => {
+export function applyCurrent(sandbox: Sandbox, wholeBlock = false): Promise<void> {
+  inFlight ??= applyStatement(sandbox, wholeBlock).finally(() => {
     inFlight = null;
   });
   return inFlight;
 }
 
-async function applyStatement(sandbox: Sandbox): Promise<void> {
+async function applyStatement(sandbox: Sandbox, wholeBlock: boolean): Promise<void> {
   if (!isParserReady()) await initParser();
   const editor = useEditorStore.getState();
   const parsed = parseSql(editor.text);
   if (!parsed.ok) return;
-  const stmt = statementAt(parsed.statements, editor.cursor);
+  const multiple = wholeBlock && parsed.statements.length > 1;
+  const stmt = multiple ? parsed.statements.at(-1) : statementAt(parsed.statements, editor.cursor);
   // «Применено»: повтор ничего не пишет, пока текст не изменён (спека 3.9)
   if (!stmt || editor.applied[stmt.index]) return;
   const started = performance.now();
   try {
-    const results = await sandbox.apply(stmt.text);
+    const results = await sandbox.apply(multiple ? editor.text : stmt.text);
+    if (multiple) {
+      if (useEditorStore.getState().text === editor.text) {
+        for (const [index, statement] of parsed.statements.entries()) {
+          const trace = appliedTrace(
+            statement,
+            results[index] ? [results[index]] : [],
+            Math.round(performance.now() - started),
+          );
+          useEditorStore.getState().markApplied(statement.index, trace);
+        }
+        const trace = useEditorStore.getState().applied[stmt.index];
+        if (trace) useSceneStore.getState().setTrace(trace, useSceneStore.getState().nextGeneration());
+      }
+      notifyApplied(results.slice(-1));
+      const changed = parsed.statements.findLast((statement) =>
+        dmlTargetOf(statement, useBoardStore.getState().schema),
+      );
+      if (changed) focusDmlTarget(changed.text, true);
+      return;
+    }
     // SELECT базу не меняет: его сцена превью остаётся. Текст правили во время применения - номер уже чужой
     if (stmt.kind !== 'select' && useEditorStore.getState().text === editor.text) {
       const trace = appliedTrace(stmt, results, Math.round(performance.now() - started));
@@ -76,6 +97,6 @@ async function applyStatement(sandbox: Sandbox): Promise<void> {
     if (stmt.kind === 'ddl' && !('TruncateStmt' in stmt.ast)) frameAfterDdl(stmt);
     else focusDmlTarget(stmt.text, true);
   } catch (e) {
-    notifyDbError(e, stmt.text);
+    notifyDbError(e, multiple ? editor.text : stmt.text);
   }
 }

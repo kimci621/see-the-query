@@ -85,6 +85,7 @@ const GUIDE_LESSONS: string[] = [
   'uuid-pk',
   'view',
   'materialized-view',
+  'transactions',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
