@@ -33,14 +33,17 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
     ctx.scanColumns.push(...cols.map((c) => c.name));
     ctx.columns = cols;
     n = await count(`SELECT 1${sql.fromSource(i)}`);
+    const materialized = ctx.stages.find((s) => s.kind === 'materialize' && s.tempTableId === table.id);
+    const sourceName = materialized?.kind === 'materialize' ? materialized.name : undefined;
     ctx.stages.push({
       ...base('scan', cols),
       kind: 'scan',
       alias,
       tableId: table.id,
+      ...(sourceName ? { sourceName } : {}),
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'from'),
-      caption: captions.scan(table.name, alias, n),
+      caption: captions.scan(sourceName ?? table.name, alias, n),
     });
   }
   for (const [k, j] of ctx.joins.entries()) {

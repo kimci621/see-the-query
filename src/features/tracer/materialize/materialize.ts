@@ -13,12 +13,20 @@ export type TraceFn = (stmt: ParsedStatement, db: DbClient, opts: TraceOptions) 
 
 let sequence = 0;
 
-export function materializeStage(name: string, inner: Trace, id: string): Stage & { kind: 'materialize' } {
+export function materializeStage(
+  name: string,
+  inner: Trace,
+  id: string,
+  source: 'cte' | 'from',
+  tempTableId: string,
+): Stage & { kind: 'materialize' } {
   const last = inner.stages.at(-1);
   const output = last?.output ?? { columns: [], rows: [] };
   return {
     id,
     kind: 'materialize',
+    source,
+    tempTableId,
     name,
     inner,
     caption: captions.materialize(name, output.rows.length),
@@ -192,7 +200,7 @@ export async function prepareSources(
     const inner = await trace(branch, db, { ...opts, schema });
     if (inner.mode !== 'full')
       return { reason: `CTE ${name} не анимируется: ${inner.fallbackReason ?? 'причина не указана'}` };
-    stages.push(materializeStage(name, inner, `${stages.length}:materialize`));
+    stages.push(materializeStage(name, inner, `${stages.length}:materialize`, 'cte', table.id));
     names.set(name, temp);
   }
   let rewritten = replaceRangeVars({ ...sel, withClause: undefined }, names) as SelectStmt;
@@ -226,7 +234,7 @@ export async function prepareSources(
       const table = await tempTable(prober, temp, types);
       schema = { ...schema, tables: [...schema.tables, table] };
       const inner = await tempSourceTrace(prober, temp, alias, types);
-      stages.push(materializeStage(alias, inner, `${stages.length}:materialize`));
+      stages.push(materializeStage(alias, inner, `${stages.length}:materialize`, 'from', table.id));
       return {
         RangeVar: {
           schemaname: 'pg_temp',
@@ -261,7 +269,7 @@ export async function prepareSources(
       failure = `Подзапрос ${alias} не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`;
       return node;
     }
-    stages.push(materializeStage(alias, inner, `${stages.length}:materialize`));
+    stages.push(materializeStage(alias, inner, `${stages.length}:materialize`, 'from', table.id));
     return {
       RangeVar: {
         schemaname: 'pg_temp',

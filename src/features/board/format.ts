@@ -24,6 +24,7 @@ function toText(value: unknown, type?: string): string {
           .replace(/\.\d{3}Z$/, 'Z');
   }
   if (Array.isArray(value)) {
+    if (type === 'json' || type === 'jsonb') return JSON.stringify(value);
     // элементы как одиночные значения своего типа: date[] без времени
     const item = type?.endsWith('[]') ? type.slice(0, -2) : type;
     return `{${value.map((v) => (v === null ? 'NULL' : toText(v, item))).join(',')}}`;

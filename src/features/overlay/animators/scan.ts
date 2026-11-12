@@ -6,8 +6,13 @@ import type { Animator, Frame, StageOf } from '../types';
 // FROM t: призрак отделяется от таблицы на доске и уезжает в рабочую зону
 export const scanAnimator: Animator<StageOf<'scan'>> = (prev, stage, stageIndex, ctx) => {
   const id = `t:${stage.alias}`;
-  const title = tableTitle(stage.tableId, stage.alias);
-  const others = prev.tables.filter((t) => t.id !== id);
+  const materialized = stage.sourceName
+    ? prev.tables.find((table) => table.id.startsWith('m:') && table.title === stage.sourceName)
+    : undefined;
+  const title = stage.sourceName
+    ? `${stage.sourceName}${stage.alias === stage.sourceName ? '' : ` ${stage.alias}`}`
+    : tableTitle(stage.tableId, stage.alias);
+  const others = prev.tables.filter((t) => t.id !== id && t !== materialized);
   // следующая таблица встаёт правее уже стоящих в рабочей зоне
   const targetX = others.reduce((x, t) => Math.max(x, t.x + ghostWidth(t) + TABLE_GAP), ctx.workArea.x);
   const rect = ctx.nodeRect(stage.tableId);
@@ -15,8 +20,8 @@ export const scanAnimator: Animator<StageOf<'scan'>> = (prev, stage, stageIndex,
     {
       id,
       title,
-      x: rect?.x ?? targetX,
-      y: rect?.y ?? ctx.workArea.y,
+      x: materialized?.x ?? rect?.x ?? targetX,
+      y: materialized?.y ?? rect?.y ?? ctx.workArea.y,
       fold: ctx.folded(stage.tableId).map((c) => `${stage.alias}.${c}`),
     },
     stage.output,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Stage } from '@/features/tracer/types';
-import { aggregateTrace, groupTrace } from './__fixtures__/traces';
+import { aggregateTrace, fullPipelineTrace, groupTrace } from './__fixtures__/traces';
 import { stageLabel } from './labels';
 
 type GroupStage = Extract<Stage, { kind: 'group' }>;
@@ -10,6 +10,19 @@ const aggregate = (aggregates: string[]): GroupStage => ({
 });
 
 describe('stageLabel', () => {
+  it('отличает CTE от источника в FROM', () => {
+    const stage: Extract<Stage, { kind: 'materialize' }> = {
+      id: 'm',
+      kind: 'materialize',
+      name: 'j',
+      inner: fullPipelineTrace(),
+      caption: '',
+      output: { columns: [], rows: [] },
+    };
+    expect(stageLabel({ ...stage, source: 'cte' })).toBe('WITH j');
+    expect(stageLabel({ ...stage, source: 'from' })).toBe('FROM j');
+  });
+
   it('с GROUP BY чип «GROUP BY»', () => {
     expect(stageLabel(groupTrace(['count(*)', 'sum(price)']).stages[1])).toBe('GROUP BY');
   });

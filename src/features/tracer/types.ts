@@ -34,7 +34,7 @@ export interface StageBase {
 }
 export type Stage = StageBase &
   (
-    | { kind: 'scan'; alias: string; tableId: string }
+    | { kind: 'scan'; alias: string; tableId: string; sourceName?: string }
     | {
         kind: 'expand';
         fn: string;
@@ -105,7 +105,7 @@ export type Stage = StageBase &
         op: 'union' | 'union all' | 'intersect' | 'intersect all' | 'except' | 'except all';
         branches: [Trace, Trace];
       }
-    | { kind: 'materialize'; name: string; inner: Trace }
+    | { kind: 'materialize'; name: string; inner: Trace; source?: 'cte' | 'from'; tempTableId?: string }
     | { kind: 'recursion'; name: string; iterations: Relation[] }
     | {
         kind: 'subquery';

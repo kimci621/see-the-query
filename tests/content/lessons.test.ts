@@ -81,6 +81,7 @@ const GUIDE_LESSONS: string[] = [
   'boolean',
   'enum',
   'arrays',
+  'jsonb',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX

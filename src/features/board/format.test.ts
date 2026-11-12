@@ -28,6 +28,9 @@ describe('formatCell', () => {
     expect(formatCell(['классика', 'роман'], 'text[]').text).toBe('{классика,роман}');
     expect(formatCell([1, null]).text).toBe('{1,NULL}');
     expect(formatCell({ lang: 'ru' }, 'jsonb').text).toBe('{"lang":"ru"}');
+    expect(formatCell([1, null, 'тег'], 'jsonb').text).toBe('[1,null,"тег"]');
+    expect(formatCell([[1, 2]], 'json').text).toBe('[[1,2]]');
+    expect(formatCell([[1, 2]], 'jsonb[]').text).toBe('{[1,2]}');
     expect(formatCell('890.00', 'numeric(10,2)').text).toBe('890.00');
     expect(formatCell(42).text).toBe('42');
     expect(formatCell(true).text).toBe('true');

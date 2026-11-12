@@ -48,13 +48,16 @@ export const scanStep: SelectStep = {
       // Без JOIN строки скана идут дальше по пайплайну; с JOIN их заменит join-стадия
       ctx.columns = columns;
       ctx.rows = rows;
+      const materialized = ctx.stages.find((s) => s.kind === 'materialize' && s.tempTableId === table.id);
+      const sourceName = materialized?.kind === 'materialize' ? materialized.name : undefined;
       ctx.stages.push({
         id: stageId(ctx, 'scan'),
         kind: 'scan',
         alias,
         tableId: table.id,
+        ...(sourceName ? { sourceName } : {}),
         sourceRange: rangeOf(ctx.stmt, 'from'),
-        caption: captions.scan(table.name, alias, rows.length),
+        caption: captions.scan(sourceName ?? table.name, alias, rows.length),
         output: { columns, rows },
       });
     }

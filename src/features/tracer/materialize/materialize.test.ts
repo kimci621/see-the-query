@@ -14,12 +14,49 @@ describe('стадия materialize', () => {
         expect(trace.mode, trace.fallbackReason).toBe('full');
         const materialize = stageOf(trace, 'materialize');
         expect(materialize.name).toBe('python_books');
+        expect(materialize.source).toBe('cte');
         expect(materialize.output.rows).toHaveLength(3);
         expect(materialize.inner.stages.map((stage) => stage.kind)).toEqual(['scan', 'filter', 'project']);
         const scan = trace.stages.find((stage) => stage.kind === 'scan');
         expect(scan?.kind === 'scan' ? scan.alias : null).toBe('python_books');
         expect(scan?.output.rows).toHaveLength(3);
+        expect(scan).toMatchObject({ sourceName: 'python_books', caption: 'FROM python_books: 3 строки' });
         expect(trace.result?.rows).toEqual([[3]]);
+      }),
+    ));
+
+  it('псевдоним CTE не раскрывает имя временной таблицы', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'with chosen as (select book_id from book where book_id = 1) select c.book_id from chosen c',
+        );
+        const scan = trace.stages.find((stage) => stage.kind === 'scan');
+        expect(scan).toMatchObject({
+          sourceName: 'chosen',
+          alias: 'c',
+          caption: 'FROM chosen AS c: 1 строка',
+        });
+      }),
+    ));
+
+  it('сжатая сцена сохраняет имя источника и псевдоним', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(
+          db,
+          'with chosen as (select book_id from book) select c.book_id from chosen c',
+          { maxRows: 2 },
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const scan = trace.stages.find((stage) => stage.kind === 'scan');
+        expect(scan).toMatchObject({
+          sourceName: 'chosen',
+          alias: 'c',
+          compressed: true,
+          caption: 'FROM chosen AS c: 11 строк',
+        });
       }),
     ));
 
@@ -53,6 +90,7 @@ describe('стадия materialize', () => {
         expect(trace.mode, trace.fallbackReason).toBe('full');
         const materialize = stageOf(trace, 'materialize');
         expect(materialize.name).toBe('p');
+        expect(materialize.source).toBe('from');
         expect(materialize.inner.stages.map((stage) => stage.kind)).toEqual(['scan', 'filter', 'project']);
         expect(materialize.output.rows).toHaveLength(4);
         expect(trace.result?.rows.map((row) => row[1])).toEqual(['3200.00', '2400.00', '1990.00', '890.00']);
@@ -66,6 +104,7 @@ describe('стадия materialize', () => {
         expect(trace.mode, trace.fallbackReason).toBe('full');
         const materialize = stageOf(trace, 'materialize');
         expect(materialize.name).toBe('t');
+        expect(materialize.source).toBe('from');
         expect(materialize.output.columns.map((c) => c.name)).toEqual(['n', 's']);
         expect(trace.result?.rows).toEqual([
           [1, 'a'],

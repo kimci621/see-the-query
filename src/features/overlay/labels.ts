@@ -31,7 +31,7 @@ export function stageLabel(stage: Stage): string {
     case 'setop':
       return stage.op.toUpperCase();
     case 'materialize':
-      return `WITH ${stage.name}`;
+      return `${stage.source === 'from' ? 'FROM' : 'WITH'} ${stage.name}`;
     case 'recursion':
       return `RECURSIVE ${stage.name}`;
     case 'subquery':

@@ -1,0 +1,128 @@
+---
+id: jsonb
+title: JSON и JSONB
+chapter: types
+number: "5.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+initialQuery: |
+  select book_id, title, meta from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-json.html
+    title: Типы JSON
+  - url: https://www.postgresql.org/docs/current/functions-json.html
+    title: Функции и операторы JSON
+course: ["11.32", "11.33"]
+tags: [json, jsonb, jsonb_each, jsonb_array_elements]
+---
+
+<TlDr>`jsonb` хранит JSON в разобранном виде. Операторы достают значения и проверяют содержимое, а функции раскрывают объект или массив в строки.</TlDr>
+
+## Что есть в данных
+
+У книг есть необязательная колонка <C id="public.book.meta">meta</C> типа `jsonb`. У покупателей настройки хранятся в <C id="public.customer.settings">settings</C>.
+
+```sql run expect=rows:1
+select title, meta from book where book_id = 1;
+```
+
+У «Тихого Дона» указаны язык `ru` и формат `hardcover`. У других книг набор ключей может отличаться, а у некоторых `meta` равен SQL NULL.
+
+<Callout kind="analogy">
+Представь конверт с карточками «язык: ru» и «формат: hardcover». У другой книги в конверте может быть только карточка языка. Функция `jsonb_each` достанет карточки и покажет каждую отдельной строкой.
+</Callout>
+
+## JSON и JSONB
+
+`json` сохраняет исходный текст, включая пробелы, порядок и повторяющиеся ключи. `jsonb` разбирает документ, не сохраняет порядок ключей и оставляет последнее значение повторённого ключа. Для обработки и поиска обычно выбирают `jsonb`; если нужна точная исходная запись, может подойти `json`. Индексы и стоимость операций зависят от запроса.
+
+## Достать значение
+
+```sql run expect=rows:2
+select book_id, meta->>'format' as format from book where meta ? 'format' order by book_id;
+```
+
+`?` проверяет наличие ключа верхнего уровня, а `->>` возвращает значение как текст. Формат указан у книг 1 и 2.
+
+```sql run expect=rows:1
+select meta->'edition' as edition_jsonb, meta->>'edition' as edition_text,
+       pg_typeof(meta->'edition')::text as json_type, pg_typeof(meta->>'edition')::text as text_type
+from book where book_id = 2;
+```
+
+Обе колонки выглядят как `2`, но `->` вернул `jsonb`, а `->>` вернул `text`. Для арифметики текст можно явно привести к числу: `(meta->>'edition')::int`.
+
+## Найти документ по содержимому
+
+```sql run expect=rows:7
+select book_id from book where meta @> '{"lang": "ru"}' order by book_id;
+```
+
+`@>` проверяет, содержится ли указанный JSON внутри документа. Семь книг имеют язык `ru`; строки с SQL NULL в `meta` условие не проходят.
+
+## Раскрыть объект и массив
+
+```sql run expect=rows:2
+select c.customer_id, s.key, s.value from customer c, jsonb_each(c.settings) as s(key, value) where c.customer_id = 1;
+```
+
+`jsonb_each` создаёт по строке на каждую пару ключ-значение. У покупательницы 1 это `lang` и `notify`. На доске сначала раскрываются настройки всех покупателей, затем `WHERE` оставляет её строки.
+
+```sql run expect=rows:1
+select c.customer_id, s.key from customer c, jsonb_each(c.settings) as s(key, value) where c.customer_id = 2;
+```
+
+У покупателя 2 одна пара: `notify`. Пустой объект покупателя 4 не даёт строк в таком соединении.
+
+```sql run expect=rows:3
+select e.elem from (values ('[1,2,3]'::jsonb)) as j (doc), jsonb_array_elements(j.doc) as e (elem);
+```
+
+`jsonb_array_elements` раскрывает массив в три строки: 1, 2 и 3. Это функция для JSON-массива, а `unnest` из предыдущего урока работает с массивом PostgreSQL.
+
+## Собрать объект
+
+```sql run expect=rows:1
+select jsonb_build_object('title', title, 'cheap', price < 1000) as info from book where book_id = 1;
+```
+
+Получается объект с названием и булевым полем `cheap`. Его значение для первой книги равно true.
+
+## Чего нет в выдаче и почему
+
+- ❌ Книг без `format` в запросе с `meta ? 'format'`: ключа нет или сама колонка равна SQL NULL.
+- ❌ Строк покупателя 4 при раскрытии `settings`: пустой объект не содержит пар.
+- ❌ Все книги в запросе по языку `ru`: не у каждой заполнен такой ключ.
+
+## Ловушки
+
+<Callout kind="trap">
+Отсутствующий ключ и ключ со значением JSON `null` через `->>` дают SQL NULL. Проверка `?` различает эти случаи:
+
+```sql run expect=rows:1
+select '{"a": null}'::jsonb ? 'a' as present, '{"a": null}'::jsonb->>'a' as value,
+       '{"a": null}'::jsonb ? 'b' as missing;
+```
+
+Результат: true, NULL, false. Сам документ SQL NULL это ещё один случай: проверка `?` для него тоже вернёт SQL NULL.
+</Callout>
+
+<Callout kind="tip">
+Для поиска по JSONB индекс выбирают под оператор и выражение запроса. GIN может ускорить некоторые проверки содержимого; для сравнения конкретного `->>` может подойти индекс по этому выражению.
+</Callout>
+
+## Проверь себя
+
+1. Какой тип вернёт `meta->>'edition'` и чем он отличается от результата `meta->'edition'`?
+2. Сколько строк создаст `jsonb_each` для объекта с двумя ключами?
+3. Как отличить отсутствующий ключ от ключа со значением JSON `null`?
+
+<Cheatsheet>
+- `json` сохраняет исходный текст; `jsonb` хранит разобранное представление.
+- `->` возвращает JSON или JSONB; `->>` возвращает текст.
+- `?` проверяет ключ верхнего уровня; `@>` проверяет содержимое JSONB.
+- `jsonb_each` раскрывает объект в пары, `jsonb_array_elements` раскрывает массив в элементы.
+- Отсутствующий ключ и JSON `null` могут оба дать SQL NULL при извлечении через `->>`.
+</Cheatsheet>

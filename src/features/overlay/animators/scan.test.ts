@@ -23,6 +23,38 @@ describe('scanAnimator', () => {
     expect(phases[0].frame.tables[0]).toMatchObject({ x: 500, y: 0 });
   });
 
+  it('читает материализованный источник без дубля и внутреннего имени', () => {
+    const materialized = {
+      ...rebuildTable({ id: 'm:0', title: 'j', x: 500, y: 0 }, bookScan().output),
+      dashed: true,
+    };
+    const phases = scanAnimator(
+      { tables: [materialized], decorations: [] },
+      { ...bookScan(), alias: 'j', tableId: 'pg_temp.__vs_f42', sourceName: 'j' },
+      1,
+      testCtx({}),
+    );
+    for (const phase of phases) {
+      expect(phase.frame.tables).toHaveLength(1);
+      expect(phase.frame.tables[0]).toMatchObject({ id: 't:j', title: 'j', x: 500, y: 0 });
+    }
+  });
+
+  it('при псевдониме читает ту же материализацию под её именем', () => {
+    const materialized = {
+      ...rebuildTable({ id: 'm:0', title: 'chosen', x: 500, y: 0 }, bookScan().output),
+      dashed: true,
+    };
+    const [phase] = scanAnimator(
+      { tables: [materialized], decorations: [] },
+      { ...bookScan(), alias: 'c', tableId: 'pg_temp.__vs_m42', sourceName: 'chosen' },
+      1,
+      testCtx({}),
+    );
+    expect(phase.frame.tables).toHaveLength(1);
+    expect(phase.frame.tables[0]).toMatchObject({ id: 't:c', title: 'chosen c' });
+  });
+
   it('второй scan встаёт правее первого', () => {
     const first = scanAnimator({ tables: [], decorations: [] }, bookScan(), 0, testCtx());
     const second = scanAnimator(first[1].frame, { ...bookScan(), alias: 'b2' }, 1, testCtx());
