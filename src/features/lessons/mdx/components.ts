@@ -1,4 +1,5 @@
 import { Callout, Cheatsheet, DontDoThis, TlDr } from './Callouts';
+import { MvccPage } from './MvccPage';
 import { Nesting } from './Nesting';
 import { Scene, Step } from './Scene';
 import { SqlBlock } from './SqlBlock';
@@ -16,4 +17,5 @@ export const mdxComponents = {
   T,
   C,
   Nesting,
+  MvccPage,
 };
