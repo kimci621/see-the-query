@@ -3,11 +3,26 @@
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: контейнер прокрутки фокусируется ради прокрутки с клавиатуры
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { formatCell } from '@/features/board/format';
 import type { QueryResult } from '@/features/db/types';
 
-// OID встроенных date и date[]: PGlite отдаёт их как Date, без типа ячейка покажет время
-const DATE_TYPES: Record<number, string> = { 1082: 'date', 1182: 'date[]' };
+// OID нужны для отличия даты от timestamp и JSON-массива от массива PostgreSQL.
+const CELL_TYPES: Record<number, string> = {
+  1082: 'date',
+  1182: 'date[]',
+  114: 'json',
+  3802: 'jsonb',
+  199: 'json[]',
+  3807: 'jsonb[]',
+};
 
 // Виртуализированная таблица результата: моно-шрифт, NULL-плашки как на доске
 export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHint?: string }) {
@@ -86,7 +101,7 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
                     row={item.index}
                     col={i}
                     value={cell}
-                    type={DATE_TYPES[result.fields[i]?.dataTypeID ?? 0]}
+                    type={CELL_TYPES[result.fields[i]?.dataTypeID ?? 0]}
                   />
                 ))}
               </div>
@@ -100,15 +115,49 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
 
 function Cell({ row, col, value, type }: { row: number; col: number; value: unknown; type?: string }) {
   const cell = formatCell(value, type);
+  const full = formatCell(value, type, Number.POSITIVE_INFINITY);
+  const isLong = cell.text !== full.text;
+  const detail =
+    (type === 'json' || type === 'jsonb') && value !== null && typeof value === 'object'
+      ? JSON.stringify(value, null, 2)
+      : full.text;
   return (
     <div
       role="cell"
       data-testid={`cell-${row}-${col}`}
       data-kind={cell.kind}
       className="min-w-24 flex-1 truncate px-2 py-1.5"
-      title={cell.text}
+      title={isLong ? 'Открыть полное значение' : cell.text}
     >
-      {cell.kind === 'null' ? (
+      {isLong ? (
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Строка ${row + 1}, столбец ${col + 1}: показать полное значение`}
+              className="block w-full truncate text-left underline decoration-dotted underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              {cell.text}
+            </button>
+          </DialogTrigger>
+          <DialogContent className="max-h-[85vh] overflow-hidden">
+            <DialogHeader>
+              <DialogTitle>Значение ячейки</DialogTitle>
+              <DialogDescription>
+                Строка {row + 1}, столбец {col + 1}.
+              </DialogDescription>
+            </DialogHeader>
+            <pre
+              tabIndex={0}
+              role="region"
+              aria-label="Полное значение"
+              className="min-h-0 max-h-[65vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs"
+            >
+              {detail}
+            </pre>
+          </DialogContent>
+        </Dialog>
+      ) : cell.kind === 'null' ? (
         <span className="italic text-muted-foreground">NULL</span>
       ) : cell.kind === 'empty' ? (
         <span className="italic text-muted-foreground">''</span>

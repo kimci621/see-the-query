@@ -91,6 +91,7 @@ const GUIDE_LESSONS: string[] = [
   'isolation',
   'locks',
   'btree-seq-vs-index',
+  'explain',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX

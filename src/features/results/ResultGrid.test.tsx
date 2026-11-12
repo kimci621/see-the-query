@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { QueryResult } from '@/features/db/types';
 import type { Trace } from '@/features/tracer/types';
@@ -89,6 +90,39 @@ describe('ResultGrid', () => {
     };
     render(<ResultGrid result={dated} />);
     expect(screen.getByTestId('cell-0-0')).toHaveTextContent(/^\{1940-01-01,1958-01-01\}$/);
+  });
+
+  it('JSON-массив отображается как JSON, а не как массив PostgreSQL', () => {
+    const result: QueryResult = {
+      fields: [{ name: 'data', dataTypeID: 3802 }],
+      rows: [[[1, 'два']]],
+      command: 'SELECT',
+      rowCount: 1,
+    };
+    render(<ResultGrid result={result} />);
+    expect(screen.getByTestId('cell-0-0')).toHaveTextContent('[1,"два"]');
+  });
+
+  it('длинный JSON можно открыть целиком с клавиатуры', async () => {
+    const result: QueryResult = {
+      fields: [{ name: 'QUERY PLAN', dataTypeID: 114 }],
+      rows: [
+        [[{ Plan: { 'Node Type': 'Seq Scan', Filter: 'x'.repeat(80), 'Rows Removed by Filter': 99995 } }]],
+      ],
+      command: 'EXPLAIN',
+      rowCount: 1,
+    };
+    render(<ResultGrid result={result} />);
+    expect(screen.getByTestId('cell-0-0').textContent).toMatch(/^\[/);
+    const trigger = screen.getByRole('button', { name: 'Строка 1, столбец 1: показать полное значение' });
+    trigger.focus();
+    const user = userEvent.setup();
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: 'Значение ячейки' });
+    expect(dialog).toHaveTextContent('Rows Removed by Filter');
+    expect(dialog).toHaveTextContent('99995');
+    await user.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
   });
 
   it('пустой результат показывает подсказку', () => {

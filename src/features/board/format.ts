@@ -6,11 +6,11 @@ export interface FormattedCell {
 const MAX_LEN = 60;
 
 // Текст ячейки для доски и панели результата. NULL и '' разные вещи, поэтому у них свой kind
-export function formatCell(value: unknown, type?: string): FormattedCell {
+export function formatCell(value: unknown, type?: string, maxLength = MAX_LEN): FormattedCell {
   if (value === null || value === undefined) return { text: 'NULL', kind: 'null' };
   if (value === '') return { text: "''", kind: 'empty' };
   const text = toText(value, type);
-  return { text: text.length > MAX_LEN ? `${text.slice(0, MAX_LEN - 1)}…` : text, kind: 'value' };
+  return { text: text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text, kind: 'value' };
 }
 
 function toText(value: unknown, type?: string): string {
