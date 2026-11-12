@@ -130,6 +130,7 @@ export type Stage = StageBase &
           deleted: RowKey[];
           updated: Array<{ key: RowKey; values: unknown[] }>;
         }>;
+        triggerEffects?: Array<{ tableId: string; candidates: string[]; added: Relation }>;
         // Колонки, которые заполнила база: DEFAULT, identity, генерируемые
         defaulted?: string[];
         sequences?: Array<{ column: string; before: number | string | null; after: number | string | null }>;

@@ -3,6 +3,7 @@ import type { Relation } from '@/features/tracer/types';
 import { currentTable, mapRows, rebuildTable, withTable } from '../frame';
 import { cellLeft, ghostHeight, ghostWidth, TABLE_GAP } from '../geometry';
 import type { Animator, Decoration, GhostRow, GhostTable, Phase, StageOf } from '../types';
+import { sideEffectPhases } from './side-effects';
 
 function targetBase(
   current: GhostTable | null,
@@ -306,5 +307,7 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
       durationMs: 450,
       frame: sourceFrame,
     });
-  return [...phases, ...cascadePhases(final, stage, stageIndex, ctx)];
+  const cascades = cascadePhases(final, stage, stageIndex, ctx);
+  const effects = sideEffectPhases(cascades.at(-1) ?? final, stage, stageIndex, ctx, marked);
+  return [...phases, ...cascades, ...effects];
 };

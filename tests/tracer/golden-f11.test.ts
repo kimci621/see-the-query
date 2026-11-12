@@ -36,3 +36,35 @@ describe('golden Ф11: раскрытие массивов и JSON', () => {
     ),
   );
 });
+
+describe('golden Ф11: побочные изменения при триггерах', () => {
+  it('сравнивает RETURNING и журнал с прямым выполнением PostgreSQL', async () => {
+    await withDataset('bookstore', async (db) => {
+      await db.exec(`
+        create table price_log (book_id bigint, old_price numeric, new_price numeric);
+        create function record_price() returns trigger language plpgsql as $$
+        begin
+          insert into price_log values (new.book_id, old.price, new.price);
+          return new;
+        end $$;
+        create trigger price_changed after update on book for each row
+        when (old.price is distinct from new.price) execute function record_price();
+      `);
+      const sql = 'update book set price = price + 10 where book_id = 1 returning book_id, price';
+      const direct = await inPreview(db, async () => {
+        const result = await db.query(sql);
+        const log = await db.query('select book_id, old_price, new_price from price_log');
+        return { result: result.rows, log: log.rows };
+      });
+      await inPreview(db, async () => {
+        const trace = await traceSql(db, sql);
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(trace.result?.rows).toEqual(direct.result);
+        const stage = trace.stages.find((item) => item.kind === 'dml');
+        expect(stage?.kind).toBe('dml');
+        if (stage?.kind !== 'dml') throw new Error('Нет стадии DML');
+        expect(stage.triggerEffects?.[0].added.rows.map((row) => row.values)).toEqual(direct.log);
+      });
+    });
+  });
+});

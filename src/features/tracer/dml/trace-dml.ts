@@ -28,6 +28,7 @@ import {
   insertErrorExtras,
   sourceRelation,
 } from './source';
+import { captureTriggerEffects, triggerEffects } from './trigger-effects';
 import { whereStages } from './where';
 
 type Op = 'insert' | 'update' | 'delete' | 'merge';
@@ -81,6 +82,7 @@ export async function traceDml(
   const before = where ? where.stages[0].output : await snapshot(prober, target);
   const cascadeBefore =
     op === 'delete' || op === 'update' ? await captureCascades(target.table.id, opts.schema, prober, op) : [];
+  const triggerBefore = await captureTriggerEffects(target, opts.schema, prober, op);
   const collisionKeys = body.onConflictClause
     ? [
         ...new Set(
@@ -184,6 +186,29 @@ export async function traceDml(
       error: null,
     };
   }
+  let effects: DmlStage['triggerEffects'];
+  if (triggerBefore) {
+    try {
+      const observed = await snapshot(prober, target);
+      const expected = [...byKey.values(), ...added].filter((item) => !deleted.includes(item.key));
+      const values = (rows: Row[]) => rows.map((item) => JSON.stringify(item.values)).sort();
+      if (!sameValue(values(observed.rows), values(expected))) {
+        throw new TraceFallback('Пока не анимируется: триггер изменил целевую таблицу');
+      }
+      effects = await triggerEffects(prober, triggerBefore);
+    } catch (error) {
+      if (opts.signal?.aborted || (error instanceof DbException && error.db.code.startsWith('VS')))
+        throw error;
+      return {
+        mode: 'final-only',
+        fallbackReason:
+          error instanceof TraceFallback ? error.message : 'Побочные изменения не удалось проверить',
+        stages: [],
+        result: userResult(run.value, prefix),
+        error: null,
+      };
+    }
+  }
   stages.push({
     id: `${stages.length}:dml`,
     kind: 'dml',
@@ -195,6 +220,7 @@ export async function traceDml(
     conflicts,
     mergeBranches,
     cascades,
+    ...(effects?.length ? { triggerEffects: effects } : {}),
     caption:
       op === 'update'
         ? captions.dmlUpdate(updated.length, before.rows.length)

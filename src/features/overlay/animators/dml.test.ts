@@ -155,6 +155,36 @@ describe('dmlAnimator', () => {
     });
   });
 
+  it('показывает добавленные побочные строки, не утверждая какой триггер сработал', () => {
+    const phases = dmlAnimator(
+      { tables: [], decorations: [] },
+      stage({
+        triggerEffects: [
+          {
+            tableId: 'public.author',
+            candidates: ['log_change'],
+            added: {
+              columns: [{ name: 'name', type: 'text' }],
+              rows: [{ key: 'author=(0,9)', lineage: { author: '(0,9)' }, values: ['Запись'] }],
+            },
+          },
+        ],
+      }),
+      0,
+      testCtx(),
+    );
+    const effect = phases.at(-1);
+    expect(effect?.id).toBe('0:trigger:0');
+    expect(effect?.caption).toContain('возможный триггер log_change');
+    const source = effect?.frame.tables.find((table) => table.id === 't:public.book');
+    expect(source?.rows.map((row) => row.key)).toEqual(['b=(0,8)']);
+    expect(source?.hiddenRows).toBe(4);
+    const journal = effect?.frame.tables.find((table) => table.id === 't:public.author');
+    expect(journal?.title).toContain('author');
+    expect(journal?.rows[0]).toMatchObject({ values: ['Запись'], state: 'new', badge: 'побочный эффект' });
+    expect(effect?.frame.decorations).toContainEqual(expect.objectContaining({ kind: 'arrow' }));
+  });
+
   it('INSERT SELECT держит источник и проводит линию к конфликту', () => {
     const source: Frame = {
       tables: [
