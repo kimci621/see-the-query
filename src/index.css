@@ -259,3 +259,26 @@
     scrollbar-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent) transparent;
   }
 }
+
+/* Сканер проходит по сетке страниц; пользователям с ограничением движения оставляем итог. */
+@keyframes btree-scan-x {
+  from { left: 0; }
+  to { left: calc(100% - (100% - 98px) / 50); }
+}
+@keyframes btree-scan-y {
+  from { top: 0; }
+  to { top: calc(100% - (100% - 98px) / 50); }
+}
+.btree-scanner {
+  position: absolute;
+  width: calc((100% - 98px) / 50);
+  aspect-ratio: 1;
+  background: var(--primary);
+  outline: 1px solid var(--background);
+  pointer-events: none;
+  animation: btree-scan-x 0.12s linear var(--btree-rows),
+    btree-scan-y calc(0.12s * var(--btree-rows)) steps(var(--btree-rows), end) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btree-scanner { display: none; }
+}

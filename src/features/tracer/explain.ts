@@ -18,6 +18,7 @@ export interface PlanNode {
   rowsRechecked?: number;
   loops?: number;
   sharedHitBlocks?: number;
+  sharedReadBlocks?: number;
   actualTotalTime?: number;
   totalCost?: number;
   children: PlanNode[];
@@ -38,6 +39,7 @@ function convert(raw: Record<string, unknown>): PlanNode {
     rowsRechecked: raw['Rows Removed by Index Recheck'] as number | undefined,
     loops: raw['Actual Loops'] as number | undefined,
     sharedHitBlocks: raw['Shared Hit Blocks'] as number | undefined,
+    sharedReadBlocks: raw['Shared Read Blocks'] as number | undefined,
     actualTotalTime: raw['Actual Total Time'] as number | undefined,
     totalCost: raw['Total Cost'] as number | undefined,
     children: ((raw.Plans as Record<string, unknown>[] | undefined) ?? []).map(convert),
