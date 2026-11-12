@@ -88,6 +88,7 @@ const GUIDE_LESSONS: string[] = [
   'transactions',
   'savepoint',
   'mvcc',
+  'isolation',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
