@@ -52,7 +52,7 @@ export function Timeline() {
       <div data-testid="timeline" className="flex h-full items-center px-3 text-sm">
         <p data-testid="final-only-note" aria-live="polite">
           {trace.error
-            ? 'Запрос завершился ошибкой, см. «Сообщения»'
+            ? 'Запрос завершился ошибкой, см. «Результат»'
             : (trace.fallbackReason ?? 'Пошаговый разбор для этой конструкции пока не умею')}
         </p>
       </div>

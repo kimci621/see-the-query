@@ -42,6 +42,7 @@ const CASES: Record<string, string> = {
   whereNotBool: 'select title from book where price',
   exists: 'create table author (id int)',
   unique: `insert into customer (name, email, created_at) values ('X', 'anna@example.com', now())`,
+  uniqueIndex: 'create unique index duplicate_idx on duplicate_values (id)',
   fkInsert: `insert into book (title, author_id) values ('X', 999)`,
   fkDelete: 'delete from author where author_id = 1',
   notNull: 'insert into author (name) values (null)',
@@ -86,6 +87,8 @@ beforeAll(async () => {
       create temp sequence unused_seq;
       create temp table short_text (value varchar(2));
       create temp table generated_values (a int, b int generated always as (a * 2) stored);
+      create temp table duplicate_values (id int);
+      insert into duplicate_values values (1), (1);
       create temp table unique_values (id int primary key);
       insert into unique_values values (1);
     `);
@@ -175,6 +178,14 @@ describe('explainError', () => {
       const explanation = explainError({ code, message }, context);
       expect(`${explanation.title} ${explanation.body}`).not.toContain(forbidden);
     }
+  });
+
+  it('объясняет повторы при создании уникального индекса', () => {
+    expect(errors.get('uniqueIndex')?.code).toBe('23505');
+    expect(explain('uniqueIndex').body).toMatch(/индекс/i);
+    expect(explain('uniqueIndex').suggestion).toMatch(/повтор/i);
+    expect(explain('uniqueIndex').suggestion).not.toContain('INSERT');
+    expect(explain('unique').suggestion).toContain('ON CONFLICT');
   });
 
   it('различает повторное изменение строки и скалярный подзапрос', () => {

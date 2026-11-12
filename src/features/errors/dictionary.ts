@@ -331,12 +331,17 @@ export const DICTIONARY: Record<string, Entry> = {
 
   '23505': (err) => {
     const key = parseKey(err.detail);
+    const creatingIndex = /could not create unique index/i.test(err.message);
     return {
       title: 'Такое значение уже есть',
-      body: key
-        ? `Ограничение ${err.constraint} требует уникальности: (${key.values}) в ${key.columns.join(', ')} уже есть в ${err.table}.`
-        : `Ограничение ${err.constraint} требует уникальности.`,
-      suggestion: 'Возьми другое значение или используй INSERT ... ON CONFLICT.',
+      body: creatingIndex
+        ? `Уникальный индекс ${quoted(err.message)} не создан: в таблице есть повторяющиеся значения.`
+        : key
+          ? `Ограничение ${err.constraint} требует уникальности: (${key.values}) в ${key.columns.join(', ')} уже есть в ${err.table}.`
+          : `Ограничение ${err.constraint} требует уникальности.`,
+      suggestion: creatingIndex
+        ? 'Проверь повторяющиеся значения и устрани их перед созданием индекса.'
+        : 'Возьми другое значение или используй INSERT ... ON CONFLICT.',
       highlight: { tableIds: [tableId(err)], columns: key?.columns.map((c) => columnId(err, c)) ?? [] },
     };
   },

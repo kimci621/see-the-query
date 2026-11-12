@@ -106,7 +106,7 @@ describe('Timeline', () => {
     expect(screen.queryAllByTestId('stage-chip')).toHaveLength(0);
   });
 
-  it('ошибка запроса: отсылка к «Сообщениям», а не «не умею»', () => {
+  it('ошибка запроса: отсылка к результату с подробностями', () => {
     const s = useSceneStore.getState();
     const error = { code: '42703', message: 'column "nope" does not exist' };
     act(() =>
@@ -123,7 +123,7 @@ describe('Timeline', () => {
     );
     render(<Timeline />);
     expect(screen.getByTestId('final-only-note').textContent).toBe(
-      'Запрос завершился ошибкой, см. «Сообщения»',
+      'Запрос завершился ошибкой, см. «Результат»',
     );
   });
 
