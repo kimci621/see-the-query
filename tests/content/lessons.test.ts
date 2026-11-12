@@ -97,6 +97,7 @@ const GUIDE_LESSONS: string[] = [
   'selectivity',
   'index-types',
   'index-maintenance',
+  'normalization',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
