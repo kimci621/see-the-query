@@ -4,6 +4,7 @@ import { Nesting } from './Nesting';
 import { Scene, Step } from './Scene';
 import { SqlBlock } from './SqlBlock';
 import { C, T } from './TermLinks';
+import { TwoSessionsBlock } from './TwoSessionsBlock';
 
 // Компоненты, доступные в MDX без импорта. По этому же списку tests/content/lessons.test.ts проверяет теги уроков
 export const mdxComponents = {
@@ -18,4 +19,5 @@ export const mdxComponents = {
   C,
   Nesting,
   MvccPage,
+  TwoSessions: TwoSessionsBlock,
 };

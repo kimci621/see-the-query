@@ -16,7 +16,7 @@ export default mergeConfig(
             // Тесты с PGlite: холодный старт ~0,7 с, под параллельной нагрузкой полного прогона дольше 5 с
             testTimeout: 20000,
             include: [
-              'src/features/{db,sql,tracer,errors,overlay,board,editor}/**/*.test.ts',
+              'src/features/{db,sql,tracer,errors,overlay,board,editor,sessions,scenes}/**/*.test.ts',
               'tests/tracer/**/*.test.ts',
               'plugins/**/*.test.ts',
               'tests/unit/**/*.test.ts',

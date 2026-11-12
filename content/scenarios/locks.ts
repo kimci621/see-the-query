@@ -1,0 +1,95 @@
+import type { Scenario } from '@/features/sessions/types';
+
+export const locks: Scenario[] = [
+  {
+    id: 'lock-for-update',
+    title: 'Ожидание блокировки строки',
+    intro: 'Вторая сессия ждёт, пока первая не завершит транзакцию с FOR UPDATE.',
+    setup: '',
+    steps: [
+      { session: 'a', caption: 'Открывает транзакцию', sql: 'begin' },
+      {
+        session: 'a',
+        caption: 'Блокирует книгу 1',
+        sql: 'select book_id::text from book where book_id = 1 for update',
+        expect: { rows: [['1']] },
+        note: 'A удерживает блокировку книги 1.',
+      },
+      { session: 'b', caption: 'Открывает транзакцию', sql: 'begin' },
+      {
+        session: 'b',
+        caption: 'Пытается заблокировать ту же книгу',
+        sql: 'select book_id::text from book where book_id = 1 for update',
+        fire: true,
+        settlesAt: 4,
+        settledNote: 'B получила блокировку после COMMIT A.',
+        expect: { rows: [['1']] },
+        note: 'B ждёт завершения транзакции A.',
+      },
+      { session: 'a', caption: 'Фиксирует транзакцию', sql: 'commit', note: 'A освободила блокировку.' },
+      {
+        session: 'b',
+        caption: 'Читает цену',
+        sql: 'select price::text from book where book_id = 1',
+        expect: { rows: [['890.00']] },
+        note: 'B видит цену 890,00 и удерживает блокировку.',
+      },
+      { session: 'b', caption: 'Завершает транзакцию', sql: 'commit', note: 'B освободила блокировку.' },
+    ],
+  },
+  {
+    id: 'deadlock',
+    title: 'Взаимная блокировка',
+    intro:
+      'В этом примере отменяется B; в других условиях PostgreSQL может выбрать другую транзакцию. Интервалы проверки настроены для воспроизводимости.',
+    setup: '',
+    steps: [
+      { session: 'a', caption: 'Открывает транзакцию', sql: 'begin' },
+      { session: 'a', caption: 'Настраивает интервал проверки', sql: "set local deadlock_timeout = '5s'" },
+      {
+        session: 'a',
+        caption: 'Меняет книгу 1',
+        sql: 'update book set price = 1 where book_id = 1',
+        note: 'A удерживает строку книги 1.',
+      },
+      { session: 'b', caption: 'Открывает транзакцию', sql: 'begin' },
+      { session: 'b', caption: 'Настраивает интервал проверки', sql: "set local deadlock_timeout = '100ms'" },
+      {
+        session: 'b',
+        caption: 'Меняет книгу 2',
+        sql: 'update book set price = 2 where book_id = 2',
+        note: 'B удерживает строку книги 2.',
+      },
+      {
+        session: 'a',
+        caption: 'Ждёт строку книги 2',
+        sql: 'update book set price = 3 where book_id = 2',
+        fire: true,
+        settlesAt: 7,
+        note: 'A ждёт строку, занятую B.',
+        settledNote: 'A продолжила после отмены транзакции B.',
+      },
+      {
+        session: 'b',
+        caption: 'Пытается изменить книгу 1',
+        sql: 'update book set price = 4 where book_id = 1',
+        expectError: '40P01',
+        note: 'PostgreSQL обнаружил цикл и отменил транзакцию B.',
+      },
+      {
+        session: 'a',
+        caption: 'Читает свою новую цену книги 2',
+        sql: 'select price::text from book where book_id = 2',
+        expect: { rows: [['3.00']] },
+        note: 'A видит свою цену 3,00.',
+      },
+      { session: 'a', caption: 'Откатывает транзакцию', sql: 'rollback', note: 'A откатила свои изменения.' },
+      {
+        session: 'b',
+        caption: 'Закрывает неудачную транзакцию',
+        sql: 'rollback',
+        note: 'B откатила транзакцию после ошибки.',
+      },
+    ],
+  },
+];
