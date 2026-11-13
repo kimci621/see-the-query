@@ -1,0 +1,149 @@
+---
+id: triggers
+title: Триггеры
+chapter: extras
+number: "14.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book where book_id = 1;
+docs:
+  - url: https://www.postgresql.org/docs/18/trigger-definition.html
+    title: Как работают триггеры
+  - url: https://www.postgresql.org/docs/18/plpgsql-trigger.html
+    title: Триггерные функции на PL/pgSQL
+  - url: https://www.postgresql.org/docs/18/sql-createtrigger.html
+    title: Создание триггера
+course: ["12.43"]
+tags: [триггер, trigger, plpgsql, журнал]
+---
+
+<TlDr>Триггер вызывает функцию при событии в таблице. Покажем изменение цены и запись в журнал в одной транзакции.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.book">book</T> книга «Тихий Дон» стоит 890 рублей:
+
+```sql run expect=rows:1
+select book_id, title, price from book where book_id = 1;
+```
+
+На доске одна строка. Создадим журнал изменений и триггер, который будет добавлять в него старую и новую цену.
+
+## Журнал и функция
+
+**Триггер** связывает событие с функцией: PostgreSQL вызывает её автоматически, когда операция подходит под условия триггера. Сначала создадим таблицу журнала:
+
+```sql apply expect=rows:0
+create table price_log (
+  book_id bigint,
+  old_price numeric,
+  new_price numeric,
+  changed_at timestamptz default now()
+);
+```
+
+Теперь создадим триггерную функцию. В строковом триггере `OLD` содержит старую строку, а `NEW` - новую:
+
+```sql apply expect=rows:0
+create function log_price_change() returns trigger
+language plpgsql as $$
+begin
+  insert into price_log (book_id, old_price, new_price)
+  values (new.book_id, old.price, new.price);
+  return new;
+end;
+$$;
+```
+
+Функция готова, но сама по себе не привязана к таблице. Добавим триггер:
+
+```sql apply expect=rows:0
+create trigger book_price_log after update on book
+for each row when (old.price is distinct from new.price)
+execute function log_price_change();
+```
+
+`AFTER UPDATE` задаёт событие и момент вызова. `FOR EACH ROW` означает отдельный вызов для каждой подходящей строки. `WHEN` пропускает функцию, если цена не изменилась; `IS DISTINCT FROM` также корректно сравнивает `NULL`.
+
+<Callout kind="analogy">
+Триггер похож на отметку в журнале при пересмотре цены: изменение происходит в карточке книги, а запись с прежним и новым значением появляется отдельно. Обе операции входят в одну транзакцию.
+</Callout>
+
+## Сначала предпросмотр
+
+Запусти изменение на доске:
+
+```sql run expect=rows:1
+update book set price = price + 10 where book_id = 1 returning title, price;
+```
+
+Доска показывает новую цену 900 и добавленную строку `price_log`. Подпись называет `book_price_log` возможным триггером: она показывает подходящий триггер и наблюдаемое изменение, но не доказывает связь для произвольного кода. Предпросмотр откатывает обе записи. Проверим журнал:
+
+```sql run expect=rows:1
+select count(*) as entries from price_log;
+```
+
+Получился ноль. Теперь выполним то же изменение с сохранением:
+
+```sql apply expect=rows:1
+update book set price = price + 10 where book_id = 1 returning title, price;
+```
+
+```sql run expect=rows:1
+select book_id, old_price, new_price from price_log;
+```
+
+Одна строка журнала хранит переход с 890.00 на 900.00. Запись о времени зависит от момента запуска. Если транзакция откатится, откатятся и обновление цены, и запись триггера.
+
+## Когда цена не изменилась
+
+Обновим ту же строку без изменения цены:
+
+```sql apply expect=rows:1
+update book set price = price where book_id = 1 returning title, price;
+```
+
+Строка обновлена, но условие `WHEN` ложно. Проверим количество записей:
+
+```sql run expect=rows:1
+select count(*) as entries from price_log;
+```
+
+По-прежнему одна строка. «Сброс» восстановит начальные данные и удалит журнал с триггером.
+
+## BEFORE, AFTER и уровень вызова
+
+Строковый `BEFORE` вызывается до операции. При `INSERT` или `UPDATE` его функция может вернуть изменённую `NEW` или вернуть `NULL`, чтобы пропустить операцию для этой строки. `AFTER` вызывается после операции; его возвращаемое значение игнорируется. Оба выполняются в той же транзакции, поэтому ошибка или откат могут отменить всю операцию.
+
+`FOR EACH ROW` работает для каждой затронутой строки. `FOR EACH STATEMENT` вызывается один раз на оператор, даже если тот не затронул ни одной строки. У триггера уровня оператора нет отдельных `OLD` и `NEW` для каждой строки.
+
+## Чего нет в выдаче и почему
+
+- ❌ Записи после предпросмотра: он откатывает и изменение цены, и вставку в журнал.
+- ❌ Второй записи после `price = price`: условие `WHEN` не выполнилось.
+
+## Ловушки
+
+<Callout kind="trap">
+`UPDATE` может затронуть строку, даже когда значение колонки осталось прежним. Для журнала изменений проверяй старое и новое значение, как в нашем условии `WHEN`.
+</Callout>
+
+<Callout kind="tip">
+Документируй побочные действия триггеров и проверяй откат транзакции. Для простых ограничений сначала рассмотри `NOT NULL`, `CHECK`, `UNIQUE` и внешние ключи.
+</Callout>
+
+## Проверь себя
+
+1. Сколько строк появится в журнале после предпросмотра изменения цены? Почему?
+2. Почему `UPDATE ... SET price = price` не добавил запись?
+3. Чем вызов `FOR EACH ROW` отличается от `FOR EACH STATEMENT`, если оператор не затронул строки?
+
+<Cheatsheet>
+- Триггер задаёт событие, момент, уровень вызова и функцию.
+- В строковом `UPDATE` доступны `OLD` и `NEW`; `WHEN` может сравнить их.
+- Строковый `BEFORE` может изменить `NEW` или пропустить строку; значение, возвращённое `AFTER`, игнорируется.
+- Триггер и вызвавший его оператор участвуют в одной транзакции.
+</Cheatsheet>

@@ -102,6 +102,7 @@ const GUIDE_LESSONS: string[] = [
   'dont-do-this',
   'full-text-search',
   'functions',
+  'triggers',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
