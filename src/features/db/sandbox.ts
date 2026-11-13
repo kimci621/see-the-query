@@ -111,7 +111,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       const client = await factory(cached);
       if (cached) return client;
       try {
-        await client.exec(await loadDatasetSql(id));
+        await client.exec(await loadDatasetSql(id), { initialization: true });
         baseTables.set(
           id,
           (await introspect(client, { sampleRows: 0 })).tables.map((t) => t.id),
@@ -233,7 +233,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
         const watched: DbClient = {
           ...client,
           query: (sql, params) => spy(client.query(sql, params)),
-          exec: (sql) => spy(client.exec(sql)),
+          exec: (sql, opts) => spy(client.exec(sql, opts)),
         };
         const outcome = await fn(watched).then(
           (value) => ({ ok: true as const, value }),

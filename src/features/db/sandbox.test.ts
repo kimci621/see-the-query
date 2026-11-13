@@ -30,9 +30,9 @@ async function mortalClient(dataDir?: Blob): Promise<DbClient> {
       await check(sql);
       return real.query(sql, params);
     },
-    exec: async (sql) => {
+    exec: async (sql, opts) => {
       await check(sql);
-      return real.exec(sql);
+      return real.exec(sql, opts);
     },
     dump: () => real.dump(),
     version: () => real.version(),
@@ -75,6 +75,29 @@ describe('sandbox: загрузка урока', () => {
       expect(factory).toHaveBeenCalledTimes(2);
       expect(factory.mock.calls[1][0]).toBeInstanceOf(Blob); // второй раз из снапшота
       expect(await count(sandbox.client(), 'author')).toBe(7);
+    },
+    T,
+  );
+
+  it(
+    'длинный таймаут используется только для загрузки датасета',
+    async () => {
+      const executions: { sql: string; initialization: boolean | undefined }[] = [];
+      const sandbox = createSandbox(async (dataDir) => {
+        const client = await createNodeClient({ dataDir });
+        return {
+          ...client,
+          exec: (sql, opts) => {
+            executions.push({ sql, initialization: opts?.initialization });
+            return client.exec(sql, opts);
+          },
+        };
+      });
+      await sandbox.loadLesson('bookstore', []);
+      expect(executions).toHaveLength(1);
+      expect(executions[0].initialization).toBe(true);
+      await sandbox.apply('select 1');
+      expect(executions.at(-1)?.initialization).toBeUndefined();
     },
     T,
   );

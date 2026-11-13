@@ -29,6 +29,7 @@ const CLOSED: DbError = { code: SANDBOX_CRASHED, message: 'Песочница з
 
 export async function createRpcClient(port: RpcPort, opts: RpcOptions = {}): Promise<DbClient> {
   const timeoutMs = opts.timeoutMs ?? 3000;
+  const initTimeoutMs = opts.initTimeoutMs ?? 30000;
   let nextId = 1;
   let death: DbError | null = null;
   let tail: Promise<unknown> = Promise.resolve();
@@ -84,7 +85,7 @@ export async function createRpcClient(port: RpcPort, opts: RpcOptions = {}): Pro
   }
 
   try {
-    await send({ type: 'init', dataDir: opts.dataDir }, opts.initTimeoutMs ?? 30000);
+    await send({ type: 'init', dataDir: opts.dataDir }, initTimeoutMs);
   } catch (e) {
     await die(CLOSED);
     throw e;
@@ -92,8 +93,9 @@ export async function createRpcClient(port: RpcPort, opts: RpcOptions = {}): Pro
 
   return {
     query: (sql, params) => send<QueryResult>({ type: 'query', sql, params }),
-    exec: (sql) => send<QueryResult[]>({ type: 'exec', sql }),
-    dump: () => send<Blob>({ type: 'dump' }),
+    exec: (sql, options) =>
+      send<QueryResult[]>({ type: 'exec', sql }, options?.initialization ? initTimeoutMs : timeoutMs),
+    dump: () => send<Blob>({ type: 'dump' }, initTimeoutMs),
     version: () => send<string>({ type: 'version' }),
     close: async () => {
       await die(CLOSED);

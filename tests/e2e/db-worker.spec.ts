@@ -77,3 +77,49 @@ test('контрибы доступны внутри браузерной пес
   );
   expect(result).toEqual(['0.67', 10]);
 });
+
+test('медленные загрузка датасета и снимок не прерываются через 3 секунды', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    const delayed = new Map<number, string>();
+    const seen: string[] = [];
+    (window as unknown as { __delayedDbTypes: string[] }).__delayedDbTypes = seen;
+    window.Worker = new Proxy(window.Worker, {
+      construct(target, args) {
+        const worker = Reflect.construct(target, args) as Worker;
+        const post = worker.postMessage.bind(worker);
+        let firstExec = true;
+        worker.postMessage = (message: { id: number; type: string }) => {
+          if ((message.type === 'exec' && firstExec) || message.type === 'dump') {
+            if (message.type === 'exec') firstExec = false;
+            delayed.set(message.id, message.type);
+          }
+          post(message);
+        };
+        Object.defineProperty(worker, 'onmessage', {
+          set(handler: (event: MessageEvent) => void) {
+            worker.addEventListener('message', (event: MessageEvent<{ id: number }>) => {
+              const type = delayed.get(event.data.id);
+              if (!type) return handler(event);
+              delayed.delete(event.data.id);
+              seen.push(type);
+              setTimeout(() => handler(event), 3200);
+            });
+          },
+        });
+        return worker;
+      },
+    });
+  });
+  await page.goto('/l/selectivity');
+  await waitReady(page);
+  const result = await page.evaluate(() => {
+    const sandbox = (window as WithSandbox).__vsSandbox;
+    const seen = (window as unknown as { __delayedDbTypes: string[] }).__delayedDbTypes;
+    return sandbox?.preview(async (db) => ({
+      count: (await db.query('select count(*)::int from orders')).rows[0][0],
+      seen,
+    }));
+  });
+  expect(result).toEqual({ count: 100000, seen: ['exec', 'dump'] });
+});

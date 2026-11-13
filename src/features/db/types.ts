@@ -33,8 +33,8 @@ export const SANDBOX_CRASHED = 'VS002'; // worker упал
 
 export interface DbClient {
   query(sql: string, params?: unknown[]): Promise<QueryResult>; // один оператор
-  exec(sql: string): Promise<QueryResult[]>; // несколько операторов
-  dump(): Promise<Blob>;
+  exec(sql: string, opts?: { initialization?: boolean }): Promise<QueryResult[]>; // initialization: загрузка датасета
+  dump(): Promise<Blob>; // таймаут инициализации
   version(): Promise<string>; // select version()
   close(): Promise<void>;
 }
