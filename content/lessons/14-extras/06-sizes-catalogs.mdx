@@ -1,0 +1,144 @@
+---
+id: sizes-catalogs
+title: Размеры и системные каталоги
+chapter: extras
+number: "14.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.book, public.order_item]
+initialQuery: |
+  select book_id, title from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADMIN-DBOBJECT
+    title: Размеры объектов базы
+  - url: https://www.postgresql.org/docs/18/catalogs.html
+    title: Системные каталоги
+  - url: https://www.postgresql.org/docs/18/catalog-pg-class.html
+    title: Каталог pg_class
+  - url: https://www.postgresql.org/docs/18/catalog-pg-attribute.html
+    title: Каталог колонок pg_attribute
+  - url: https://www.postgresql.org/docs/18/infoschema-tables.html
+    title: Представление information_schema.tables
+course: ["12.44"]
+tags: [размер, pg_class, каталог, information_schema]
+---
+
+<TlDr>Функции размера измеряют место объектов, а системные каталоги описывают таблицы, колонки и другие объекты базы.</TlDr>
+
+## Что есть в данных
+
+В книжном магазине есть таблицы <T id="public.book">book</T> и <T id="public.order_item">order_item</T>. У обеих есть первичные ключи с индексами. Сравним их полный размер и посмотрим, какие сведения о них хранит PostgreSQL.
+
+## Размер таблицы и её индексов
+
+`pg_total_relation_size` возвращает размер таблицы с индексами и связанным TOAST-хранилищем в байтах. `pg_size_pretty` переводит число в удобную единицу:
+
+{/* final-only: чтение системного каталога или представления показывает только результат */}
+```sql run expect=rows:2 trace=final-only
+select relname, pg_size_pretty(pg_total_relation_size(oid)) as size
+from pg_class
+where oid in ('public.book'::regclass, 'public.order_item'::regclass)
+order by relname;
+```
+
+В результате две строки. Запросы к системным каталогам пока не анимируются: смотри итог под редактором. В исходной песочнице `book` обычно занимает 32 kB, а `order_item` - 24 kB. Размер зависит от состояния базы, индексов и версии PostgreSQL, поэтому эти числа не правило для других баз.
+
+Сравним части размера `book`:
+
+```sql run expect=rows:1
+select pg_size_pretty(pg_relation_size('public.book')) as main_fork,
+       pg_size_pretty(pg_indexes_size('public.book')) as indexes,
+       pg_size_pretty(pg_total_relation_size('public.book')) as total;
+```
+
+`pg_relation_size` без второго аргумента измеряет основную часть файла отношения. `pg_indexes_size` считает индексы таблицы. Полный размер также включает другие части хранения и TOAST, поэтому не обязан равняться сумме только этих двух значений.
+
+<Callout kind="analogy">
+Полный размер объекта похож на место, которое занимает проект: кроме основного файла есть вспомогательные файлы и указатели. Размер одного файла не показывает всю занятую площадь.
+</Callout>
+
+## Системные каталоги
+
+**Системный каталог** хранит описание объектов PostgreSQL. Например, `pg_class` содержит записи не только о таблицах, но и об индексах, последовательностях, представлениях и других отношениях:
+
+{/* final-only: чтение системного каталога или представления показывает только результат */}
+```sql run expect=rows:1 trace=final-only
+select count(*) as relations from pg_class;
+```
+
+Результат - одно число. Оно зависит от версии, расширений и созданных объектов. Посчитаем отдельно отношения в схеме `pg_catalog`:
+
+{/* final-only: чтение системного каталога или представления показывает только результат */}
+```sql run expect=rows:1 trace=final-only
+select count(*) as catalog_relations from pg_class
+where relnamespace = 'pg_catalog'::regnamespace;
+```
+
+Это не число только таблиц: в `pg_class` описаны и другие виды отношений. Колонка `relkind` помогает отличить их.
+
+Посмотрим имена и типы пользовательских колонок `book` из `pg_attribute`:
+
+{/* final-only: чтение системного каталога или представления показывает только результат */}
+```sql run expect=rows:9 trace=final-only
+select attname, format_type(atttypid, atttypmod) as type
+from pg_attribute
+where attrelid = 'public.book'::regclass and attnum > 0 and not attisdropped
+order by attnum;
+```
+
+Девять строк соответствуют колонкам `book`. Условие исключает системные и удалённые колонки. Другие каталоги описывают, например, индексы (`pg_index`) и функции (`pg_proc`).
+
+## Стандартное представление
+
+`information_schema` предоставляет представления метаданных, основанные на стандарте SQL. Получим три имени из `pg_catalog`:
+
+{/* final-only: чтение системного каталога или представления показывает только результат */}
+```sql run expect=rows:3 trace=final-only
+select table_name from information_schema.tables
+where table_schema = 'pg_catalog' order by table_name limit 3;
+```
+
+Имена могут отличаться между версиями и наборами расширений. `information_schema.tables` показывает только доступные текущей роли таблицы и представления; это не полный список всех объектов из `pg_class`.
+
+## Где занято больше места
+
+Найдём три обычные таблицы схемы `public` с наибольшим полным размером:
+
+{/* final-only: чтение системного каталога или представления показывает только результат */}
+```sql run expect=rows:3 trace=final-only
+select c.relname, pg_size_pretty(pg_total_relation_size(c.oid)) as total
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relkind = 'r'
+order by pg_total_relation_size(c.oid) desc, c.relname limit 3;
+```
+
+Сортировка идёт по байтам, а не по отформатированной строке. На крошечном учебном наборе размеры могут совпадать; в рабочей базе полезнее наблюдать изменение размеров со временем, чем делать вывод по одному снимку.
+
+## Чего нет в выдаче и почему
+
+- ❌ Удалённых и системных колонок в списке `book`: запрос их исключил.
+- ❌ Всех объектов из `pg_class` в `information_schema.tables`: последнее представление выбирает другие виды объектов и учитывает права.
+
+## Ловушки
+
+<Callout kind="trap">
+Не сравнивай размеры, отсортировав строки вроде `900 kB` и `2 MB` как текст. Сортируй число байт, а `pg_size_pretty` используй для вывода.
+</Callout>
+
+<Callout kind="tip">
+Уточняй, что входит в измерение: основной файл, индексы, TOAST или вся база. Снимай показатели регулярно и сопоставляй рост с нагрузкой и обслуживанием.
+</Callout>
+
+## Проверь себя
+
+1. Чем `pg_relation_size('public.book')` отличается от `pg_total_relation_size('public.book')`?
+2. Почему число строк `pg_class` не равно числу обычных таблиц?
+3. Зачем в запросе размеров сортировать по байтам, а не по результату `pg_size_pretty`?
+
+<Cheatsheet>
+- `pg_relation_size` измеряет часть хранения отношения; по умолчанию основную.
+- `pg_indexes_size` считает индексы таблицы, `pg_total_relation_size` включает индексы и TOAST.
+- `pg_class` описывает отношения, `pg_attribute` - их колонки.
+- `information_schema` даёт стандартные представления метаданных с учётом прав.
+</Cheatsheet>

@@ -105,6 +105,7 @@ const GUIDE_LESSONS: string[] = [
   'triggers',
   'roles',
   'partitioning',
+  'sizes-catalogs',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
