@@ -22,7 +22,7 @@ async function focus(page: Page, id: string) {
 }
 
 test('представления показывают запрос, зависимости и расхождения снимка', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/l/select-basics');
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
   await apply(page, 'create view v_expensive as select book_id, title, price from book where price > 1000');
@@ -56,14 +56,15 @@ test('представления показывают запрос, зависи
   await page.screenshot({ path: testInfo.outputPath('fresh.png') });
 
   await apply(page, 'update book set price = 1500 where book_id = 6');
-  await expect(snapshot.getByText('1 различие')).toBeVisible({ timeout: 15_000 });
   await focus(page, 'public.mv_expensive');
+  await expect(snapshot.getByText('1 различие')).toBeVisible({ timeout: 15_000 });
   await page.screenshot({ path: testInfo.outputPath('stale.png') });
 
   await apply(page, 'update book set price = 2401 where book_id = 2');
+  await focus(page, 'public.mv_expensive');
   await expect(snapshot.getByText('3 различия')).toBeVisible({ timeout: 15_000 });
   await apply(page, 'refresh materialized view mv_expensive');
-  await expect(snapshot.getByText('Совпадает')).toBeVisible({ timeout: 15_000 });
   await focus(page, 'public.mv_expensive');
+  await expect(snapshot.getByText('Совпадает')).toBeVisible({ timeout: 15_000 });
   await page.screenshot({ path: testInfo.outputPath('refreshed.png') });
 });

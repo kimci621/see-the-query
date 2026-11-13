@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('урок VIEW: живые данные и список колонок на момент создания', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.addInitScript(() => {
     localStorage.setItem(
       'vs-scene',
@@ -53,10 +54,17 @@ test('урок VIEW: живые данные и список колонок на
         await expect(view).toHaveAttribute('data-kind', 'view', { timeout: 15_000 });
         await expect(view.getByTestId('row-count')).toHaveText('3');
       }
-      if (index === 4)
+      if (index === 4) {
+        await page.evaluate(async () => {
+          const modulePath = '/src/stores/board.ts';
+          const store = await import(modulePath);
+          store.useBoardStore.getState().focus(['public.expensive_book']);
+          store.useBoardStore.getState().requestFrame();
+        });
         await expect(
           page.getByTestId('table-node-public.expensive_book').getByTestId('row-count'),
         ).toHaveText('4', { timeout: 15_000 });
+      }
       if (index === 6)
         await expect(page.getByTestId('table-node-public.all_books')).toHaveAttribute('data-kind', 'view', {
           timeout: 15_000,
