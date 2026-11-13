@@ -1,3 +1,5 @@
+import type { Locale } from '../src/lib/i18n';
+
 export interface Chapter {
   id: string;
   number: number;
@@ -22,3 +24,25 @@ export const CHAPTERS: Chapter[] = [
   { id: 'design', number: 13, title: 'Проектирование' },
   { id: 'extras', number: 14, title: 'Сверху рутины' },
 ];
+
+const EN_TITLES: Record<string, string> = {
+  start: 'Start',
+  basics: 'Foundations',
+  ddl: 'Structure (DDL)',
+  dml: 'Changing data (DML)',
+  select: 'Selecting from one table',
+  types: 'Data types and functions',
+  joins: 'Joins',
+  aggregation: 'Aggregation',
+  subqueries: 'Subqueries, sets and CTEs',
+  windows: 'Window functions',
+  views: 'Views',
+  transactions: 'Transactions and concurrency',
+  indexes: 'Indexes and performance',
+  design: 'Database design',
+  extras: 'Beyond the basics',
+};
+
+export function chapterTitle(chapter: Chapter, locale: Locale): string {
+  return locale === 'en' ? (EN_TITLES[chapter.id] ?? chapter.title) : chapter.title;
+}

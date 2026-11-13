@@ -7,7 +7,9 @@ import type { QueryResult } from '@/features/db/types';
 import type { Trace } from '@/features/tracer/types';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { EditorToolbar } from './EditorToolbar';
+import { notifyApplied } from './notifyDbError';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -61,6 +63,29 @@ describe('EditorToolbar', () => {
     vi.clearAllMocks();
     useEditorStore.setState(useEditorStore.getInitialState(), true);
     useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('подписывает команды и предупреждение сброса на английском', async () => {
+    useSettingsStore.setState({ locale: 'en' });
+    useEditorStore.getState().setText('select 1');
+    render(<EditorToolbar sandbox={fakeSandbox([])} onApplyCurrent={() => undefined} />);
+    expect(screen.getByTestId('preview-status')).toHaveTextContent('Preview: data is unchanged');
+    expect(screen.getByRole('button', { name: /Apply/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(screen.getByRole('dialog', { name: 'Reset this lesson?' })).toBeInTheDocument();
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('сообщает итог выполнения на английском', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    notifyApplied([{ command: 'INSERT', rowCount: 2, rows: [], fields: [] }]);
+    expect(toast.success).toHaveBeenLastCalledWith('Saved to the database', {
+      id: 'apply',
+      description: 'INSERT: 2 rows',
+    });
+    useSettingsStore.setState({ locale: 'ru' });
   });
 
   it('индикатор превью отражает статус и погашенность', () => {

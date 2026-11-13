@@ -5,10 +5,62 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fullPipelineTrace } from '@/features/overlay/__fixtures__/traces';
 import { Timeline } from '@/features/timeline/Timeline';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { ResultsPanel } from './ResultsPanel';
 
 describe('ResultsPanel', () => {
-  beforeEach(() => useSceneStore.setState(useSceneStore.getInitialState(), true));
+  beforeEach(() => {
+    useSceneStore.setState(useSceneStore.getInitialState(), true);
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('показывает вкладки и пустой результат на английском', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    const trace = fullPipelineTrace();
+    const stages = trace.stages
+      .slice(0, 2)
+      .map((s, i) => (i === 1 ? { ...s, output: { ...s.output, rows: [] } } : s));
+    const result = { fields: [], rows: [], command: 'SELECT', rowCount: 0 };
+    useSceneStore
+      .getState()
+      .setTrace({ ...trace, stages, result }, useSceneStore.getState().nextGeneration());
+    render(<ResultsPanel />);
+    expect(screen.getByRole('tab', { name: 'Result' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Messages' })).toBeInTheDocument();
+    expect(screen.getByText('0 rows. Rows disappeared at WHERE: 5 before, 0 after.')).toBeInTheDocument();
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('показывает статистику плана на английском', async () => {
+    useSettingsStore.setState({ locale: 'en' });
+    const trace = fullPipelineTrace();
+    const plan = {
+      nodeType: 'Seq Scan',
+      relation: 'book',
+      schema: 'public',
+      alias: 'b',
+      actualRows: 3,
+      rowsRemoved: 2,
+      loops: 2,
+      children: [],
+    };
+    useSceneStore.getState().setTrace({ ...trace, plan }, useSceneStore.getState().nextGeneration());
+    render(<ResultsPanel />);
+    await userEvent.click(screen.getByRole('tab', { name: 'Plan' }));
+    expect(screen.getByText(/read ≈10 rows/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Seq Scan on public.book/ })).toBeInTheDocument();
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('использует единственное число для одной строки плана на английском', async () => {
+    useSettingsStore.setState({ locale: 'en' });
+    const trace = fullPipelineTrace();
+    const plan = { nodeType: 'Seq Scan', actualRows: 1, rowsRemoved: 0, loops: 1, planRows: 1, children: [] };
+    useSceneStore.getState().setTrace({ ...trace, plan }, useSceneStore.getState().nextGeneration());
+    render(<ResultsPanel />);
+    await userEvent.click(screen.getByRole('tab', { name: 'Plan' }));
+    expect(screen.getByText('read 1 row · returned 1 row · estimated 1 row per loop')).toBeInTheDocument();
+  });
 
   it('пустой результат: «0 строк» и шаг, где пропали строки', () => {
     const t = fullPipelineTrace();

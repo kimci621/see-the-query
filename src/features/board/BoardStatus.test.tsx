@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useBoardStore } from '@/stores/board';
+import { useSettingsStore } from '@/stores/settings';
 import { SCHEMA } from './__fixtures__/schema';
 import { BoardStatus, pgVersionLabel } from './BoardStatus';
 
@@ -15,7 +16,17 @@ describe('pgVersionLabel', () => {
 });
 
 describe('BoardStatus', () => {
-  beforeEach(() => useBoardStore.setState(useBoardStore.getInitialState(), true));
+  beforeEach(() => {
+    useBoardStore.setState(useBoardStore.getInitialState(), true);
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('показывает состояние базы на выбранном языке', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    render(<BoardStatus status="booting" version={VERSION} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Starting Postgres...');
+    expect(screen.getByTestId('pg-version')).toHaveTextContent('PostgreSQL 18.3 in the browser');
+  });
 
   it('пока Postgres поднимается, виден скелетон', () => {
     render(<BoardStatus status="booting" version={null} />);

@@ -1,10 +1,12 @@
 import { useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Kbd } from '@/components/ui/kbd';
+import { useMessages } from '@/hooks/use-messages';
+import type { Message } from '@/lib/messages';
 import { modKey } from '@/lib/utils';
 
 // Полный список из спеки 3.10; часть клавиш заработает в следующих фазах. mod: ⌘ или Ctrl по платформе
-const HOTKEYS: Array<{ keys: string[]; action: string; soon?: true }> = [
+const HOTKEYS: Array<{ keys: string[]; action: Message; soon?: true }> = [
   { keys: ['mod', 'K'], action: 'Поиск по урокам' },
   { keys: ['mod', '\\'], action: 'Режим фокуса: доска на всю ширину' },
   { keys: ['mod', '⏎'], action: 'Применить запрос' },
@@ -25,6 +27,7 @@ export function HotkeysHelp({
   onOpenChange: (open: boolean) => void;
 }) {
   const opener = useRef<HTMLElement | null>(null);
+  const t = useMessages();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -39,8 +42,8 @@ export function HotkeysHelp({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Горячие клавиши</DialogTitle>
-          <DialogDescription>Что можно сделать с клавиатуры.</DialogDescription>
+          <DialogTitle>{t('Горячие клавиши')}</DialogTitle>
+          <DialogDescription>{t('Что можно сделать с клавиатуры.')}</DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
           {HOTKEYS.map((h) => (
@@ -51,8 +54,8 @@ export function HotkeysHelp({
                 ))}
               </dt>
               <dd>
-                {h.action}
-                {h.soon && <span className="text-muted-foreground"> · скоро</span>}
+                {t(h.action)}
+                {h.soon && <span className="text-muted-foreground"> · {t('скоро')}</span>}
               </dd>
             </div>
           ))}

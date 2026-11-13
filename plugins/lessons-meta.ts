@@ -1,12 +1,14 @@
 import { existsSync, globSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import type { Plugin } from 'vite';
 import { parse as parseYaml } from 'yaml';
 import type { LessonMeta } from '../src/features/lessons/types.ts';
+import type { Locale } from '../src/lib/i18n.ts';
 
 const VIRTUAL_ID = 'virtual:lessons-meta';
 const RESOLVED_ID = `\0${VIRTUAL_ID}`;
-const LESSONS_GLOB = 'content/lessons/**/*.mdx';
+const LESSONS_DIRS: Record<Locale, string> = { ru: 'content/lessons', en: 'content/lessons-en' };
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 
 type Raw = Record<string, unknown>;
@@ -65,6 +67,7 @@ export function parseLessonFile(source: string, relPath: string): LessonMeta {
 
   const meta: LessonMeta = {
     id: requireString(raw, 'id', file),
+    locale: file.startsWith(`${LESSONS_DIRS.en}/`) ? 'en' : 'ru',
     title: requireString(raw, 'title', file),
     chapter: requireString(raw, 'chapter', file),
     number: requireString(raw, 'number', file),
@@ -83,15 +86,28 @@ export function parseLessonFile(source: string, relPath: string): LessonMeta {
   return meta;
 }
 
-export function collectLessonsMeta(root: string): LessonMeta[] {
-  if (!existsSync(path.join(root, 'content/lessons'))) return [];
-  const files = globSync(LESSONS_GLOB, { cwd: root }).sort();
+export function collectLessonsMeta(root: string, locale: Locale = 'ru'): LessonMeta[] {
+  const dir = LESSONS_DIRS[locale];
+  if (!existsSync(path.join(root, dir))) return [];
+  const files = globSync(`${dir}/**/*.mdx`, { cwd: root }).sort();
   const metas = files.map((f) => parseLessonFile(readFileSync(path.join(root, f), 'utf8'), f));
   const seen = new Map<string, string>();
   for (const meta of metas) {
     const prev = seen.get(meta.id);
     if (prev) throw new Error(`Дубль id «${meta.id}»: ${prev} и ${meta.path}`);
     seen.set(meta.id, meta.path);
+  }
+  if (locale === 'en') {
+    const originals = new Map(collectLessonsMeta(root).map((meta) => [meta.id, meta]));
+    for (const meta of metas) {
+      const original = originals.get(meta.id);
+      if (!original) throw new Error(`${meta.id}: нет русского урока для ${meta.path}`);
+      for (const key of ['chapter', 'number', 'order', 'dataset', 'board'] as const) {
+        if (!isDeepStrictEqual(meta[key], original[key])) {
+          throw new Error(`${meta.id}: поле ${key} различается в ${original.path} и ${meta.path}`);
+        }
+      }
+    }
   }
   return metas;
 }
@@ -108,13 +124,13 @@ export function lessonsMeta(): Plugin {
     },
     load(id) {
       if (id !== RESOLVED_ID) return null;
-      return `export const lessonsMeta = ${JSON.stringify(collectLessonsMeta(root))};`;
+      return `export const lessonsMeta = ${JSON.stringify([...collectLessonsMeta(root), ...collectLessonsMeta(root, 'en')])};`;
     },
     configureServer(server) {
-      const lessonsDir = path.join(root, 'content', 'lessons');
+      const lessonsDirs = Object.values(LESSONS_DIRS).map((dir) => `${path.join(root, dir)}${path.sep}`);
       // Новый, удалённый или изменённый урок: пересобрать список и перезагрузить страницу
       const onChange = (file: string) => {
-        if (!file.startsWith(lessonsDir) || !file.endsWith('.mdx')) return;
+        if (!lessonsDirs.some((dir) => file.startsWith(dir)) || !file.endsWith('.mdx')) return;
         const env = server.environments.client;
         const mod = env.moduleGraph.getModuleById(RESOLVED_ID);
         if (mod) env.moduleGraph.invalidateModule(mod);

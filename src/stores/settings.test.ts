@@ -28,6 +28,25 @@ describe('sanitizeLayout', () => {
 });
 
 describe('useSettingsStore', () => {
+  it('сохраняет язык и восстанавливает его вместе с темой', async () => {
+    useSettingsStore.getState().setTheme('dark');
+    useSettingsStore.getState().setLocale('en');
+    const saved = localStorage.getItem('vs-settings');
+    expect(saved).not.toBeNull();
+    useSettingsStore.setState({ theme: 'system', locale: 'ru' });
+    localStorage.setItem('vs-settings', saved as string);
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().theme).toBe('dark');
+    expect(useSettingsStore.getState().locale).toBe('en');
+    useSettingsStore.setState({ theme: 'system', locale: 'ru' });
+  });
+
+  it('неизвестный сохранённый язык заменяет на русский', async () => {
+    localStorage.setItem('vs-settings', JSON.stringify({ state: { locale: 'fr' }, version: 2 }));
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().locale).toBe('ru');
+  });
+
   it('битый vs-settings в localStorage не ломает стор', async () => {
     localStorage.setItem(
       'vs-settings',

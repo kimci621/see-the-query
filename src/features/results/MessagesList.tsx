@@ -1,5 +1,6 @@
 import type { DbError } from '@/features/db/types';
 import type { Trace } from '@/features/tracer/types';
+import { useMessages } from '@/hooks/use-messages';
 import { ErrorCard } from './ErrorCard';
 
 // Сообщения: карточка ошибки (объяснение словаря и оригинал Postgres), NOTICE, пустое состояние.
@@ -10,6 +11,7 @@ export function MessagesList({
   trace: Trace | null;
   parseError?: { error: DbError; sql: string } | null; // ошибка разбора недописанного запроса вместо ошибки трейса
 }) {
+  const t = useMessages();
   const shown = parseError ?? (trace?.error ? { error: trace.error, sql: trace.sql } : null);
   const parse = parseError != null;
   const notices = trace?.notices ?? [];
@@ -20,7 +22,7 @@ export function MessagesList({
         data-testid="messages-empty"
         className="grid h-full place-items-center text-sm text-muted-foreground"
       >
-        Пока сообщений нет
+        {t('Пока сообщений нет')}
       </div>
     );
   }

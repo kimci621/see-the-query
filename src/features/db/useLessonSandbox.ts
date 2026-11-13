@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { message } from '@/lib/messages';
 import { useLessonStore } from '@/stores/lesson';
+import { useSettingsStore } from '@/stores/settings';
 import type { DatasetId } from './datasets';
 import type { Sandbox } from './sandbox';
 
@@ -22,7 +24,8 @@ export function useLessonSandbox(
     let loaded = false;
     const saveJournal = () => useLessonStore.getState().setJournal(lessonId, [...sandbox.journal()]);
     const off = sandbox.subscribe((e) => {
-      if (e.type === 'restarted') toast.warning(RESTART_MESSAGES[e.reason]);
+      if (e.type === 'restarted')
+        toast.warning(message(useSettingsStore.getState().locale, RESTART_MESSAGES[e.reason]));
       if (e.type === 'changed' && loaded) saveJournal();
     });
     const saved = useLessonStore.getState().byId[lessonId]?.journal ?? [];
@@ -31,7 +34,10 @@ export function useLessonSandbox(
         loaded = true;
         saveJournal(); // журнал мог обрезаться, если запись больше не выполняется
       },
-      () => toast.error('Не удалось поднять Postgres. Обнови страницу.'),
+      () =>
+        toast.error(
+          message(useSettingsStore.getState().locale, 'Не удалось поднять Postgres. Обнови страницу.'),
+        ),
     );
     return off;
   }, [sandbox, lessonId, datasetId]);

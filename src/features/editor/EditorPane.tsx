@@ -132,6 +132,15 @@ export function EditorPane() {
     return () => clearTimeout(timer);
   }, [text, lessonId, meta]);
 
+  // При закрытии редактора сохраняем ввод, не дожидаясь таймера.
+  useEffect(() => {
+    if (!lessonId) return;
+    return () => {
+      const current = useEditorStore.getState().text;
+      useLessonStore.getState().setLastQuery(lessonId, current === meta?.initialQuery ? undefined : current);
+    };
+  }, [lessonId, meta?.initialQuery]);
+
   // единый путь применения для кнопки, ⌘⏎ из keymap CodeMirror и ⌘⏎ вне редактора
   const apply = () => {
     if (sandbox) void applyCurrent(sandbox);

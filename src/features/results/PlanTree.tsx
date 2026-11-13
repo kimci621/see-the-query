@@ -1,10 +1,12 @@
 import { linkPlanToStages, type PlanNode, rowsRead } from '@/features/tracer/explain';
 import type { Stage } from '@/features/tracer/types';
 import { useSceneStore } from '@/stores/scene';
-
-const format = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+import { useSettingsStore } from '@/stores/settings';
 
 export function PlanTree({ plan, stages }: { plan: PlanNode; stages: Stage[] }) {
+  const locale = useSettingsStore((s) => s.locale);
+  const format = new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'ru-RU', { maximumFractionDigits: 1 });
+  const rowUnit = (count: number) => (locale === 'en' ? (count === 1 ? 'row' : 'rows') : 'строк');
   const links = new Map(linkPlanToStages(plan, stages).map(({ node, stageIndex }) => [node, stageIndex]));
   const maxRows = Math.max(1, ...[...links.keys()].map((node) => (node.actualRows ?? 0) * (node.loops ?? 0)));
   const setHoveredStage = useSceneStore((state) => state.setHoveredStage);
@@ -16,15 +18,19 @@ export function PlanTree({ plan, stages }: { plan: PlanNode; stages: Stage[] }) 
     const description = [
       read === null
         ? null
-        : `прочитано ${node.loops && node.loops > 1 ? '≈' : ''}${format.format(read)} строк`,
+        : `${locale === 'en' ? 'read' : 'прочитано'} ${node.loops && node.loops > 1 ? '≈' : ''}${format.format(read)} ${rowUnit(read)}`,
       found === null
         ? null
-        : `возвращено ${node.loops && node.loops > 1 ? '≈' : ''}${format.format(found)} строк`,
-      node.planRows === undefined ? null : `оценка ${format.format(node.planRows)} строк за проход`,
+        : `${locale === 'en' ? 'returned' : 'возвращено'} ${node.loops && node.loops > 1 ? '≈' : ''}${format.format(found)} ${rowUnit(found)}`,
+      node.planRows === undefined
+        ? null
+        : locale === 'en'
+          ? `estimated ${format.format(node.planRows)} ${rowUnit(node.planRows)} per loop`
+          : `оценка ${format.format(node.planRows)} строк за проход`,
     ]
       .filter(Boolean)
       .join(' · ');
-    const title = `${node.nodeType}${node.relation ? ` по ${node.schema ? `${node.schema}.` : ''}${node.relation}` : ''}${node.indexName ? ` (${node.indexName})` : ''}`;
+    const title = `${node.nodeType}${node.relation ? ` ${locale === 'en' ? 'on' : 'по'} ${node.schema ? `${node.schema}.` : ''}${node.relation}` : ''}${node.indexName ? ` (${node.indexName})` : ''}`;
     return (
       <li key={key}>
         <div
@@ -41,15 +47,21 @@ export function PlanTree({ plan, stages }: { plan: PlanNode; stages: Stage[] }) 
               onMouseLeave={() => setHoveredStage(null)}
               onFocus={() => setHoveredStage(stageIndex)}
               onBlur={() => setHoveredStage(null)}
-              aria-label={`${title}. Показать связанный шаг`}
+              aria-label={`${title}. ${locale === 'en' ? 'Show related step' : 'Показать связанный шаг'}`}
             >
               {title}
             </button>
           )}
           {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
-          {node.filter && <p className="mt-1 break-words font-mono text-xs">Фильтр: {node.filter}</p>}
+          {node.filter && (
+            <p className="mt-1 break-words font-mono text-xs">
+              {locale === 'en' ? 'Filter' : 'Фильтр'}: {node.filter}
+            </p>
+          )}
           {node.indexCond && (
-            <p className="mt-1 break-words font-mono text-xs">Условие индекса: {node.indexCond}</p>
+            <p className="mt-1 break-words font-mono text-xs">
+              {locale === 'en' ? 'Index condition' : 'Условие индекса'}: {node.indexCond}
+            </p>
           )}
         </div>
         {node.children.length > 0 && (
@@ -63,8 +75,9 @@ export function PlanTree({ plan, stages }: { plan: PlanNode; stages: Stage[] }) 
   return (
     <div data-testid="plan-tree" className="h-full overflow-auto p-2">
       <p className="mb-2 text-xs text-muted-foreground">
-        Наведи указатель или переведи фокус на узел, чтобы подсветить связанный шаг. Числа при нескольких
-        проходах приблизительны.
+        {locale === 'en'
+          ? 'Hover or focus a node to highlight the related step. Counts for multiple loops are approximate.'
+          : 'Наведи указатель или переведи фокус на узел, чтобы подсветить связанный шаг. Числа при нескольких проходах приблизительны.'}
       </p>
       <ul className="space-y-2">{renderNode(plan, 'root')}</ul>
     </div>

@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { FkInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import type { Locale } from '@/lib/i18n';
 import { rowsWord } from '@/lib/plural';
 import {
   autoLayout,
@@ -35,7 +36,18 @@ type ViewFlowEdge = Edge<Record<string, unknown>, 'smoothstep'>;
 export { GROUP_LABEL, GROUP_PADDING } from './layout';
 
 // Подпись ноды для скринридера: таблица, строк всего (не только показанных), все колонки
-export function tableAriaLabel(t: TableInfo): string {
+export function tableAriaLabel(t: TableInfo, locale: Locale = 'ru'): string {
+  if (locale === 'en') {
+    const kind = t.kind === 'view' ? 'View' : t.kind === 'matview' ? 'Materialized view' : 'Table';
+    const definition = t.viewDefinition ? `, query: ${t.viewDefinition}` : '';
+    const lag =
+      t.kind === 'matview' && t.matviewLag != null
+        ? t.matviewLag === 0
+          ? ', snapshot is up to date'
+          : `, differences from current result: ${t.matviewLag}`
+        : '';
+    return `${kind} ${t.schema}.${t.name}, ${rowsWord(t.rowCount, locale)}, columns: ${t.columns.map((c) => c.name).join(', ')}${lag}${definition}`;
+  }
   const kind =
     t.kind === 'view'
       ? 'Представление'
@@ -87,6 +99,7 @@ export function buildNodes(
   schema: SchemaSnapshot,
   visible: string[] | null,
   positions: Positions,
+  locale: Locale = 'ru',
 ): BoardNode[] {
   const groups: SchemaFlowNode[] = [];
   const tables: TableFlowNode[] = [];
@@ -126,10 +139,17 @@ export function buildNodes(
         position: { x: b.x - gx, y: b.y - gy },
         data: { table: b.t },
         // Фокус при Tab попадает на обёртку ноды React Flow, подпись нужна ей
-        ariaLabel: tableAriaLabel(b.t),
+        ariaLabel: tableAriaLabel(b.t, locale),
         // По умолчанию React Flow называет роль «node»
         domAttributes: {
-          'aria-roledescription': b.t.kind === 'view' || b.t.kind === 'matview' ? 'представление' : 'таблица',
+          'aria-roledescription':
+            b.t.kind === 'view' || b.t.kind === 'matview'
+              ? locale === 'en'
+                ? 'view'
+                : 'представление'
+              : locale === 'en'
+                ? 'table'
+                : 'таблица',
         },
         // Ширину задаёт сама нода (свёртка зависит от запроса), React Flow её замеряет.
         // initialWidth (свёрнутая ширина без запроса) нужна только до замера: для отсечения
@@ -147,7 +167,11 @@ export function buildNodes(
   return [...groups, ...tables];
 }
 
-export function buildEdges(schema: SchemaSnapshot, visible: string[] | null): (FkFlowEdge | ViewFlowEdge)[] {
+export function buildEdges(
+  schema: SchemaSnapshot,
+  visible: string[] | null,
+  locale: Locale = 'ru',
+): (FkFlowEdge | ViewFlowEdge)[] {
   const known = new Set(schema.tables.map((t) => t.id));
   const fks: FkFlowEdge[] = schema.fks
     .filter((fk) => known.has(fk.from.tableId) && known.has(fk.to.tableId))
@@ -170,7 +194,8 @@ export function buildEdges(schema: SchemaSnapshot, visible: string[] | null): (F
       source: tableId,
       target: viewId,
       style: { stroke: 'var(--muted-foreground)', strokeDasharray: '5 4' },
-      ariaLabel: `Представление ${viewId} использует ${tableId}`,
+      ariaLabel:
+        locale === 'en' ? `View ${viewId} uses ${tableId}` : `Представление ${viewId} использует ${tableId}`,
       selectable: false,
       focusable: false,
     }));

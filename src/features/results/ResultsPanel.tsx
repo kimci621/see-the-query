@@ -4,10 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type DbError, hasRowCount } from '@/features/db/types';
 import { explainError } from '@/features/errors/explain';
 import { emptyResultHint } from '@/features/overlay/emptyHint';
+import { useMessages } from '@/hooks/use-messages';
+import { message } from '@/lib/messages';
 import { rowsWord } from '@/lib/plural';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { ErrorCard } from './ErrorCard';
 import { MessagesList } from './MessagesList';
 import { PlanTree } from './PlanTree';
@@ -16,6 +19,8 @@ import { ResultGrid } from './ResultGrid';
 // Панель результата: вкладки Результат, Сообщения и доступный план.
 // При stale (недописанный запрос) панель погашена, но не пуста: без мигания.
 export function ResultsPanel() {
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const sceneTrace = useSceneStore((s) => s.trace);
   const stale = useSceneStore((s) => s.stale);
   const text = useEditorStore((s) => s.text);
@@ -45,11 +50,16 @@ export function ResultsPanel() {
       : trace?.error
         ? { error: trace.error, sql: trace.sql }
         : null;
-    if (err) return `Ошибка: ${explainError(err.error, { sql: err.sql, schema }).title}`;
+    if (err)
+      return `${message(locale, 'Ошибка')}: ${explainError(err.error, { sql: err.sql, schema }).title}`;
     if (result)
-      return isDml ? (counted ? `${result.command}: ${count}` : (result.command ?? '')) : rowsWord(count);
+      return isDml
+        ? counted
+          ? `${result.command}: ${count}`
+          : (result.command ?? '')
+        : rowsWord(count, locale);
     return '';
-  }, [parseDbError, text, trace, schema, result, isDml, counted, count]);
+  }, [parseDbError, text, trace, schema, result, isDml, counted, count, locale]);
   // Задержка 1000 мс: пока человек печатает, превью пересчитывается на каждый символ, а объявлять нужно итог
   const [announced, setAnnounced] = useState('');
   const [tab, setTab] = useState('result');
@@ -81,24 +91,26 @@ export function ResultsPanel() {
         <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1">
           <TabsList className="h-7">
             <TabsTrigger value="result" className="text-xs">
-              Результат
+              {t('Результат')}
             </TabsTrigger>
             <TabsTrigger value="messages" className="text-xs">
-              Сообщения
+              {t('Сообщения')}
             </TabsTrigger>
             {trace?.plan && (
               <TabsTrigger value="plan" className="text-xs">
-                План
+                {t('План')}
               </TabsTrigger>
             )}
           </TabsList>
           {result && (
             <Badge variant="secondary" data-testid="result-count">
-              {isDml ? (counted ? `${result.command}: ${count}` : result.command) : rowsWord(count)}
+              {isDml ? (counted ? `${result.command}: ${count}` : result.command) : rowsWord(count, locale)}
             </Badge>
           )}
           {trace && (
-            <span className="ml-auto font-mono text-xs text-muted-foreground">{trace.timingMs} мс</span>
+            <span className="ml-auto font-mono text-xs text-muted-foreground">
+              {trace.timingMs} {locale === 'en' ? 'ms' : 'мс'}
+            </span>
           )}
         </div>
         <TabsContent value="result" tabIndex={-1} className="mt-0 min-h-0 flex-1">
@@ -112,8 +124,10 @@ export function ResultsPanel() {
               // Под «0 строк» подсказка, на каком шаге запрос потерял все строки
               emptyHint={
                 isDml
-                  ? `${result.command} не возвращает строк.${counted ? ` Затронуто: ${count}` : ''}`
-                  : ['0 строк', trace && emptyResultHint(trace)].filter(Boolean).join('. ')
+                  ? locale === 'en'
+                    ? `${result.command} does not return rows.${counted ? ` Rows affected: ${count}` : ''}`
+                    : `${result.command} не возвращает строк.${counted ? ` Затронуто: ${count}` : ''}`
+                  : [rowsWord(0, locale), trace && emptyResultHint(trace, locale)].filter(Boolean).join('. ')
               }
             />
           ) : trace?.error ? (
@@ -122,7 +136,7 @@ export function ResultsPanel() {
             </div>
           ) : (
             <div className="grid h-full place-items-center text-sm text-muted-foreground">
-              Начни печатать запрос
+              {t('Начни печатать запрос')}
             </div>
           )}
         </TabsContent>

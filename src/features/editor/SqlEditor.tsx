@@ -7,9 +7,11 @@ import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { clauseRanges } from '@/features/sql/clauses';
 import { parseSql } from '@/features/sql/parser';
 import { statementAt } from '@/features/sql/statements';
+import { message } from '@/lib/messages';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { buildSchemaSpec } from './completion';
 import { parseDiagnostic, pgDiagnostic } from './diagnostics';
 import { clauseHighlight, setActiveClauseRange } from './highlight';
@@ -28,6 +30,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
   ref,
 ) {
   const text = useEditorStore((s) => s.text);
+  const locale = useSettingsStore((s) => s.locale);
   const setText = useEditorStore((s) => s.setText);
   const setCursor = useEditorStore((s) => s.setCursor);
   const parseError = useEditorStore((s) => s.parseError);
@@ -78,7 +81,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
         upperCaseKeywords: false,
         schema: schema ? buildSchemaSpec(schema) : undefined,
       }),
-      EditorView.contentAttributes.of({ 'aria-label': 'SQL-запрос' }),
+      EditorView.contentAttributes.of({ 'aria-label': message(locale, 'SQL-запрос') }),
       // Prec.highest: иначе Mod-Enter из defaultKeymap (insertBlankLine) срабатывает раньше
       Prec.highest(
         keymap.of([
@@ -96,7 +99,7 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
       hoverExtension,
       ...extraExtensions,
     ],
-    [schema, hoverExtension, extraExtensions],
+    [schema, hoverExtension, extraExtensions, locale],
   );
 
   // Программные диагностики: setDiagnostics сам подключает lint-состояние, linter не нужен

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { plural } from '@/lib/plural';
+import { plural, rowsWord } from '@/lib/plural';
 
 describe('plural', () => {
   it('склонение по числу', () => {
@@ -15,5 +15,9 @@ describe('plural', () => {
       'строк',
       'строк',
     ]);
+  });
+
+  it('подписывает ноль, одну и несколько строк на английском', () => {
+    expect([0, 1, 2].map((n) => rowsWord(n, 'en'))).toEqual(['0 rows', '1 row', '2 rows']);
   });
 });

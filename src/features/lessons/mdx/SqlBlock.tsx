@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { applyCurrent } from '@/features/editor/applyCurrent';
+import { useMessages } from '@/hooks/use-messages';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
@@ -21,6 +22,7 @@ export function sendToBoard(sql: string, lessonId: string | undefined): void {
 
 // Подменяет <pre> в MDX: SQL-блоки получают кнопки, остальные рендерятся как есть
 export function SqlBlock(props: PreProps) {
+  const t = useMessages();
   const { lessonId } = useParams();
   const { sandbox } = useSandbox();
   const [copied, setCopied] = useState(false);
@@ -36,7 +38,7 @@ export function SqlBlock(props: PreProps) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       },
-      () => toast.error('Не удалось скопировать: браузер не дал доступ к буферу обмена'),
+      () => toast.error(t('Не удалось скопировать: браузер не дал доступ к буферу обмена')),
     );
   };
 
@@ -68,17 +70,17 @@ export function SqlBlock(props: PreProps) {
             onClick={() => void apply()}
           >
             {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <Zap aria-hidden />}
-            Применить
+            {t('Применить')}
           </Button>
         ) : meta.run ? (
           <Button size="sm" variant="secondary" onClick={() => sendToBoard(sql, lessonId)}>
             <Play aria-hidden />
-            На доску
+            {t('На доску')}
           </Button>
         ) : null}
         <Button size="sm" variant="ghost" onClick={copy}>
           {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-          {copied ? 'Скопировано' : 'Копировать'}
+          {t(copied ? 'Скопировано' : 'Копировать')}
         </Button>
       </div>
     </div>

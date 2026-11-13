@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { isLocale, type Locale } from '@/lib/i18n';
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
 
@@ -9,10 +10,12 @@ export const DEFAULT_RIGHT_LAYOUT = [52, 12, 18, 18];
 
 export interface SettingsStore {
   theme: ThemeSetting;
+  locale: Locale;
   mainLayout: number[];
   rightLayout: number[];
   focusMode: boolean;
   setTheme(t: ThemeSetting): void;
+  setLocale(locale: Locale): void;
   setMainLayout(l: number[]): void;
   setRightLayout(l: number[]): void;
   toggleFocusMode(): void;
@@ -34,10 +37,12 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       theme: 'system',
+      locale: 'ru',
       mainLayout: DEFAULT_MAIN_LAYOUT,
       rightLayout: DEFAULT_RIGHT_LAYOUT,
       focusMode: false,
       setTheme: (theme) => set({ theme }),
+      setLocale: (locale) => set({ locale }),
       setMainLayout: (mainLayout) => set({ mainLayout: sanitizeLayout(mainLayout, DEFAULT_MAIN_LAYOUT) }),
       setRightLayout: (rightLayout) =>
         set({ rightLayout: sanitizeLayout(rightLayout, DEFAULT_RIGHT_LAYOUT) }),
@@ -54,6 +59,7 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       partialize: (s) => ({
         theme: s.theme,
+        locale: s.locale,
         mainLayout: s.mainLayout,
         rightLayout: s.rightLayout,
         focusMode: s.focusMode,
@@ -63,6 +69,7 @@ export const useSettingsStore = create<SettingsStore>()(
         return {
           ...current,
           theme: isTheme(p.theme) ? p.theme : current.theme,
+          locale: isLocale(p.locale) ? p.locale : 'ru',
           mainLayout: sanitizeLayout(p.mainLayout, DEFAULT_MAIN_LAYOUT),
           rightLayout: sanitizeLayout(p.rightLayout, DEFAULT_RIGHT_LAYOUT),
           focusMode: typeof p.focusMode === 'boolean' ? p.focusMode : current.focusMode,

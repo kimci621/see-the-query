@@ -26,6 +26,7 @@ describe('parseLessonFile', () => {
     const meta = parseLessonFile(VALID, 'content/lessons/06-joins/02-inner-join.mdx');
     expect(meta).toEqual({
       id: 'inner-join',
+      locale: 'ru',
       title: 'INNER JOIN',
       chapter: 'joins',
       number: '6.2',
@@ -111,6 +112,38 @@ describe('collectLessonsMeta', () => {
       'content/lessons/06-joins/03-b.mdx': VALID,
     });
     expect(() => collectLessonsMeta(root)).toThrow(/Дубль id «inner-join».*02-a\.mdx.*03-b\.mdx/);
+  });
+
+  it('собирает английскую версию с тем же id и отдельным путём', () => {
+    const root = makeRoot({
+      'content/lessons/06-joins/02-inner-join.mdx': VALID,
+      'content/lessons-en/06-joins/02-inner-join.mdx': VALID.replace(
+        'title: INNER JOIN',
+        'title: Inner join',
+      ),
+    });
+    expect(collectLessonsMeta(root, 'en')).toMatchObject([
+      {
+        id: 'inner-join',
+        locale: 'en',
+        title: 'Inner join',
+        path: '/content/lessons-en/06-joins/02-inner-join.mdx',
+      },
+    ]);
+    expect(collectLessonsMeta(root, 'ru')).toHaveLength(1);
+  });
+
+  it('отклоняет английский урок без русского оригинала', () => {
+    const root = makeRoot({ 'content/lessons-en/06-joins/02-inner-join.mdx': VALID });
+    expect(() => collectLessonsMeta(root, 'en')).toThrow(/inner-join.*русск/i);
+  });
+
+  it('отклоняет несовпадение общих полей языковых версий', () => {
+    const root = makeRoot({
+      'content/lessons/06-joins/02-inner-join.mdx': VALID,
+      'content/lessons-en/06-joins/02-inner-join.mdx': VALID.replace('dataset: bookstore', 'dataset: empty'),
+    });
+    expect(() => collectLessonsMeta(root, 'en')).toThrow(/inner-join.*dataset/i);
   });
 
   it('нет папки уроков → пустой список', () => {

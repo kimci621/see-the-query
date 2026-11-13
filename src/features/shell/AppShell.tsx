@@ -8,6 +8,7 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { useLessonSandbox } from '@/features/db/useLessonSandbox';
 import { getLesson } from '@/features/lessons/registry';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { useMessages } from '@/hooks/use-messages';
 import { remToPx, useRootFont } from '@/hooks/use-root-font';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
@@ -24,7 +25,10 @@ const MAIN_PANELS = ['sidebar', 'theory', 'workspace'] as const;
 
 export function AppShell() {
   const { lessonId } = useParams();
-  const meta = lessonId ? getLesson(lessonId) : undefined;
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
+  const meta = lessonId ? getLesson(lessonId, locale) : undefined;
+  const translationPending = locale === 'en' && !meta && !!lessonId && !!getLesson(lessonId);
   const { sandbox } = useSandbox();
   useLessonSandbox(sandbox, meta?.id, meta?.dataset);
   const mainLayout = useSettingsStore((s) => s.mainLayout);
@@ -73,12 +77,12 @@ export function AppShell() {
   if (phone && !forceOpen) {
     return (
       <main className="flex h-svh flex-col items-center justify-center gap-4 bg-background p-6 text-center text-foreground">
-        <h1 className="text-lg font-semibold">see-the-query рассчитан на экран от 640 px</h1>
+        <h1 className="text-lg font-semibold">{t('see-the-query рассчитан на экран от 640 px')}</h1>
         <p className="text-sm text-muted-foreground">
-          Открой на ноутбуке или планшете: на телефоне доска не поместится.
+          {t('Открой на ноутбуке или планшете: на телефоне доска не поместится.')}
         </p>
         <Button variant="outline" onClick={() => setForceOpen(true)}>
-          Всё равно открыть
+          {t('Всё равно открыть')}
         </Button>
       </main>
     );
@@ -104,11 +108,11 @@ export function AppShell() {
               minSize={remToPx('12rem', rootFont)}
               maxSize="30%"
             >
-              <PanelErrorBoundary name="Темы">
+              <PanelErrorBoundary name={t('Темы')} locale={locale}>
                 <LessonSidebar activeId={lessonId} onOpenSearch={() => setCommandOpen(true)} />
               </PanelErrorBoundary>
             </ResizablePanel>
-            <ResizableHandle aria-label="Ширина списка уроков" />
+            <ResizableHandle aria-label={t('Ширина списка уроков')} />
           </>
         )}
         {!focusMode && (
@@ -119,16 +123,31 @@ export function AppShell() {
               defaultSize={`${mainLayout[1]}%`}
               minSize={remToPx('20rem', rootFont)}
             >
-              <PanelErrorBoundary key={lessonId} name="Теория">
-                <TheoryPane meta={meta} onOpenLessons={narrow ? openLessons : undefined} />
+              <PanelErrorBoundary key={lessonId} name={t('Теория')} locale={locale}>
+                <TheoryPane
+                  meta={meta}
+                  translationPending={translationPending}
+                  onOpenLessons={narrow ? openLessons : undefined}
+                />
               </PanelErrorBoundary>
             </ResizablePanel>
-            <ResizableHandle aria-label="Граница теории и доски" />
+            <ResizableHandle aria-label={t('Граница теории и доски')} />
           </>
         )}
         <ResizablePanel id="workspace" defaultSize={`${mainLayout[2]}%`} minSize="25%">
-          <PanelErrorBoundary name="Доска">
-            <BoardPane />
+          <PanelErrorBoundary name={t('Доска')} locale={locale}>
+            {translationPending ? (
+              <div role="status" className="p-6 text-sm text-muted-foreground">
+                <p>The workspace will be available when this lesson is translated.</p>
+                {focusMode && (
+                  <Button variant="outline" size="sm" onClick={toggleFocusMode}>
+                    {t('Выйти из режима фокуса')}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <BoardPane />
+            )}
           </PanelErrorBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>
@@ -141,7 +160,7 @@ export function AppShell() {
           className="fixed top-2 left-2 z-20"
           onClick={openLessons}
         >
-          <Menu className="size-4" aria-hidden /> Уроки
+          <Menu className="size-4" aria-hidden /> {t('Уроки')}
         </Button>
       )}
       {narrow && (
@@ -159,8 +178,8 @@ export function AppShell() {
               (target ?? document.getElementById('lessons-button'))?.focus();
             }}
           >
-            <SheetTitle className="sr-only">Уроки</SheetTitle>
-            <SheetDescription className="sr-only">Список уроков по главам</SheetDescription>
+            <SheetTitle className="sr-only">{t('Уроки')}</SheetTitle>
+            <SheetDescription className="sr-only">{t('Список уроков по главам')}</SheetDescription>
             <LessonSidebar
               activeId={lessonId}
               onOpenSearch={() => {

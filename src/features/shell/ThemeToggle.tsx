@@ -7,9 +7,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useMessages } from '@/hooks/use-messages';
+import type { Message } from '@/lib/messages';
 import { type ThemeSetting, useSettingsStore } from '@/stores/settings';
 
-const OPTIONS: Array<{ value: ThemeSetting; label: string }> = [
+const OPTIONS: Array<{ value: ThemeSetting; label: Message }> = [
   { value: 'light', label: 'Светлая' },
   { value: 'dark', label: 'Тёмная' },
   { value: 'system', label: 'Как в системе' },
@@ -18,12 +20,13 @@ const OPTIONS: Array<{ value: ThemeSetting; label: string }> = [
 export function ThemeToggle() {
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
+  const t = useMessages();
   const Icon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Тема оформления">
+        <Button variant="ghost" size="icon" aria-label={t('Тема оформления')}>
           <Icon className="size-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -38,7 +41,7 @@ export function ThemeToggle() {
         <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as ThemeSetting)}>
           {OPTIONS.map((o) => (
             <DropdownMenuRadioItem key={o.value} value={o.value}>
-              {o.label}
+              {t(o.label)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

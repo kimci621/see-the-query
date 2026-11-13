@@ -19,6 +19,11 @@ describe('normalizeTableId', () => {
 });
 
 describe('tableAriaLabel', () => {
+  it('описывает таблицу и колонки на английском', () => {
+    expect(tableAriaLabel(book, 'en')).toBe(
+      `Table public.book, 11 rows, columns: ${book.columns.map((c) => c.name).join(', ')}`,
+    );
+  });
   it('таблица, число строк и все колонки', () => {
     expect(tableAriaLabel(book)).toBe(
       `Таблица public.book, 11 строк, колонки: ${book.columns.map((c) => c.name).join(', ')}`,

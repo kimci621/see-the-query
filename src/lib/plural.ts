@@ -1,3 +1,5 @@
+import type { Locale } from './i18n';
+
 // Склонение по числу: plural(2, 'строка', 'строки', 'строк') -> 'строки'
 export function plural(n: number, one: string, few: string, many: string): string {
   const d10 = n % 10;
@@ -7,4 +9,5 @@ export function plural(n: number, one: string, few: string, many: string): strin
   return many;
 }
 
-export const rowsWord = (n: number) => `${n} ${plural(n, 'строка', 'строки', 'строк')}`;
+export const rowsWord = (n: number, locale: Locale = 'ru') =>
+  locale === 'en' ? `${n} ${n === 1 ? 'row' : 'rows'}` : `${n} ${plural(n, 'строка', 'строки', 'строк')}`;

@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLessonStore } from '@/stores/lesson';
+import { useSettingsStore } from '@/stores/settings';
 import type { Sandbox, SandboxEvent } from './sandbox';
 import { RESTART_MESSAGES, useLessonSandbox } from './useLessonSandbox';
 
@@ -40,6 +41,7 @@ function fakeSandbox() {
 beforeEach(() => {
   localStorage.clear();
   useLessonStore.setState({ byId: {} });
+  useSettingsStore.setState({ locale: 'ru' });
   vi.clearAllMocks();
 });
 
@@ -70,6 +72,14 @@ describe('useLessonSandbox', () => {
     renderHook(() => useLessonSandbox(f.sandbox, 'dml-insert', 'bookstore'));
     f.emit({ type: 'restarted', reason: 'timeout' });
     expect(toast.warning).toHaveBeenCalledWith(RESTART_MESSAGES.timeout);
+  });
+
+  it('сообщает о перезапуске на выбранном языке', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    const f = fakeSandbox();
+    renderHook(() => useLessonSandbox(f.sandbox, 'dml-insert', 'bookstore'));
+    f.emit({ type: 'restarted', reason: 'crash' });
+    expect(toast.warning).toHaveBeenCalledWith('The sandbox restarted and your changes were restored.');
   });
 
   it('без песочницы или урока ничего не делает', () => {

@@ -17,17 +17,21 @@ import type { QueryResult } from '@/features/db/types';
 import { statementAt } from '@/features/sql/statements';
 import type { ParsedStatement } from '@/features/sql/types';
 import type { Trace } from '@/features/tracer/types';
+import { useMessages } from '@/hooks/use-messages';
+import type { Locale } from '@/lib/i18n';
+import type { Message } from '@/lib/messages';
 import { rowsWord } from '@/lib/plural';
 import { cn, modKey } from '@/lib/utils';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { applyCurrent } from './applyCurrent';
 import { notifyApplied, notifyDbError, undoLast } from './notifyDbError';
 import { appliedTrace } from './useLiveTrace';
 import { useParsedText } from './useParsedText';
 import { useTypingError } from './useTypingError';
 
-const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', string> = {
+const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', Message> = {
   idle: 'Превью: база не меняется',
   tracing: 'Считаем',
   ready: 'Превью: база не меняется',
@@ -37,12 +41,16 @@ const STATUS_LABEL: Record<'idle' | 'tracing' | 'ready' | 'error' | 'stale', str
 
 // UPDATE/DELETE без WHERE: превью затронуло все строки таблицы, число берём из его итога.
 // Трасса чужого текста или с ошибкой, пустая таблица - предупреждать не о чем
-function noWhereCaution(stmt: ParsedStatement | null, trace: Trace | null): string | null {
+function noWhereCaution(stmt: ParsedStatement | null, trace: Trace | null, locale: Locale): string | null {
   if (!stmt || !trace || trace.sql !== stmt.text || trace.error) return null;
   const body = stmt.ast as unknown as Record<string, { whereClause?: unknown } | undefined>;
   const dml = stmt.kind === 'update' ? body.UpdateStmt : stmt.kind === 'delete' ? body.DeleteStmt : undefined;
   const n = trace.result?.rowCount ?? 0;
   if (!dml || dml.whereClause || n === 0) return null;
+  if (locale === 'en') {
+    const action = stmt.kind === 'update' ? 'updated' : 'deleted';
+    return n === 1 ? `the only row will be ${action}` : `all ${n} rows will be ${action}`;
+  }
   const [one, many] = stmt.kind === 'update' ? ['изменится', 'изменятся'] : ['удалится', 'удалятся'];
   return n === 1 ? `${one} единственная строка` : `${many} все ${rowsWord(n)}`;
 }
@@ -56,6 +64,8 @@ export function EditorToolbar({
   sandbox: Sandbox | null;
   onApplyCurrent: () => void;
 }) {
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const status = useSceneStore((s) => s.status);
   const stale = useSceneStore((s) => s.stale);
   const trace = useSceneStore((s) => s.trace);
@@ -99,7 +109,7 @@ export function EditorToolbar({
   // имя на полуслове (42703/42P01 до паузы набора) ещё не ошибка: «Недописан», как у разбора
   const typing = useTypingError(trace?.error?.code);
   const shown = stale || typing ? 'stale' : hasError ? 'error' : status;
-  const caution = !stale && !applied && status === 'ready' ? noWhereCaution(current, trace) : null;
+  const caution = !stale && !applied && status === 'ready' ? noWhereCaution(current, trace, locale) : null;
 
   const applyAll = () =>
     void run(async () => {
@@ -137,7 +147,7 @@ export function EditorToolbar({
         ) : (
           <span aria-hidden>●</span>
         )}
-        {STATUS_LABEL[shown]}
+        {t(STATUS_LABEL[shown])}
         {caution && ` · ${caution}`}
       </Badge>
       <div className="ml-auto flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -149,7 +159,7 @@ export function EditorToolbar({
             disabled={busy || !sandbox}
             onClick={applyAll}
           >
-            Применить всё
+            {t('Применить всё')}
           </Button>
         )}
         <Button
@@ -159,25 +169,25 @@ export function EditorToolbar({
           disabled={busy || !sandbox || journal.length === 0}
           onClick={() => void run(() => (sandbox ? undoLast(sandbox) : Promise.resolve()))}
         >
-          Отменить
+          {t('Отменить')}
         </Button>
         {/* DialogTrigger: после Esc или «Отмена» Radix возвращает фокус на «Сброс» */}
         <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm" data-testid="reset-button" disabled={busy || !sandbox}>
-              Сброс
+              {t('Сброс')}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Сбросить урок?</DialogTitle>
+              <DialogTitle>{t('Сбросить урок?')}</DialogTitle>
               <DialogDescription>
-                Все применённые запросы будут отменены, данные вернутся к началу урока.
+                {t('Все применённые запросы будут отменены, данные вернутся к началу урока.')}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmReset(false)}>
-                Отмена
+                {t('Отмена')}
               </Button>
               <Button
                 variant="destructive"
@@ -186,7 +196,7 @@ export function EditorToolbar({
                   void run(() => sandbox?.reset() ?? Promise.resolve());
                 }}
               >
-                Сбросить
+                {t('Сбросить')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -201,7 +211,7 @@ export function EditorToolbar({
           aria-disabled={applied || undefined}
           onClick={onApplyCurrent}
         >
-          {applied ? 'Применено' : 'Применить'} <Kbd>{modKey()} ⏎</Kbd>
+          {t(applied ? 'Применено' : 'Применить')} <Kbd>{modKey()} ⏎</Kbd>
         </Button>
       </div>
     </div>

@@ -20,6 +20,7 @@ import { useParams } from 'react-router';
 import { useResolvedTheme } from '@/app/ThemeProvider';
 import { getLesson } from '@/features/lessons/registry';
 import { OverlayLayer } from '@/features/overlay/OverlayLayer';
+import { useMessages } from '@/hooks/use-messages';
 import { useRootFont } from '@/hooks/use-root-font';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
@@ -38,7 +39,7 @@ const edgeTypes = { fk: FkEdge };
 // Подписи React Flow по-русски (ключи из AriaLabelConfig). Описание нод и рёбер заменено:
 // стандартное обещает выбор и перенос, а доска только для чтения
 const NODE_DESCRIPTION = 'Таблица на доске. Только для просмотра. Стрелки влево и вправо ходят по колонкам.';
-const ariaLabelConfig = {
+const ruAriaLabelConfig = {
   'node.a11yDescription.default': NODE_DESCRIPTION,
   'node.a11yDescription.keyboardDisabled': NODE_DESCRIPTION,
   'edge.a11yDescription.default': 'Связь по внешнему ключу. Только для просмотра.',
@@ -47,6 +48,17 @@ const ariaLabelConfig = {
   'controls.zoomOut.ariaLabel': 'Отдалить',
   'controls.fitView.ariaLabel': 'Вписать доску',
   'minimap.ariaLabel': 'Миникарта доски',
+};
+const enAriaLabelConfig = {
+  'node.a11yDescription.default': 'Read-only table. Use the left and right arrows to move between columns.',
+  'node.a11yDescription.keyboardDisabled':
+    'Read-only table. Use the left and right arrows to move between columns.',
+  'edge.a11yDescription.default': 'Read-only foreign key relationship.',
+  'controls.ariaLabel': 'Board controls',
+  'controls.zoomIn.ariaLabel': 'Zoom in',
+  'controls.zoomOut.ariaLabel': 'Zoom out',
+  'controls.fitView.ariaLabel': 'Fit board',
+  'minimap.ariaLabel': 'Board minimap',
 };
 
 // Ключ состояния свёртки: колонки трейса и развёрнутые таблицы. Смена ключа значит, что ширины нод изменятся
@@ -146,6 +158,9 @@ export function BoardCanvas() {
 
 function BoardFlow() {
   const { lessonId = null } = useParams();
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
+  const ariaLabelConfig = locale === 'en' ? enAriaLabelConfig : ruAriaLabelConfig;
   const meta = lessonId ? getLesson(lessonId) : undefined;
   const schema = useBoardStore((s) => s.schema);
   const visible = useBoardStore((s) => s.visibleTables);
@@ -177,8 +192,11 @@ function BoardFlow() {
   const { nodes, edges } = useMemo(() => {
     if (!schema) return { nodes: [], edges: [] };
     const positions = resolvePositions(schema, visible, meta?.board?.layout);
-    return { nodes: buildNodes(schema, visible, positions), edges: buildEdges(schema, visible) };
-  }, [schema, visible, meta, rootFont]);
+    return {
+      nodes: buildNodes(schema, visible, positions, locale),
+      edges: buildEdges(schema, visible, locale),
+    };
+  }, [schema, visible, meta, rootFont, locale]);
 
   useCamera(lessonId, nodes, boardRef, over);
 
@@ -238,8 +256,8 @@ function BoardFlow() {
           </ControlButton>
           <ControlButton
             onClick={() => setMiniMap((v) => !v)}
-            title="Миникарта"
-            aria-label="Миникарта"
+            title={t('Миникарта')}
+            aria-label={t('Миникарта')}
             aria-pressed={miniMap}
           >
             <MapIcon />

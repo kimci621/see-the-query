@@ -17,9 +17,13 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from '@/components/ui/sidebar';
-import { LESSONS, lessonsByChapter } from '@/features/lessons/registry';
+import { LESSONS, lessonsByChapter, lessonsForLocale } from '@/features/lessons/registry';
+import { useMessages } from '@/hooks/use-messages';
+import { lessonHref } from '@/lib/i18n';
 import { modKey } from '@/lib/utils';
 import { lessonStatus, useLessonStore } from '@/stores/lesson';
+import { useSettingsStore } from '@/stores/settings';
+import { LanguageToggle } from './LanguageToggle';
 import { ThemeToggle } from './ThemeToggle';
 
 const STATUS = {
@@ -36,7 +40,9 @@ export function LessonSidebar({
   onOpenSearch: () => void;
 }) {
   const byId = useLessonStore((s) => s.byId);
-  const groups = lessonsByChapter();
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
+  const groups = lessonsByChapter(lessonsForLocale(locale), locale);
   const done = LESSONS.filter((l) => byId[l.id]?.completed).length;
   const percent = LESSONS.length ? Math.round((done / LESSONS.length) * 100) : 0;
   const activeChapter = groups.find((g) => g.lessons.some((l) => l.id === activeId))?.chapter.id;
@@ -55,12 +61,12 @@ export function LessonSidebar({
           <p className="px-2 font-semibold">see-the-query</p>
           <Button variant="outline" size="sm" className="justify-between" onClick={onOpenSearch}>
             <span className="flex items-center gap-2">
-              <Search className="size-4" /> Поиск
+              <Search className="size-4" /> {t('Поиск')}
             </span>
             <Kbd>{modKey()} K</Kbd>
           </Button>
         </SidebarHeader>
-        <nav aria-label="Уроки" className="flex min-h-0 flex-1 flex-col">
+        <nav aria-label={t('Уроки')} className="flex min-h-0 flex-1 flex-col">
           <SidebarContent>
             {groups.map(({ chapter, lessons }) => (
               <Collapsible
@@ -90,8 +96,8 @@ export function LessonSidebar({
                         return (
                           <SidebarMenuItem key={l.id}>
                             <SidebarMenuButton asChild isActive={l.id === activeId}>
-                              <Link to={`/l/${l.id}`} title={l.title}>
-                                <Icon className="size-3.5 shrink-0" aria-label={label} role="img" />
+                              <Link to={lessonHref(l.id, locale)} title={l.title}>
+                                <Icon className="size-3.5 shrink-0" aria-label={t(label)} role="img" />
                                 <span className="font-mono text-xs text-muted-foreground">{l.number}</span>
                                 <span className="truncate">{l.title}</span>
                               </Link>
@@ -109,11 +115,14 @@ export function LessonSidebar({
         <SidebarFooter>
           <div className="flex items-center gap-2 px-2">
             <div className="flex-1 space-y-1">
-              <Progress value={percent} aria-label="Прогресс по программе" />
+              <Progress value={percent} aria-label={t('Прогресс по программе')} />
               <p className="text-xs text-muted-foreground">
-                Пройдено {done} из {LESSONS.length}
+                {locale === 'en'
+                  ? `Completed ${done} of ${LESSONS.length}`
+                  : `Пройдено ${done} из ${LESSONS.length}`}
               </p>
             </div>
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </SidebarFooter>

@@ -1,8 +1,10 @@
 import { memo } from 'react';
+import { useMessages } from '@/hooks/use-messages';
 import { formatCell } from './format';
 
 // NULL: серая плашка курсивом с пунктиром; '' приглушённо, чтобы их не путали
 export const CellValue = memo(function CellValue({ value, type }: { value: unknown; type?: string }) {
+  const t = useMessages();
   const cell = formatCell(value, type);
   if (cell.kind === 'null') {
     return (
@@ -16,7 +18,7 @@ export const CellValue = memo(function CellValue({ value, type }: { value: unkno
   }
   if (cell.kind === 'empty') {
     return (
-      <span data-kind="empty" title="Пустая строка" className="text-muted-foreground">
+      <span data-kind="empty" title={t('Пустая строка')} className="text-muted-foreground">
         {cell.text}
       </span>
     );

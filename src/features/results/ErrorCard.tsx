@@ -4,15 +4,19 @@ import type { DbError } from '@/features/db/types';
 import { applyFix } from '@/features/editor/diagnostics';
 import { useTypingError } from '@/features/editor/useTypingError';
 import { explainError } from '@/features/errors/explain';
+import { useMessages } from '@/hooks/use-messages';
 import { cn } from '@/lib/utils';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
+import { useSettingsStore } from '@/stores/settings';
 
 // Карточка ошибки: объяснение словаря, подсказка, правка в один клик и оригинал Postgres
 // (оригинал всегда в DOM, свёрнут под «Текст Postgres», спека 5.14).
 // sql - оператор, к которому относится position. parse - ошибка разбора недописанного текста.
 // Разбор и имя на полуслове показываем нейтрально, как плашку «Недописан»: краснеть рано
 export function ErrorCard({ error, sql, parse = false }: { error: DbError; sql: string; parse?: boolean }) {
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const schema = useBoardStore((s) => s.schema);
   const text = useEditorStore((s) => s.text);
   const explanation = useMemo(() => explainError(error, { sql, schema }), [error, sql, schema]);
@@ -55,14 +59,14 @@ export function ErrorCard({ error, sql, parse = false }: { error: DbError; sql: 
               data-testid="pg-fix-button"
               onClick={() => useEditorStore.getState().setText(fixed)}
             >
-              Заменить на {fix.to}
+              {locale === 'en' ? 'Replace with' : 'Заменить на'} {fix.to}
             </Button>
           )}
         </div>
       )}
       {/* оригинал свёрнут, но остаётся в DOM: скринридер и поиск его находят */}
       <details className="mt-2 text-xs">
-        <summary className="cursor-pointer text-muted-foreground">Текст Postgres</summary>
+        <summary className="cursor-pointer text-muted-foreground">{t('Текст Postgres')}</summary>
         <pre
           data-testid="pg-original"
           className="mt-1 overflow-auto rounded bg-muted/60 p-2 font-mono whitespace-pre-wrap"

@@ -11,6 +11,7 @@ const chapters: Chapter[] = [
 function lesson(id: string, chapter: string, order: number): LessonMeta {
   return {
     id,
+    locale: 'ru',
     title: id,
     chapter,
     number: '',

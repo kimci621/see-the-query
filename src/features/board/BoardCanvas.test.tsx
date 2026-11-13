@@ -99,6 +99,14 @@ describe('BoardCanvas', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it('подписывает управление доской на выбранном языке', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    renderBoard();
+    expect(screen.getByRole('button', { name: 'Zoom in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fit board' })).toBeInTheDocument();
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
   it('при малом зуме доска получает data-far', async () => {
     renderBoard();
     const board = screen.getByTestId('board-canvas');

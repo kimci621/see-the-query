@@ -21,4 +21,9 @@ describe('сжатый вид таблицы', () => {
     expect(hiddenRowsLabel(large(1006))).toMatch(/^ещё 1\s001 строка$/);
     expect(hiddenRowsLabel(large(1006, 2))).toMatch(/^ещё 1\s004 строки$/);
   });
+
+  it('подписывает скрытые строки на английском', () => {
+    expect(hiddenRowsLabel(large(100000), 'en')).toBe('99,995 more rows');
+    expect(hiddenRowsLabel(large(6), 'en')).toBe('1 more row');
+  });
 });

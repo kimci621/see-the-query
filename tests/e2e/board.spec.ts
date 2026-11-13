@@ -276,7 +276,7 @@ test('переход table-anatomy → select-basics заканчивается 
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('алиас');
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/l\/select-basics$/);
+  await expect(page).toHaveURL(/\/l\/select-basics\?lang=ru$/);
   await expect(book.getByTestId('hidden-columns')).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => zoomOf(page)).toBeGreaterThanOrEqual(0.85);
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');

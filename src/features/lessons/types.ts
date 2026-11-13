@@ -1,7 +1,9 @@
+import type { Locale } from '@/lib/i18n';
 import type { DatasetId } from '../db/datasets';
 
 export interface LessonMeta {
   id: string;
+  locale: Locale;
   title: string;
   chapter: string;
   number: string;

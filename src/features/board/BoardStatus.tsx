@@ -1,12 +1,15 @@
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Sandbox } from '@/features/db/sandbox';
+import { useMessages } from '@/hooks/use-messages';
+import type { Locale } from '@/lib/i18n';
 import { useBoardStore } from '@/stores/board';
+import { useSettingsStore } from '@/stores/settings';
 import { isTableVisible } from './layout';
 
-export function pgVersionLabel(version: string | null): string | null {
+export function pgVersionLabel(version: string | null, locale: Locale = 'ru'): string | null {
   const m = version?.match(/PostgreSQL (\d+(?:\.\d+)?)/);
-  return m ? `PostgreSQL ${m[1]} в браузере` : null;
+  return m ? `PostgreSQL ${m[1]} ${locale === 'en' ? 'in the browser' : 'в браузере'}` : null;
 }
 
 // Слои поверх доски: загрузка, пустая схема, сбой, версия Postgres
@@ -14,9 +17,11 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
   const schema = useBoardStore((s) => s.schema);
   const visible = useBoardStore((s) => s.visibleTables);
   const dimmed = useBoardStore((s) => s.dimmed);
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const loading = status === 'booting' || status === 'restarting' || (status === 'ready' && schema === null);
   const empty = schema !== null && !schema.tables.some((t) => isTableVisible(visible, t.id));
-  const label = pgVersionLabel(version);
+  const label = pgVersionLabel(version, locale);
 
   return (
     <>
@@ -32,7 +37,7 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
               <Skeleton className="h-40 w-52" />
               <Skeleton className="h-24 w-36" />
             </div>
-            <p className="text-sm text-muted-foreground">Поднимаем Postgres...</p>
+            <p className="text-sm text-muted-foreground">{t('Поднимаем Postgres...')}</p>
           </div>
         </div>
       )}
@@ -41,7 +46,7 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
           role="alert"
           className="absolute inset-0 z-10 grid place-items-center bg-background/80 text-sm text-destructive"
         >
-          Postgres не запустился. Обнови страницу.
+          {t('Postgres не запустился. Обнови страницу.')}
         </div>
       )}
       {!loading && status !== 'failed' && empty && !dimmed && (
@@ -50,7 +55,7 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
           className="pointer-events-none absolute inset-0 grid place-items-center"
         >
           <p className="text-sm text-muted-foreground">
-            Создай первую таблицу: <code className="font-mono">create table ...</code>
+            {t('Создай первую таблицу:')} <code className="font-mono">create table ...</code>
           </p>
         </div>
       )}

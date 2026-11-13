@@ -242,6 +242,19 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     }
   });
 
+  it('сохраняет свежий SQL при закрытии редактора до таймера', () => {
+    vi.useFakeTimers();
+    try {
+      route.lessonId = 'with-initial';
+      const { unmount } = render(<EditorPane />);
+      act(() => useEditorStore.getState().setText('select 123;'));
+      unmount();
+      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBe('select 123;');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('открытие урока ставит стартовый кадр на таблицы стартового текста', async () => {
     route.lessonId = 'unknown';
     useLessonStore

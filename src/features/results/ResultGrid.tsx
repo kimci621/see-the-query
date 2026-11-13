@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { formatCell } from '@/features/board/format';
 import type { QueryResult } from '@/features/db/types';
+import { useMessages } from '@/hooks/use-messages';
+import { rowsWord } from '@/lib/plural';
+import { useSettingsStore } from '@/stores/settings';
 
 // OID нужны для отличия даты от timestamp и JSON-массива от массива PostgreSQL.
 const CELL_TYPES: Record<number, string> = {
@@ -26,6 +29,8 @@ const CELL_TYPES: Record<number, string> = {
 
 // Виртуализированная таблица результата: моно-шрифт, NULL-плашки как на доске
 export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHint?: string }) {
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = result.rows;
   // initialRect: jsdom без layout, тесты иначе не увидят ни одной строки
@@ -42,7 +47,7 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
     return (
       <div data-testid="result-grid" className="grid h-full place-items-center">
         <p data-testid="result-empty" className="text-sm text-muted-foreground">
-          {emptyHint ?? '0 строк'}
+          {emptyHint ?? rowsWord(0, locale)}
         </p>
       </div>
     );
@@ -56,7 +61,7 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
       <div
         ref={scrollRef}
         role="table"
-        aria-label="Результат запроса"
+        aria-label={t('Результат запроса')}
         aria-rowcount={rows.length + 1}
         tabIndex={0}
         className="h-full overflow-auto"
@@ -114,6 +119,8 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
 }
 
 function Cell({ row, col, value, type }: { row: number; col: number; value: unknown; type?: string }) {
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const cell = formatCell(value, type);
   const full = formatCell(value, type, Number.POSITIVE_INFINITY);
   const isLong = cell.text !== full.text;
@@ -127,14 +134,18 @@ function Cell({ row, col, value, type }: { row: number; col: number; value: unkn
       data-testid={`cell-${row}-${col}`}
       data-kind={cell.kind}
       className="min-w-24 flex-1 truncate px-2 py-1.5"
-      title={isLong ? 'Открыть полное значение' : cell.text}
+      title={isLong ? t('Открыть полное значение') : cell.text}
     >
       {isLong ? (
         <Dialog>
           <DialogTrigger asChild>
             <button
               type="button"
-              aria-label={`Строка ${row + 1}, столбец ${col + 1}: показать полное значение`}
+              aria-label={
+                locale === 'en'
+                  ? `Row ${row + 1}, column ${col + 1}: show full value`
+                  : `Строка ${row + 1}, столбец ${col + 1}: показать полное значение`
+              }
               className="block w-full truncate text-left underline decoration-dotted underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               {cell.text}
@@ -142,15 +153,17 @@ function Cell({ row, col, value, type }: { row: number; col: number; value: unkn
           </DialogTrigger>
           <DialogContent className="max-h-[85vh] overflow-hidden">
             <DialogHeader>
-              <DialogTitle>Значение ячейки</DialogTitle>
+              <DialogTitle>{t('Значение ячейки')}</DialogTitle>
               <DialogDescription>
-                Строка {row + 1}, столбец {col + 1}.
+                {locale === 'en'
+                  ? `Row ${row + 1}, column ${col + 1}.`
+                  : `Строка ${row + 1}, столбец ${col + 1}.`}
               </DialogDescription>
             </DialogHeader>
             <pre
               tabIndex={0}
               role="region"
-              aria-label="Полное значение"
+              aria-label={t('Полное значение')}
               className="min-h-0 max-h-[65vh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs"
             >
               {detail}

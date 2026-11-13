@@ -5,10 +5,12 @@ import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ColumnInfo } from '@/features/db/introspect';
+import { useMessages } from '@/hooks/use-messages';
 import { plural } from '@/lib/plural';
 import { bumpRenderCount } from '@/lib/renderCount';
 import { cn } from '@/lib/utils';
 import { type AppliedWrite, useBoardStore } from '@/stores/board';
+import { useSettingsStore } from '@/stores/settings';
 import { CellValue } from './CellValue';
 import { COMPRESSED_ROWS, hiddenRowsLabel, isCompressed } from './compressed';
 import {
@@ -93,6 +95,7 @@ function Hint({ text, children }: { text: string; children: ReactNode }) {
 }
 
 function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: boolean }) {
+  const t = useMessages();
   return (
     <Hint text={columnTitle(column)}>
       <div
@@ -108,8 +111,8 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
         style={{ width: COLUMN_WIDTH }}
       >
         <div className="flex items-center gap-1 text-xs font-medium">
-          {column.isPk && <KeyRound aria-label="Первичный ключ" className="size-3 shrink-0" />}
-          {column.fk && <Link2 aria-label="Внешний ключ" className="size-3 shrink-0" />}
+          {column.isPk && <KeyRound aria-label={t('Первичный ключ')} className="size-3 shrink-0" />}
+          {column.fk && <Link2 aria-label={t('Внешний ключ')} className="size-3 shrink-0" />}
           <span className="vs-col-name truncate font-mono">{column.name}</span>
         </div>
         <div className="vs-col-meta flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
@@ -125,6 +128,8 @@ function ColumnHead({ column, highlighted }: { column: ColumnInfo; highlighted: 
 
 export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFlowNode>) {
   bumpRenderCount('tableNode');
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   const { table } = data;
   // Селекторы вместо data: при фокусе другой таблицы эта нода не рендерится
   const focused = useBoardStore((s) => s.focused.includes(id));
@@ -191,7 +196,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
             </span>
           )}
         </span>
-        <Badge variant="secondary" data-testid="row-count" title="Строк в таблице">
+        <Badge variant="secondary" data-testid="row-count" title={t('Строк в таблице')}>
           {table.rowCount}
         </Badge>
       </header>
@@ -208,11 +213,13 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
                   ? 'text-amber-700 dark:text-amber-300'
                   : 'text-green-700 dark:text-green-300',
               )}
-              title="Различия между снимком и текущим результатом запроса"
+              title={t('Различия между снимком и текущим результатом запроса')}
             >
               {table.matviewLag === 0
-                ? 'Совпадает'
-                : `${table.matviewLag} ${plural(table.matviewLag, 'различие', 'различия', 'различий')}`}
+                ? t('Совпадает')
+                : locale === 'en'
+                  ? `${table.matviewLag} ${table.matviewLag === 1 ? 'difference' : 'differences'}`
+                  : `${table.matviewLag} ${plural(table.matviewLag, 'различие', 'различия', 'различий')}`}
             </span>
           )}
           <code
@@ -220,7 +227,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
             className="min-w-0 truncate text-muted-foreground"
             title={table.viewDefinition ?? undefined}
           >
-            {table.viewDefinition ?? 'Определение недоступно'}
+            {table.viewDefinition ?? t('Определение недоступно')}
           </code>
         </div>
       )}
@@ -249,7 +256,12 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
                 node?.focus();
               }}
             >
-              +{stub} {plural(stub, 'колонка', 'колонки', 'колонок')}
+              +{stub}{' '}
+              {locale === 'en'
+                ? stub === 1
+                  ? 'column'
+                  : 'columns'
+                : plural(stub, 'колонка', 'колонки', 'колонок')}
             </button>
           </Hint>
         )}
@@ -259,7 +271,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
           key={row.key}
           data-row
           data-mark={row.mark}
-          title={row.mark && MARK_LABEL[row.mark]}
+          title={row.mark && t(MARK_LABEL[row.mark])}
           className={cn(
             'vs-rows flex border-b border-border/50 font-mono text-xs',
             row.mark === 'new' && 'bg-new-bg',
@@ -284,12 +296,16 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
       ))}
       {hiddenRows > 0 && (
         <div className="vs-rows px-3 text-xs text-muted-foreground" style={footer}>
-          {isCompressed(table) ? hiddenRowsLabel(table) : `+ ещё ${hiddenRows}`}
+          {isCompressed(table)
+            ? hiddenRowsLabel(table, locale)
+            : locale === 'en'
+              ? `+ ${hiddenRows} more`
+              : `+ ещё ${hiddenRows}`}
         </div>
       )}
       {table.rowCount === 0 && (
         <div className="vs-rows px-3 text-xs text-muted-foreground italic" style={footer}>
-          пусто
+          {t('пусто')}
         </div>
       )}
     </div>

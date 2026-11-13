@@ -1,8 +1,23 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { useSettingsStore } from '@/stores/settings';
 import { Callout, Cheatsheet, DontDoThis, NewTabLink, TlDr } from './Callouts';
 
 describe('выноски урока', () => {
+  it('подписывает выноски и ссылки на английском', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    render(
+      <>
+        <Callout kind="trap">Example</Callout>
+        <Cheatsheet>Summary</Cheatsheet>
+        <NewTabLink href="https://example.com">Docs</NewTabLink>
+      </>,
+    );
+    expect(screen.getByRole('note', { name: 'Pitfall' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cheat sheet' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Docs (opens in a new tab)' })).toBeInTheDocument();
+    useSettingsStore.setState({ locale: 'ru' });
+  });
   it('TlDr показывает суть и подсказку для скринридера', () => {
     render(<TlDr>Возвращает только строки с парой.</TlDr>);
     expect(screen.getByText('Возвращает только строки с парой.')).toBeInTheDocument();

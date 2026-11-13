@@ -1,7 +1,8 @@
 import type { Stage } from '@/features/tracer/types';
+import type { Locale } from '@/lib/i18n';
 
 // Короткое название стадии для чипа таймлайна и подсказок
-export function stageLabel(stage: Stage): string {
+export function stageLabel(stage: Stage, locale: Locale = 'ru'): string {
   switch (stage.kind) {
     case 'scan':
       return 'FROM';
@@ -35,13 +36,13 @@ export function stageLabel(stage: Stage): string {
     case 'recursion':
       return `RECURSIVE ${stage.name}`;
     case 'subquery':
-      return 'ПОДЗАПРОС';
+      return locale === 'en' ? 'SUBQUERY' : 'ПОДЗАПРОС';
     case 'dml':
       return stage.op.toUpperCase();
     case 'ddl':
       return 'DDL';
     case 'error':
-      return 'ОШИБКА';
+      return locale === 'en' ? 'ERROR' : 'ОШИБКА';
   }
 }
 

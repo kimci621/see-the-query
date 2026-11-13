@@ -2,19 +2,20 @@ import { expect, test } from '@playwright/test';
 
 test('навигация по урокам, поиск, режим фокуса', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/l\/how-to-use$/);
+  await expect(page).toHaveURL(/\/l\/how-to-use\?lang=ru$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeVisible();
 
   const nextLink = page.getByRole('navigation', { name: 'Соседние уроки' }).getByRole('link');
   const nextHref = await nextLink.getAttribute('href');
   expect(nextHref).toMatch(/^\/l\/(?!how-to-use$)/);
+  if (!nextHref) throw new Error('Нет ссылки на следующий урок');
   await nextLink.click();
-  await expect(page).toHaveURL(new RegExp(`${nextHref}$`));
+  await expect(page).toHaveURL(new URL(nextHref, page.url()).href);
 
   await page.keyboard.press('ControlOrMeta+k');
   await page.getByPlaceholder('Урок, тема, ключевое слово SQL...').fill('доска');
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/l\/how-to-use$/);
+  await expect(page).toHaveURL(/\/l\/how-to-use\?lang=ru$/);
 
   await page.keyboard.press('ControlOrMeta+Backslash');
   await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeHidden();

@@ -6,6 +6,7 @@ import type { LessonMeta } from './types';
 import { useLessonProgress } from './useLessonProgress';
 
 const meta: LessonMeta = {
+  locale: 'ru',
   id: 'inner-join',
   title: 'INNER JOIN, ON и USING',
   chapter: 'joins',

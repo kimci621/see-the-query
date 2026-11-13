@@ -9,7 +9,10 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { lessonsByChapter } from '@/features/lessons/registry';
+import { lessonsByChapter, lessonsForLocale } from '@/features/lessons/registry';
+import { useMessages } from '@/hooks/use-messages';
+import { lessonHref } from '@/lib/i18n';
+import { useSettingsStore } from '@/stores/settings';
 
 export function CommandMenu({
   open,
@@ -19,6 +22,8 @@ export function CommandMenu({
   onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
+  const locale = useSettingsStore((s) => s.locale);
+  const t = useMessages();
   // У диалога нет триггера, Radix сам фокус не вернёт: запоминаем элемент до открытия
   const returnTo = useRef<Element | null>(null);
   useLayoutEffect(() => {
@@ -29,20 +34,20 @@ export function CommandMenu({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Поиск по урокам"
-      description="Название, номер или тег"
+      title={t('Поиск по урокам')}
+      description={t('Название, номер или тег')}
       onCloseAutoFocus={(e) => {
         if (!(returnTo.current instanceof HTMLElement) || !returnTo.current.isConnected) return;
         e.preventDefault();
         returnTo.current.focus();
       }}
     >
-      <CommandInput placeholder="Урок, тема, ключевое слово SQL..." />
-      <CommandList label="Уроки">
-        <CommandEmpty>Ничего не нашлось</CommandEmpty>
+      <CommandInput placeholder={t('Урок, тема, ключевое слово SQL...')} />
+      <CommandList label={t('Уроки')}>
+        <CommandEmpty>{t('Ничего не нашлось')}</CommandEmpty>
         <LessonItems
           onPick={(id) => {
-            navigate(`/l/${id}`);
+            navigate(lessonHref(id, locale));
             onOpenChange(false);
           }}
         />
@@ -56,7 +61,8 @@ export function CommandMenu({
 // Поэтому при поиске список плоский: cmdk ставит выше пункт с лучшим score
 function LessonItems({ onPick }: { onPick: (id: string) => void }) {
   const searching = useCommandState((s) => s.search !== '');
-  return lessonsByChapter().map(({ chapter, lessons }) => {
+  const locale = useSettingsStore((s) => s.locale);
+  return lessonsByChapter(lessonsForLocale(locale), locale).map(({ chapter, lessons }) => {
     const items = lessons.map((l) => (
       <CommandItem
         key={l.id}

@@ -1,5 +1,6 @@
 import { Ban, ExternalLink, Info, Lightbulb, ListChecks, Rocket, TriangleAlert } from 'lucide-react';
 import { type ReactNode, useId } from 'react';
+import { useMessages } from '@/hooks/use-messages';
 import { cn } from '@/lib/utils';
 
 export type CalloutKind = 'analogy' | 'trap' | 'tip' | 'note';
@@ -30,29 +31,32 @@ export const CALLOUT_KINDS = Object.keys(KINDS) as CalloutKind[];
 
 // Внешняя ссылка урока: новая вкладка, иконка для глаз и пометка для читалки
 export function NewTabLink({ href, children }: { href: string; children: ReactNode }) {
+  const t = useMessages();
   return (
     <a href={href} target="_blank" rel="noreferrer">
       {children} <ExternalLink aria-hidden className="inline size-3.5 align-baseline" />
-      <span className="sr-only">(откроется в новой вкладке)</span>
+      <span className="sr-only">{t('(откроется в новой вкладке)')}</span>
     </a>
   );
 }
 
 export function TlDr({ children }: { children: ReactNode }) {
+  const t = useMessages();
   return (
     <div className="text-lg italic text-muted-foreground">
-      <span className="sr-only">Коротко:</span> {children}
+      <span className="sr-only">{t('Коротко:')}</span> {children}
     </div>
   );
 }
 
 export function Callout({ kind, children }: { kind: CalloutKind; children: ReactNode }) {
   const { title, Icon, tone, iconTone } = KINDS[kind];
+  const t = useMessages();
   return (
-    <aside role="note" aria-label={title} className={cn('my-6 rounded-md border-l-4 px-4 py-1', tone)}>
+    <aside role="note" aria-label={t(title)} className={cn('my-6 rounded-md border-l-4 px-4 py-1', tone)}>
       <p className="flex items-center gap-2 font-semibold">
         <Icon aria-hidden className={cn('size-4', iconTone)} />
-        {title}
+        {t(title)}
       </p>
       {children}
     </aside>
@@ -81,11 +85,12 @@ export function DontDoThis({ href, children }: { href: string; children: ReactNo
 export function Cheatsheet({ children }: { children: ReactNode }) {
   // id на экземпляр: две шпаргалки на странице не делят подпись
   const title = useId();
+  const t = useMessages();
   return (
     <section aria-labelledby={title} className="my-8 rounded-md border px-4 py-1">
       <h2 id={title} className="flex items-center gap-2">
         <ListChecks aria-hidden className="size-5" />
-        Шпаргалка
+        {t('Шпаргалка')}
       </h2>
       {children}
     </section>

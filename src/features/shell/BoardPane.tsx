@@ -9,7 +9,9 @@ import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
 import { ResultsPanel } from '@/features/results/ResultsPanel';
 import { Timeline } from '@/features/timeline/Timeline';
+import { useMessages } from '@/hooks/use-messages';
 import { remToPx, useRootFont } from '@/hooks/use-root-font';
+import type { Message } from '@/lib/messages';
 import { modKey } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
@@ -47,6 +49,7 @@ function BoardSlot() {
   const { status, version } = useSandbox();
   const boardRef = useRef<HTMLDivElement>(null);
   const focusMode = useSettingsStore((s) => s.focusMode);
+  const t = useMessages();
   useBoardHotkeys(boardRef);
   return (
     <div
@@ -70,7 +73,7 @@ function BoardSlot() {
             boardRef.current?.focus();
           }}
         >
-          Выйти из режима фокуса <Kbd>{modKey()} \</Kbd>
+          {t('Выйти из режима фокуса')} <Kbd>{modKey()} \</Kbd>
         </Button>
       )}
     </div>
@@ -108,29 +111,30 @@ export function BoardPane() {
 
 function PanelSlot(props: {
   id: string;
-  title: string;
-  hint: string;
+  title: Message;
+  hint: Message;
   minSize: string;
   size: number;
-  handle: string | null;
+  handle: Message | null;
   children?: ReactNode;
 }) {
   const rootFont = useRootFont();
+  const t = useMessages();
   return (
     <>
       <ResizablePanel id={props.id} defaultSize={`${props.size}%`} minSize={remToPx(props.minSize, rootFont)}>
         <section
-          aria-label={props.title}
+          aria-label={t(props.title)}
           className={
             props.children
               ? 'h-full min-h-0'
               : 'flex h-full items-center justify-center text-sm text-muted-foreground'
           }
         >
-          {props.children ?? props.hint}
+          {props.children ?? t(props.hint)}
         </section>
       </ResizablePanel>
-      {props.handle && <ResizableHandle aria-label={props.handle} />}
+      {props.handle && <ResizableHandle aria-label={t(props.handle)} />}
     </>
   );
 }

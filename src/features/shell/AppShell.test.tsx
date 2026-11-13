@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { routes } from '@/app/router';
 import { LessonView } from '@/features/lessons/LessonView';
 import { getLesson, loadLessonContent, neighbours } from '@/features/lessons/registry';
+import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
 
@@ -30,7 +31,7 @@ beforeAll(async () => {
   useLessonStore.setState(useLessonStore.getInitialState(), true);
   localStorage.clear();
 });
-beforeEach(() => useSettingsStore.setState({ focusMode: false }));
+beforeEach(() => useSettingsStore.setState({ focusMode: false, locale: 'ru' }));
 afterEach(() => vi.restoreAllMocks());
 
 // Подменяет matchMedia: запрос считается совпавшим, если его текст есть в списке
@@ -95,6 +96,46 @@ describe('AppShell', () => {
     expect(router.state.location.pathname).toBe('/l/how-to-use');
   });
 
+  it('корневой адрес сохраняет английский язык и показывает отсутствие перевода', async () => {
+    const router = renderAt('/?lang=en');
+    expect(await screen.findByRole('heading', { name: 'Translation coming soon' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/l/how-to-use');
+    expect(router.state.location.search).toBe('?lang=en');
+    expect(document.documentElement.lang).toBe('en');
+    expect(screen.queryByRole('textbox', { name: /SQL/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Lessons' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Search/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start/ })).toBeInTheDocument();
+  });
+
+  it('поиск и настройки темы подписаны на английском', async () => {
+    renderAt('/l/how-to-use?lang=en');
+    const search = await screen.findByRole('button', { name: /Search/ });
+    expect(screen.getByRole('button', { name: 'Color theme' })).toBeInTheDocument();
+    fireEvent.click(search);
+    expect(await screen.findByRole('dialog', { name: 'Search lessons' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Lesson, topic or SQL keyword...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('позволяет выйти из режима фокуса, если перевода ещё нет', async () => {
+    useSettingsStore.setState({ focusMode: true });
+    renderAt('/l/how-to-use?lang=en');
+    fireEvent.click(await screen.findByRole('button', { name: /Exit focus mode/ }));
+    expect(await screen.findByRole('heading', { name: 'Translation coming soon' })).toBeInTheDocument();
+  });
+
+  it('сохраняет несохранённый SQL при смене языка и возврате', async () => {
+    renderAt('/l/how-to-use?lang=ru');
+    await screen.findByRole('heading', { name: 'Как пользоваться доской' });
+    act(() => useEditorStore.getState().setText('select 123;'));
+    fireEvent.click(screen.getByRole('button', { name: 'Переключить язык на английский' }));
+    await screen.findByRole('heading', { name: 'Translation coming soon' });
+    fireEvent.click(screen.getByRole('button', { name: 'Switch language to Russian' }));
+    await screen.findByRole('heading', { name: 'Как пользоваться доской' });
+    expect(useEditorStore.getState().text).toBe('select 123;');
+  });
+
   it('урок рендерит MDX и навигацию вперёд', async () => {
     renderAt('/l/how-to-use');
     await screen.findAllByRole('button', { name: 'На доску' });
@@ -102,7 +143,7 @@ describe('AppShell', () => {
     if (!next) throw new Error('у how-to-use нет следующего урока');
     // Ссылка на урок есть и в левой колонке, поэтому ищем внутри навигации по соседним урокам
     const nav = screen.getByRole('navigation', { name: 'Соседние уроки' });
-    expect(within(nav).getByRole('link')).toHaveAttribute('href', `/l/${next.id}`);
+    expect(within(nav).getByRole('link')).toHaveAttribute('href', `/l/${next.id}?lang=ru`);
   });
 
   it('урок рендерит MDX-компоненты и документацию', async () => {
@@ -133,7 +174,10 @@ describe('AppShell', () => {
   it('неизвестный урок: «Урок не найден», правая колонка жива', async () => {
     renderAt('/l/nope');
     expect(await screen.findByText('Урок не найден')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /К первому уроку/ })).toHaveAttribute('href', '/l/how-to-use');
+    expect(screen.getByRole('link', { name: /К первому уроку/ })).toHaveAttribute(
+      'href',
+      '/l/how-to-use?lang=ru',
+    );
     expect(screen.getByRole('region', { name: 'Доска' })).toBeInTheDocument();
   });
 
