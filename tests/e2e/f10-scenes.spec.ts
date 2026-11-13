@@ -24,7 +24,7 @@ test.describe('сцены Ф10: CTE, рекурсия, множества и о�
     await openBoard(page, 'cte');
     await typeQuery(
       page,
-      "with recent as (select * from orders where created_at >= '2024-05-01') select order_id, status from recent order by order_id",
+      "with recent as (select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz) select order_id, status from recent order by order_id",
     );
     await expect(page.getByTestId('stage-chip')).toHaveText(['WITH recent', 'FROM', 'SELECT', 'ORDER BY'], {
       timeout: 10_000,

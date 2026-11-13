@@ -26,7 +26,7 @@ export const GOLDEN_F10: Array<{
   },
   {
     dataset: 'bookstore',
-    sql: "with recent as (select * from orders where created_at >= '2024-05-01') select order_id, status from recent order by order_id",
+    sql: "with recent as (select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz) select order_id, status from recent order by order_id",
     stages: 'materialize:2 > scan:2 > project:2 > sort:2',
   },
   {

@@ -11,7 +11,7 @@ board:
     orders: { x: 0, y: 0 }
 initialQuery: |
   with recent as (
-    select * from orders where created_at >= '2024-05-01'
+    select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
   )
   select order_id, status from recent order by order_id;
 docs:
@@ -25,13 +25,13 @@ mvp: false
 
 ## Что есть в данных
 
-В <T id="public.orders">orders</T> 8 заказов. Если смотреть по <C id="public.orders.created_at">created_at</C>, с 1 мая 2024 года сделано два: заказ 7 со статусом paid и заказ 8 со статусом new. Заказ 7 создан в 00:10 по Москве, поэтому граница `>= '2024-05-01'` его берёт. В песочнице часовой пояс UTC+3.
+В <T id="public.orders">orders</T> 8 заказов. Если смотреть по <C id="public.orders.created_at">created_at</C>, с 1 мая 2024 года сделано два: заказ 7 со статусом paid и заказ 8 со статусом new. Заказ 7 создан в 00:10 по Москве. Укажем границу с явным смещением UTC+3, чтобы она включала этот заказ независимо от часового пояса сессии.
 
 ## Имя для промежуточного результата
 
 ```sql run expect=rows:2
 with recent as (
-  select * from orders where created_at >= '2024-05-01'
+  select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
 )
 select order_id, status from recent order by order_id;
 ```
@@ -46,7 +46,7 @@ CTE можно перечислить несколько, через запят�
 
 ```sql run expect=rows:1
 with recent as (
-  select * from orders where created_at >= '2024-05-01'
+  select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
 ),
 paid_recent as (
   select * from recent where status = 'paid'
@@ -64,7 +64,7 @@ select order_id, status from paid_recent order by order_id;
 
 ```sql run expect=rows:2
 with recent as (
-  select * from orders where created_at >= '2024-05-01'
+  select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
 ),
 by_status as (
   select status, count(*) as cnt from recent group by status
@@ -107,7 +107,7 @@ select * from recent;
 ## Проверь себя
 
 1. Сколько строк вернёт `with recent as (...) select count(*) from recent`? Сначала ответь, потом проверь.
-2. Поменяй дату на `'2024-04-01'`. Сколько заказов попадёт в `recent`?
+2. Поменяй дату в границе на `2024-04-01`, сохранив смещение `+03`. Сколько заказов попадёт в `recent`?
 3. Добавь третий CTE `cancelled as (select * from recent where status = 'cancelled')`. Сколько строк он вернёт?
 
 <Cheatsheet>
