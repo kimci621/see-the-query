@@ -23,6 +23,7 @@ import { OverlayLayer } from '@/features/overlay/OverlayLayer';
 import { useRootFont } from '@/hooks/use-root-font';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
+import { useSceneStore } from '@/stores/scene';
 import { useSettingsStore } from '@/stores/settings';
 import { FkEdge, FkMarkers } from './FkEdge';
 import { anchorFrame, chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM, rem, setRootFont } from './layout';
@@ -61,6 +62,19 @@ const tablesOf = (nodes: { id: string; type?: string }[]) =>
 
 // Читаем в момент вызова: пользователь может переключить настройку системы без перезагрузки
 const animationMs = (ms: number) => (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms);
+
+// Пока сцена ведёт камеру, автоматический фокус её исходных таблиц не должен перебивать кадр.
+function sceneOwnsCamera(ids: string[]): boolean {
+  const { trace, followCamera } = useSceneStore.getState();
+  const source = trace?.touched.tableIds;
+  return (
+    useBoardStore.getState().dimmed &&
+    followCamera &&
+    source !== undefined &&
+    ids.length === source.length &&
+    ids.every((id) => source.includes(id))
+  );
+}
 
 // Кадры камеры. Фокус (и стартовый кадр урока): таблицы запроса крупно, не ближе зума 1.
 // Отступ 0.1: при 0.3 свёрнутая book (756) на доске 719 px получала зум 0.73 и мелкий текст
@@ -309,7 +323,7 @@ function useCamera(
 
   useEffect(() => {
     const ids = useBoardStore.getState().focused;
-    if (focusRequest > 0 && ids.length > 0) {
+    if (focusRequest > 0 && ids.length > 0 && !sceneOwnsCamera(ids)) {
       startFold.current = null;
       fitFrame(flow, store, focusFrame(ids));
     }
@@ -330,7 +344,7 @@ function useCamera(
       knownWidths.current.set(id, w);
     }
     const start = startFold.current?.fold === foldKey() ? startFold.current : null;
-    if (!changed || start?.keep) return;
+    if (!changed || start?.keep || sceneOwnsCamera(useBoardStore.getState().focused)) return;
     if (!start) startFold.current = null;
     const ids = useBoardStore.getState().focused;
     const duration = start ? 0 : undefined;

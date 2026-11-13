@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useBoardStore } from '@/stores/board';
 import { useLessonStore } from '@/stores/lesson';
+import { useSceneStore } from '@/stores/scene';
 import { useSettingsStore } from '@/stores/settings';
 import { SCHEMA } from './__fixtures__/schema';
 import { BoardCanvas } from './BoardCanvas';
@@ -105,6 +106,43 @@ describe('BoardCanvas', () => {
     expect(board).toHaveAttribute('data-far');
     await act(() => flow().setViewport({ x: 0, y: 0, zoom: 1 }));
     expect(board).not.toHaveAttribute('data-far');
+  });
+
+  it('фокус таблиц трассы не уводит камеру от активной сцены, ручной выбор другой таблицы работает', () => {
+    renderBoard();
+    act(() => {
+      useSceneStore.setState({
+        followCamera: true,
+        trace: { touched: { tableIds: ['public.book'], columns: [] } } as never,
+      });
+      useBoardStore.getState().setDimmed(true);
+    });
+    vi.mocked(flow().fitView).mockClear();
+    act(() => useBoardStore.getState().focus(['public.book']));
+    expect(useBoardStore.getState().focused).toEqual(['public.book']);
+    expect(flow().fitView).not.toHaveBeenCalled();
+    act(() => useBoardStore.getState().focus(['public.author']));
+    expect(flow().fitView).toHaveBeenCalled();
+    useSceneStore.setState({ trace: null });
+  });
+
+  it('поздний замер таблицы не перебивает камеру активной сцены', () => {
+    renderBoard();
+    measure('public.book', 756);
+    act(() => {
+      useBoardStore.getState().focus(['public.book']);
+      useSceneStore.setState({
+        followCamera: true,
+        trace: { touched: { tableIds: ['public.book'], columns: [] } } as never,
+      });
+      useBoardStore.getState().setDimmed(true);
+    });
+    vi.mocked(flow().fitView).mockClear();
+    measure('public.book', 1188);
+    expect(flow().fitView).not.toHaveBeenCalled();
+    act(() => useBoardStore.getState().requestFit());
+    expect(flow().fitView).toHaveBeenCalled();
+    useSceneStore.setState({ trace: null });
   });
 
   it('⌘0 не перехватывается вне доски', () => {
