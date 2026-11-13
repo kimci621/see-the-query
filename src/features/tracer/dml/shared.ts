@@ -119,6 +119,22 @@ export function instrument(ast: Node, nodeName: string): string {
   return sqlOf(copy as unknown as Node);
 }
 
+// Для секций физический адрес строки уникален только вместе с tableoid.
+export function instrumentPartitionInsert(ast: Node): string {
+  const copy = structuredClone(ast) as unknown as Record<string, DmlNode>;
+  const body = copy.InsertStmt;
+  const extra = [
+    resultTarget(columnRef('new', 'tableoid'), '__vs_tableoid'),
+    resultTarget(columnRef('new', 'ctid'), '__vs_ctid'),
+    resultTarget(columnRef('new', '*')),
+  ];
+  body.returningClause = {
+    ...body.returningClause,
+    exprs: [...extra, ...(body.returningClause?.exprs ?? [])],
+  };
+  return sqlOf(copy as unknown as Node);
+}
+
 // В панели результата остаётся только RETURNING пользователя.
 export function userResult(result: QueryResult, prefix: number): QueryResult {
   const fields = result.fields.slice(prefix);

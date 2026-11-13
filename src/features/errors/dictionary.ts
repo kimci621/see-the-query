@@ -381,6 +381,16 @@ export const DICTIONARY: Record<string, Entry> = {
         },
 
   '23514': (err, ctx) => {
+    if (/^no partition of relation .+ found for row/i.test(err.message)) {
+      const name = err.table ?? quoted(err.message);
+      const schema = err.schema?.startsWith('pg_temp_') ? 'pg_temp' : (err.schema ?? 'public');
+      return {
+        title: 'Нет подходящей секции',
+        body: `Для строки не найдена секция таблицы ${name}.`,
+        suggestion: 'Проверь значение ключа и диапазоны секций или создай подходящую секцию.',
+        highlight: { tableIds: name ? [`${schema}.${name}`] : [], columns: [] },
+      };
+    }
     // имя по умолчанию: <таблица>_<колонка>_check
     const column = err.constraint?.replace(`${err.table}_`, '').replace(/_check$/, '');
     const owner = ctx.schema?.tables.find((t) => t.id === tableId(err));

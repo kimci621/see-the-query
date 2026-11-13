@@ -131,6 +131,8 @@ export type Stage = StageBase &
           updated: Array<{ key: RowKey; values: unknown[] }>;
         }>;
         triggerEffects?: Array<{ tableId: string; candidates: string[]; added: Relation }>;
+        routing?: Array<{ partitionId: string; added: Relation }>;
+        partitionKey?: string;
         // Колонки, которые заполнила база: DEFAULT, identity, генерируемые
         defaulted?: string[];
         sequences?: Array<{ column: string; before: number | string | null; after: number | string | null }>;

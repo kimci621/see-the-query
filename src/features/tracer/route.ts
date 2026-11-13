@@ -1,6 +1,7 @@
 import { type DbClient, DbException } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
 import { traceDdl } from './ddl/trace-ddl';
+import { tracePartitionInsert } from './dml/routing';
 import { traceDml } from './dml/trace-dml';
 import { traceTruncate } from './dml/truncate';
 import { ProbeOverflow, type Prober, TraceFallback } from './probe';
@@ -35,6 +36,10 @@ export async function traceSpecial(
 ): Promise<Special | string | null> {
   const node = Object.keys(stmt.ast)[0];
   try {
+    if (node === 'InsertStmt') {
+      const routed = await tracePartitionInsert(stmt, prober, opts);
+      if (routed) return routed;
+    }
     if (DML.has(node)) return await traceDml(stmt, db, prober, opts, traceSelect);
     if (node === 'TruncateStmt') return await traceTruncate(stmt, prober, opts);
     if (DDL.has(node)) return await traceDdl(stmt, db, prober, opts);

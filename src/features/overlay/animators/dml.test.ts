@@ -185,6 +185,42 @@ describe('dmlAnimator', () => {
     expect(effect?.frame.decorations).toContainEqual(expect.objectContaining({ kind: 'arrow' }));
   });
 
+  it('показывает фактическое распределение вставленных строк по секциям', () => {
+    const columns = [{ name: 'id', type: 'int' }];
+    const phases = dmlAnimator(
+      { tables: [], decorations: [] },
+      stage({
+        inserted: ['b=(0,1)', 'b=(0,8)'],
+        routing: [
+          {
+            partitionId: 'public.may',
+            added: { columns, rows: [{ key: 'b=(0,1)', lineage: {}, values: [1] }] },
+          },
+          {
+            partitionId: 'public.june',
+            added: { columns, rows: [{ key: 'b=(0,8)', lineage: {}, values: [2] }] },
+          },
+        ],
+        partitionKey: 'RANGE (logdate)',
+      }),
+      0,
+      testCtx(),
+    );
+    const routing = phases.at(-1);
+    expect(routing?.id).toBe('0:routing');
+    expect(routing?.caption).toContain('строк: 2, секций: 2');
+    expect(routing?.caption).toContain('RANGE (logdate)');
+    expect(routing?.frame.tables.find((table) => table.id === 't:public.may')?.rows[0]).toMatchObject({
+      values: [1],
+      state: 'new',
+    });
+    expect(routing?.frame.tables.find((table) => table.id === 't:public.june')?.rows[0]).toMatchObject({
+      values: [2],
+      state: 'new',
+    });
+    expect(routing?.frame.decorations.filter((item) => item.kind === 'arrow')).toHaveLength(2);
+  });
+
   it('INSERT SELECT держит источник и проводит линию к конфликту', () => {
     const source: Frame = {
       tables: [

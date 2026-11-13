@@ -47,6 +47,7 @@ const CASES: Record<string, string> = {
   fkDelete: 'delete from author where author_id = 1',
   notNull: 'insert into author (name) values (null)',
   check: 'update customer set bonus = -1',
+  missingPartition: 'insert into partitioned_values values (1)',
   divZero: 'select price / 0 from book',
   badInput: `select 'abc'::int`,
   subquery: 'select (select title from book) as t',
@@ -87,6 +88,8 @@ beforeAll(async () => {
       create temp sequence unused_seq;
       create temp table short_text (value varchar(2));
       create temp table generated_values (a int, b int generated always as (a * 2) stored);
+      create temp table partitioned_values (id int) partition by range (id);
+      create temp table partitioned_ten partition of partitioned_values for values from (10) to (20);
       create temp table duplicate_values (id int);
       insert into duplicate_values values (1), (1);
       create temp table unique_values (id int primary key);
@@ -178,6 +181,15 @@ describe('explainError', () => {
       const explanation = explainError({ code, message }, context);
       expect(`${explanation.title} ${explanation.body}`).not.toContain(forbidden);
     }
+  });
+
+  it('отличает отсутствие секции от нарушения CHECK с тем же кодом', () => {
+    expect(errors.get('missingPartition')?.code).toBe('23514');
+    expect(explain('missingPartition').title).toMatch(/секции/i);
+    expect(explain('missingPartition').body).toContain('partitioned_values');
+    expect(explain('missingPartition').body).not.toContain('undefined');
+    expect(explain('missingPartition').suggestion).toMatch(/ключа|секци/i);
+    expect(explain('check').title).toBe('Нарушено условие CHECK');
   });
 
   it('объясняет повторы при создании уникального индекса', () => {

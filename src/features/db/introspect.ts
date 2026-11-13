@@ -29,7 +29,7 @@ export interface TableInfo {
   columns: ColumnInfo[];
   rowCount: number;
   sampleRows: unknown[][]; // первые N строк, порядок по ctid
-  sampleCtids: string[]; // ctid строк sampleRows; у view и matview 'row:<i>'
+  sampleCtids: string[]; // ctid строк; у секционированной таблицы с tableoid, у view 'row:<i>'
   sampleXmins?: string[]; // xmin строк sampleRows (только таблицы): по нему доска находит строки «Применить»
   indexes: IndexInfo[];
   constraints: Array<{ name: string; kind: 'p' | 'u' | 'f' | 'c'; columns: string[] }>; // NOT NULL здесь нет: см. nullable
@@ -186,8 +186,10 @@ export async function introspect(db: DbClient, opts: { sampleRows?: number } = {
       rowCount = (await rows<[number]>(`select count(*)::int from ${from}`))[0][0];
       if (relkind === 'r' || relkind === 'p') {
         // алиас обязателен: без него order by ctid сортирует текстовый ctid, и (0,10) встаёт перед (0,2)
+        const rowId = relkind === 'p' ? "t.tableoid::text || ':' || t.ctid::text" : 't.ctid::text';
+        const order = relkind === 'p' ? 't.tableoid, t.ctid' : 't.ctid';
         const res = await rows<unknown[]>(
-          `select t.ctid::text as __ctid, t.xmin::text as __xmin, t.* from ${from} t order by t.ctid limit ${limit}`,
+          `select ${rowId} as __ctid, t.xmin::text as __xmin, t.* from ${from} t order by ${order} limit ${limit}`,
         );
         sampleCtids = res.map((r) => r[0] as string);
         sampleXmins = res.map((r) => r[1] as string);

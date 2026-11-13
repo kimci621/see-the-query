@@ -68,3 +68,33 @@ describe('golden Ф11: побочные изменения при триггер
     });
   });
 });
+
+describe('golden Ф11: маршрутизация вставки', () => {
+  it('секции и RETURNING совпадают с прямым выполнением PostgreSQL', async () => {
+    await withDataset('empty', async (db) => {
+      await db.exec(`
+        create table readings (id int, day date) partition by range (day);
+        create table readings_may partition of readings for values from ('2024-05-01') to ('2024-06-01');
+        create table readings_june partition of readings for values from ('2024-06-01') to ('2024-07-01');
+      `);
+      const sql = "insert into readings values (1, '2024-05-10'), (2, '2024-06-15') returning id, day";
+      const direct = await inPreview(db, async () => {
+        const result = await db.query(sql);
+        const rows = await db.query('select tableoid::regclass::text, id, day from readings order by id');
+        return { result: result.rows, rows: rows.rows };
+      });
+      await inPreview(db, async () => {
+        const trace = await traceSql(db, sql);
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(trace.result?.rows).toEqual(direct.result);
+        const stage = trace.stages.find((item) => item.kind === 'dml');
+        if (stage?.kind !== 'dml') throw new Error('Нет стадии DML');
+        expect(
+          stage.routing?.flatMap((group) =>
+            group.added.rows.map((row) => [group.partitionId.split('.').at(-1), ...row.values]),
+          ),
+        ).toEqual(direct.rows);
+      });
+    });
+  });
+});
