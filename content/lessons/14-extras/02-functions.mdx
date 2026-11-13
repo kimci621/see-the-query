@@ -1,0 +1,164 @@
+---
+id: functions
+title: Функции и процедуры
+chapter: extras
+number: "14.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.customer]
+initialQuery: |
+  select customer_id, name, bonus from customer order by customer_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-createfunction.html
+    title: Создание функции
+  - url: https://www.postgresql.org/docs/18/xfunc-sql.html
+    title: Функции на языке SQL
+  - url: https://www.postgresql.org/docs/18/xfunc-volatility.html
+    title: Категории изменчивости функций
+  - url: https://www.postgresql.org/docs/18/sql-createprocedure.html
+    title: Создание процедуры
+  - url: https://www.postgresql.org/docs/18/sql-call.html
+    title: Вызов процедуры
+course: ["12.41", "12.42"]
+tags: [функция, процедура, plpgsql, volatility]
+---
+
+<TlDr>Функция возвращает результат в SQL-выражение. Процедуру вызывают командой CALL; обе могут выполнять действия с данными.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.customer">customer</T> шесть покупателей. У Анны 120 бонусов, у Ивана с номером 2 бонусов нет:
+
+```sql run expect=rows:2
+select customer_id, name, bonus from customer
+where customer_id in (1, 2) order by customer_id;
+```
+
+На доске две строки. Сначала создадим функцию, которая рассчитает сумму, а потом процедуру, которая изменит данные.
+
+## Функция на SQL
+
+**Функция** хранит именованный код и возвращает результат. Создадим функцию с двумя аргументами: номером покупателя и суммой бонусов.
+
+```sql apply expect=rows:0
+create function add_bonus(p_customer_id bigint, p_amount integer) returns integer
+language sql stable as $$
+  select bonus + p_amount from customer where customer_id = p_customer_id
+$$;
+```
+
+Нажми «Применить», чтобы сохранить определение. Функция читает таблицу, но не меняет её. Вызовем её из `SELECT`:
+
+```sql run expect=rows:1
+select add_bonus(1, 10) as new_bonus;
+```
+
+Результат на доске: 130. Это расчёт, а не запись в `customer`. Аргументы можно назвать и передать в другом порядке:
+
+```sql run expect=rows:1
+select add_bonus(p_amount => 0, p_customer_id => 1) as same_bonus;
+```
+
+Получилось 120. Если покупателя нет, запрос внутри функции не возвращает строку, и скалярная SQL-функция возвращает `NULL`:
+
+```sql run expect=rows:1
+select add_bonus(999, 10) as missing_customer;
+```
+
+На доске одна строка с `NULL`, а не ноль строк. Поведение можно изменить, если явно обработать отсутствие покупателя.
+
+<Callout kind="analogy">
+Функция похожа на формулу в ячейке: ей передают входные значения и получают результат. Но функции PostgreSQL могут делать больше, в том числе менять данные, поэтому один вызов не всегда безопасен как обычный расчёт.
+</Callout>
+
+## Переменные и условия в PL/pgSQL
+
+**PL/pgSQL** добавляет к SQL переменные, условия и циклы. Следующая функция читает бонус и выбирает подпись:
+
+```sql apply expect=rows:0
+create function bonus_label(p_customer_id bigint) returns text
+language plpgsql stable as $$
+declare
+  b integer;
+begin
+  select bonus into b from customer where customer_id = p_customer_id;
+  if b is null then
+    return 'покупатель не найден';
+  elsif b > 0 then
+    return 'бонус: ' || b;
+  end if;
+  return 'без бонуса';
+end;
+$$;
+```
+
+`$$` ограничивает текст тела функции. `SELECT ... INTO` записывает значение в переменную `b`, а `IF` выбирает результат. Проверим две ветки:
+
+```sql run expect=rows:2
+select customer_id, bonus_label(customer_id) as label
+from customer where customer_id in (1, 2) order by customer_id;
+```
+
+Анна получила подпись «бонус: 120», Иван - «без бонуса». Отдельная ветка обрабатывает отсутствие покупателя.
+
+## Процедура и CALL
+
+**Процедуру** вызывают отдельной командой `CALL`, а не внутри `SELECT`. Создадим процедуру, которая начисляет бонусы:
+
+```sql apply expect=rows:0
+create procedure grant_bonus(p_customer_id bigint, p_amount integer)
+language sql as $$
+  update customer set bonus = bonus + p_amount where customer_id = p_customer_id
+$$;
+```
+
+Теперь вызовем её и сохраним изменение:
+
+```sql apply expect=rows:0
+call grant_bonus(1, 10);
+```
+
+Проверим строку покупателя:
+
+```sql run expect=rows:1
+select customer_id, bonus from customer where customer_id = 1;
+```
+
+На доске 130: процедура изменила данные. «Сброс» восстановит исходные 120 и удалит созданные объекты. Процедура может иметь выходные параметры; функция тоже может изменять таблицы. Отличие не сводится к «чтение против записи».
+
+Некоторые процедуры могут управлять транзакциями, но это разрешено не в любом контексте вызова. Например, при `CALL` внутри блока транзакции процедура не может выполнить `COMMIT` или `ROLLBACK`. В нашем примере управления транзакцией нет.
+
+## Обещание планировщику
+
+Категория изменчивости описывает поведение функции. `VOLATILE` допускает изменение данных или разные результаты при одинаковых аргументах и используется по умолчанию. `STABLE` обещает одинаковый результат для одинаковых аргументов в рамках одного оператора и запрещает изменение базы. `IMMUTABLE` обещает одинаковый результат при одинаковых аргументах всегда.
+
+Наши функции читают `customer`, поэтому они не `IMMUTABLE`: бонус может измениться между запросами. Функции в выражении индекса должны быть `IMMUTABLE`. Для вычисляемого значения в условии поиска по индексу требования другие: там может подходить `STABLE`. SQL-функцию планировщик иногда может встроить в запрос, но это не гарантия для каждого вызова.
+
+## Чего нет в выдаче и почему
+
+- ❌ Покупателя 999 в таблице: функция вернула `NULL`, потому что её внутренний запрос не нашёл строку.
+- ❌ Изменения бонуса после `SELECT add_bonus(...)`: функция только рассчитала сумму.
+
+## Ловушки
+
+<Callout kind="trap">
+Не помечай функцию как `IMMUTABLE` только ради индекса, если она читает изменяемую таблицу. Планировщик доверяет обещанию и может повторно использовать устаревший результат.
+</Callout>
+
+<Callout kind="tip">
+Проверяй поведение функции на отсутствующей строке и `NULL`. Выбирай категорию изменчивости по тому, что код действительно делает, а не по желаемому плану.
+</Callout>
+
+## Проверь себя
+
+1. Что вернёт `add_bonus(1, 0)` до вызова процедуры и изменит ли он таблицу?
+2. Какую подпись вернёт `bonus_label(999)`?
+3. Почему функции, читающей бонус из таблицы, нельзя обещать `IMMUTABLE`?
+
+<Cheatsheet>
+- `CREATE FUNCTION ... RETURNS ...` создаёт функцию; её можно вызвать в `SELECT`.
+- `CREATE PROCEDURE` создаёт процедуру, `CALL` её вызывает.
+- `STABLE`, `IMMUTABLE` и `VOLATILE` описывают обещания планировщику.
+- PL/pgSQL поддерживает переменные и условия внутри тела функции.
+</Cheatsheet>

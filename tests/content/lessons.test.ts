@@ -101,6 +101,7 @@ const GUIDE_LESSONS: string[] = [
   'denormalization',
   'dont-do-this',
   'full-text-search',
+  'functions',
 ];
 
 // Компоненты, которые урок получает без импорта; pre это подмена тега, а не компонент MDX
