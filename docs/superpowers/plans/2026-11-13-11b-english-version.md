@@ -57,7 +57,7 @@
 
 Список директорий задаёт места поиска, а не разрешение менять все файлы. В каждом модуле менять только строки и интерфейсы, нужные для языка.
 
-## Задача 1. Обновить спецификацию и контракты
+## Task 1: Обновить спецификацию и контракты
 
 **Трекер:** добавить новый пункт `P11б.7` для правок контрактов; `P11б.1` закрыть после согласования плана. На время правок в работе только `P11б.7`.
 
@@ -69,7 +69,7 @@
 - [ ] В `CLAUDE.md` заменить правило «Тексты интерфейса на русском» на правило двух языков; сохранить правило русских комментариев и остальные инварианты.
 - [ ] Сверить документ с решениями и `git diff --check`, выполнить `pnpm check`. Отметить `P11б.7` готовым и сделать отдельный коммит `docs(contracts): описать английскую версию` вместе с трекером.
 
-## Задача 2. Язык, маршруты, реестр и интерфейс
+## Task 2: Язык, маршруты, реестр и интерфейс
 
 **Трекер:** `P11б.2`. **Файлы:** `src/lib/i18n.ts`, `src/lib/messages.ts`, `src/app/router.tsx`, `src/stores/settings.ts`, `src/features/shell/*`, `src/features/lessons/*`, `content/chapters.ts`, `plugins/lessons-meta.ts`, `src/virtual-modules.d.ts` и соответствующие тесты.
 
@@ -101,7 +101,7 @@
 - [ ] Вынести пользовательские строки оболочки, боковой панели, поиска, справки, настроек, MDX-компонентов, редактора, доски и результатов в словари. Проверить подписи кнопок, пустые и ошибочные состояния, `title`, `aria-label`, `aria-live`, сообщения screen reader и строки библиотечных компонентов. Пользовательские данные и исходную ошибку БД не менять.
 - [ ] Запустить `pnpm exec vitest run --project node tests/unit/i18n.test.ts plugins/lessons-meta.test.ts` и `pnpm exec vitest run --project dom src/features/shell/LanguageToggle.test.tsx src/features/lessons/registry.test.ts`, затем `pnpm check`, `pnpm build` и `pnpm exec playwright test tests/e2e/english.spec.ts --workers=1`. Отметить `P11б.2` и закоммитить.
 
-## Задача 3. Ошибки, подписи трассы и сцены
+## Task 3: Ошибки, подписи трассы и сцены
 
 **Трекер:** `P11б.3`. **Файлы:** `src/features/errors/*`, `src/features/tracer/*`, `src/features/overlay/*`, `src/features/timeline/*`, `src/features/scenes/*`, `src/features/sessions/*`, `content/scenarios/*`, связанные тесты.
 
@@ -113,7 +113,7 @@
 - [ ] В `content/scenarios/localize.ts` хранить английские `title`, `intro` и список переводов полей шагов `caption`, `note`, `settledNote` по `scenario.id`. `scenarioForLocale` возвращает новый сценарий с выбранным текстом; SQL, ожидания, порядок и блокировки не меняются. Тест проверяет все `id`, число шагов, наличие обязательных переводов и равенство рабочих полей обеих версий. Перевести подписи сцен MVCC, B-tree, нормализации, FTS, триггеров и партиций.
 - [ ] Запустить `pnpm exec vitest run --project node src/features/tracer/captions.test.ts src/features/errors/explain.test.ts src/features/overlay/playback.test.ts` и `pnpm exec vitest run --project dom src/features/timeline/Timeline.test.tsx src/features/sessions/TwoSessions.test.tsx`, затем `pnpm check` и `pnpm exec playwright test tests/e2e/english.spec.ts --workers=1`. До задачи 4 браузерная проверка касается оболочки; работающую английскую песочницу и подписи проверить после неё. Сценарии двух сессий проверить через существующий CI job `sessions` с PostgreSQL 18; если локального Postgres нет, дождаться результата job перед закрытием фазы. Отметить `P11б.3` и закоммитить.
 
-## Задача 4. Английские данные и сохранность песочниц
+## Task 4: Английские данные и сохранность песочниц
 
 **Трекер:** `P11б.4`. **Файлы:** два новых SQL-файла, `src/features/db/{datasets,sandbox,useLessonSandbox}.ts`, `src/stores/lesson.ts`, `src/features/editor/EditorPane.tsx`, `src/features/board/BoardCanvas.tsx`, `tests/helpers/db.ts`, связанные тесты и `docs/datasets.md`.
 
@@ -128,14 +128,14 @@
 - [ ] Снять временную блокировку рабочей области из задачи 2. Если английский MDX ещё не переведён, для песочницы использовать технические поля русского урока `id`, `dataset` и `board`, не показывая его текст; начальный SQL оставить пустым. Проверить английские подписи и ошибки в браузере на вручную введённых запросах.
 - [ ] Описать соответствие особых строк в `docs/datasets.md`. Выполнить `pnpm exec vitest run --project node src/features/db/datasets.test.ts src/features/db/sandbox.test.ts`, `pnpm exec vitest run --project dom src/stores/lesson.test.ts src/features/db/useLessonSandbox.test.tsx` и `pnpm exec playwright test tests/e2e/english.spec.ts --workers=1`; затем `pnpm check` и `pnpm test:content`. Отметить `P11б.4` и закоммитить.
 
-## Задача 5. Гайд английского текста
+## Task 5: Гайд английского текста
 
 **Трекер:** `P11б.5`. **Файлы:** `docs/content-style.md`, `docs/PROGRESS.md`.
 
 - [ ] Добавить в гайд английский раздел: обращение `you`, понятный разговорный английский, единые PostgreSQL-термины, подписи к особым строкам английского датасета, структура урока и перевод служебных заголовков. Требования к SQL, ссылкам, `expect`/`expectError`/`noexec`, `final-only` и ручному просмотру действуют для обоих языков. Уточнить, что кодовые идентификаторы и цитаты сообщений Postgres не переводятся.
 - [ ] Выполнить `git diff --check` и `pnpm check`; отметить `P11б.5` готовым и закоммитить гайд вместе с трекером.
 
-## Задача 6. Проверки переводов
+## Task 6: Проверки переводов
 
 **Трекер:** перед началом добавить и взять в работу `P11б.8` «Раннер контента для двух языков». **Файлы:** `tests/content/lessons.test.ts`, `tests/content/blocks.ts`, `tests/helpers/db.ts`, `plugins/lessons-meta.test.ts`, `docs/PROGRESS.md`.
 
@@ -143,7 +143,7 @@
 - [ ] Проверить каждый имеющийся английский урок на пару с русским и совпадение общих полей; дубли и лишние `id` должны падать. До завершения перевода разрешить отсутствие пары, но не обходить проверку уже существующих английских файлов. Подготовить отдельный режим полной сверки всех пар; в задаче 8 включить его безусловно в `pnpm test:content`.
 - [ ] Проверить на временных тестовых данных, что испорченный английский SQL, отсутствующее ожидание и лишний или дублированный `id` приводят к падению, а один корректный перевод выполняется на английском датасете. Запустить `pnpm test:content` и `pnpm check`; отметить `P11б.8` и закоммитить раннер с трекером.
 
-## Задача 7. Перевод одного урока
+## Task 7: Перевод одного урока
 
 Эту задачу повторять для каждого пункта списка ниже, строго по одному. Перед началом создать в Ф11б пункт трекера `L<номер>.en`, например `L0.1.en`, со статусом `⬜`, затем перевести его в `🔄` с датой. Общий пункт `P11б.6` остаётся `⬜`, пока переводятся отдельные уроки. Это сохраняет правило одного пункта `🔄` на агента.
 
@@ -294,7 +294,7 @@
 - [ ] 14.5 `partitioning`: `content/lessons-en/14-extras/05-partitioning.mdx`
 - [ ] 14.6 `sizes-catalogs`: `content/lessons-en/14-extras/06-sizes-catalogs.mdx`
 
-## Задача 8. Сквозная проверка и закрытие фазы
+## Task 8: Сквозная проверка и закрытие фазы
 
 **Трекер:** после завершения всех `L*.en` перевести `P11б.6` в `🔄`. **Файлы:** `tests/content/lessons.test.ts`, `tests/e2e/english.spec.ts`, тесты сцен и `.github/workflows/ci.yml`, если команда проверки контента не запущена в CI; `docs/PROGRESS.md`.
 
