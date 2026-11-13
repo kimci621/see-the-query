@@ -1,0 +1,144 @@
+---
+id: roles
+title: Роли и права
+chapter: extras
+number: "14.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.review]
+initialQuery: |
+  select review_id, book_id, rating from review order by review_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/user-manag.html
+    title: Роли PostgreSQL
+  - url: https://www.postgresql.org/docs/18/ddl-priv.html
+    title: Права на объекты
+  - url: https://www.postgresql.org/docs/18/sql-grant.html
+    title: Выдача прав
+  - url: https://www.postgresql.org/docs/18/sql-set-role.html
+    title: Переключение роли
+  - url: https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html
+    title: Права по умолчанию
+course: ["11.12", "12.49"]
+tags: [роль, права, grant, revoke, безопасность]
+---
+
+<TlDr>Роль получает только нужные права. Создадим роль для чтения отзывов и проверим, что запись ей запрещена.</TlDr>
+
+## Что есть в данных
+
+В <T id="public.review">review</T> десять отзывов. Под текущей ролью таблица доступна для чтения:
+
+```sql run expect=rows:1
+select count(*) as reviews from review;
+```
+
+На доске одна строка со значением 10. Проверим доступ к этой же таблице для новой роли.
+
+## Роль и права
+
+**Роль** может владеть объектами и получать права. Роль с `LOGIN` может использоваться для входа; роль без него тоже может получать права, владеть объектами и предоставляться другим ролям.
+
+Создадим учебную роль без входа:
+
+```sql apply expect=rows:0
+create role auditor nologin;
+```
+
+Посмотрим, есть ли у неё права на чтение и вставку в `review`:
+
+```sql run expect=rows:1
+select has_table_privilege('auditor', 'public.review', 'select') as can_read,
+       has_table_privilege('auditor', 'public.review', 'insert') as can_insert;
+```
+
+На доске два значения `false`. Результат учитывает действующие права роли, в том числе через членство и `PUBLIC`. Здесь новая роль ещё не получила доступ к таблице.
+
+<Callout kind="analogy">
+Право на объект похоже на доступ к папке: разрешение читать документы не даёт права добавлять в неё новые. Для работы может понадобиться и доступ к самой схеме, где находится таблица.
+</Callout>
+
+## Даём право чтения
+
+Выдадим `SELECT` на таблицу:
+
+```sql apply expect=rows:0
+grant select on public.review to auditor;
+```
+
+Проверим оба права ещё раз:
+
+```sql run expect=rows:1
+select has_table_privilege('auditor', 'public.review', 'select') as can_read,
+       has_table_privilege('auditor', 'public.review', 'insert') as can_insert;
+```
+
+Теперь `can_read` равно `true`, а `can_insert` остаётся `false`. Попробуем прочитать отзывы под этой ролью:
+
+```sql apply expect=rows:1
+set local role auditor;
+select current_user, count(*) as reviews from public.review;
+```
+
+В результате `auditor` и 10 отзывов. `SET LOCAL ROLE` действует внутри транзакции блока; после её завершения прежняя роль восстанавливается. В песочнице команда работает из роли с достаточными правами. На обычном сервере для переключения нужны соответствующее членство с правом `SET` или права суперпользователя.
+
+## Попытка записи
+
+Попробуем добавить отзыв под ролью аудитора:
+
+```sql apply expectError=42501
+set local role auditor;
+insert into public.review (book_id, customer_id, rating, body)
+values (1, 1, 5, 'Новый отзыв');
+```
+
+PostgreSQL вернул `42501`: нет права на вставку в таблицу. Код и исходный текст ошибки видны в уведомлении. Ошибка откатывает блок, поэтому новая строка не появилась, а роль не осталась переключённой. Проверим:
+
+```sql run expect=rows:1
+select current_user, count(*) as reviews from review;
+```
+
+На доске снова 10 отзывов и исходная роль, а не `auditor`. Не проверяй права только кнопками приложения: ограничения должны действовать и при прямом запросе к базе.
+
+## Отзываем право
+
+```sql apply expect=rows:0
+revoke select on public.review from auditor;
+```
+
+```sql run expect=rows:1
+select has_table_privilege('auditor', 'public.review', 'select') as can_read;
+```
+
+После отзыва на доске `false`. «Сброс» восстановит исходную базу и удалит учебную роль.
+
+`GRANT` и `REVOKE` работают и с другими объектами, например схемами и функциями, но набор прав у них отличается. `PUBLIC` означает все роли; отдельные виды объектов имеют права для `PUBLIC` по умолчанию. `ALTER DEFAULT PRIVILEGES` меняет начальные права будущих объектов выбранной роли, а не права уже созданных таблиц.
+
+## Чего нет в выдаче и почему
+
+- ❌ Нового отзыва после попытки аудитора: у роли нет `INSERT`, блок завершился ошибкой.
+- ❌ Права чтения после `REVOKE`: оно было отозвано, другого источника этого права в примере нет.
+
+## Ловушки
+
+<Callout kind="trap">
+Отзыв права у одной роли не отменяет доступ, полученный через `PUBLIC` или членство в другой роли. Проверяй итоговое право, как в запросе с `has_table_privilege`.
+</Callout>
+
+<Callout kind="tip">
+Для приложения используй отдельную роль с минимальным набором прав. Учитывай права на схему и последовательности, членство в ролях и политику доступа к строкам; не подключай приложение под владельцем без необходимости.
+</Callout>
+
+## Проверь себя
+
+1. Какие права есть у `auditor` сразу после `GRANT` в примере?
+2. Почему после ошибки количество отзывов осталось равным 10?
+3. Гарантирует ли `REVOKE` у одной роли отсутствие доступа через `PUBLIC`?
+
+<Cheatsheet>
+- Роли могут входить в систему, владеть объектами и получать права в зависимости от настроек.
+- `GRANT` выдаёт право, `REVOKE` отзывает его из указанного источника.
+- `SET LOCAL ROLE` временно переключает роль в транзакции; доступ к команде ограничен.
+- Проверяй действующие права и давай приложению только необходимые.
+</Cheatsheet>
