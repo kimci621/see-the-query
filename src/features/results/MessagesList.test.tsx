@@ -7,6 +7,7 @@ import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { MessagesList } from './MessagesList';
 import { ResultsPanel } from './ResultsPanel';
 
@@ -30,9 +31,20 @@ afterEach(() => {
   vi.restoreAllMocks();
   useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
   useEditorStore.setState(useEditorStore.getInitialState(), true);
+  useSettingsStore.setState({ locale: 'ru' });
 });
 
 describe('MessagesList', () => {
+  it('меняет язык объяснения, сохраняя оригинал Postgres', () => {
+    useBoardStore.getState().setSchema(SCHEMA);
+    const error = { code: '42703', message: 'column "nme" does not exist', position: 8 };
+    render(<MessagesList trace={traceWith(error)} />);
+    expect(screen.getByTestId('pg-explain-title')).toHaveTextContent('Колонки nme нет');
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    expect(screen.getByTestId('pg-explain-title')).toHaveTextContent('Column nme does not exist');
+    expect(screen.getByTestId('pg-original')).toHaveTextContent(error.message);
+  });
+
   it('ошибка: человеческое объяснение из словаря + оригинальный текст', () => {
     useBoardStore.getState().setSchema(SCHEMA);
     const error = { code: '42703', message: 'column "nme" does not exist', position: 8 };

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { VersionState } from '@/features/db/pageinspect';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings';
 
 export function MiniTable({
   title,
@@ -11,6 +12,7 @@ export function MiniTable({
   columns: string[];
   rows: Array<{ key: string; cells: ReactNode[]; state?: VersionState }>;
 }) {
+  const locale = useSettingsStore((s) => s.locale);
   return (
     <section aria-label={title} className="min-w-0 overflow-hidden rounded-md border bg-card">
       <h4 className="border-b bg-muted/40 px-3 py-2 text-sm font-semibold">{title}</h4>
@@ -54,7 +56,11 @@ export function MiniTable({
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">Нет строк</p>}
+        {rows.length === 0 && (
+          <p className="px-3 py-2 text-xs text-muted-foreground">
+            {locale === 'en' ? 'No rows' : 'Нет строк'}
+          </p>
+        )}
       </div>
     </section>
   );

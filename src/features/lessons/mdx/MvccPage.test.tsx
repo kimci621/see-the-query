@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useSettingsStore } from '@/stores/settings';
 import { MvccPage } from './MvccPage';
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), run: vi.fn(), close: vi.fn() }));
@@ -30,6 +31,18 @@ beforeEach(() => {
 });
 
 describe('сцена MVCC', () => {
+  afterEach(() => useSettingsStore.setState({ locale: 'ru' }));
+
+  it('показывает английские подписи и передаёт язык при подготовке', async () => {
+    useSettingsStore.setState({ locale: 'en' });
+    mocks.run.mockResolvedValue(steps.map((step) => ({ ...step, caption: 'Three rows' })));
+    render(<MvccPage />);
+    const scene = await screen.findByRole('region', { name: 'PostgreSQL row versions' });
+    expect(within(scene).getByText('Three rows')).toBeVisible();
+    expect(within(scene).getByText('visible')).toBeVisible();
+    expect(within(scene).getByRole('button', { name: 'Next' })).toBeVisible();
+    expect(mocks.run).toHaveBeenCalledWith(expect.anything(), 'en');
+  });
   it('показывает настоящие версии, переключает шаги и сохраняет фокус', async () => {
     render(<MvccPage />);
     expect(await screen.findByText('Три строки')).toBeVisible();

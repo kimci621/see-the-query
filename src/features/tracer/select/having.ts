@@ -1,5 +1,5 @@
 import type { Node } from '@pgsql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { sqlOf } from '../probe';
 import type { RowKey } from '../types';
 import { walk } from '../whitelist';
@@ -40,7 +40,7 @@ export const havingStep: SelectStep = {
       verdicts,
       predicateColumns: ctx.grouped ? havingColumns(having, ctx.grouped) : [],
       sourceRange: rangeOf(ctx.stmt, 'having'),
-      caption: captions.having(
+      caption: captionsForLocale(ctx.locale).having(
         before,
         ctx.rows.length,
         Object.values(verdicts).filter((v) => v === null).length,

@@ -12,6 +12,7 @@ import {
   SplitSourceMissingError,
 } from '@/features/scenes/split';
 import { useStepper } from '@/features/scenes/useStepper';
+import { useSettingsStore } from '@/stores/settings';
 
 type LoadState =
   | { status: 'loading' }
@@ -20,6 +21,7 @@ type LoadState =
   | { status: 'ready'; data: SplitSceneData };
 
 export function SplitScene({ source, keyColumn, extract, target, parentColumn, valueColumn }: SplitConfig) {
+  const locale = useSettingsStore((s) => s.locale);
   const { sandbox, status } = useSandbox();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [revision, setRevision] = useState(0);
@@ -41,7 +43,7 @@ export function SplitScene({ source, keyColumn, extract, target, parentColumn, v
     setState({ status: 'loading' });
     void sandbox
       .preview(
-        (db) => loadSplitScene(db, { source, keyColumn, extract, target, parentColumn, valueColumn }),
+        (db) => loadSplitScene(db, { source, keyColumn, extract, target, parentColumn, valueColumn }, locale),
         controller.signal,
       )
       .then(
@@ -64,27 +66,34 @@ export function SplitScene({ source, keyColumn, extract, target, parentColumn, v
       active = false;
       controller.abort();
     };
-  }, [sandbox, status, source, keyColumn, extract, target, parentColumn, valueColumn, revision]);
+  }, [sandbox, status, source, keyColumn, extract, target, parentColumn, valueColumn, revision, locale]);
   if (state.status === 'loading')
-    return <p className="my-6 text-sm text-muted-foreground">Готовим сцену...</p>;
+    return (
+      <p className="my-6 text-sm text-muted-foreground">
+        {locale === 'en' ? 'Preparing the scene...' : 'Готовим сцену...'}
+      </p>
+    );
   if (state.status === 'waiting')
     return (
       <p role="status" className="my-6 rounded-lg border p-4 text-sm text-muted-foreground">
-        Для сцены нужна исходная таблица {source} с колонками {keyColumn} и {extract}. Создай её по примеру
-        выше; после удаления исходной колонки верни данные через «Сброс» и повтори подготовку.
+        {locale === 'en'
+          ? `The scene needs source table ${source} with columns ${keyColumn} and ${extract}. Create it using the example above. If the source column was removed, use Reset to restore the data and try again.`
+          : `Для сцены нужна исходная таблица ${source} с колонками ${keyColumn} и ${extract}. Создай её по примеру выше; после удаления исходной колонки верни данные через «Сброс» и повтори подготовку.`}
       </p>
     );
   if (state.status === 'error')
     return (
       <div role="alert" className="not-prose my-6 rounded-lg border p-4 text-sm">
-        <p>Не удалось подготовить сцену: {state.message}</p>
+        <p>
+          {locale === 'en' ? 'Could not prepare the scene' : 'Не удалось подготовить сцену'}: {state.message}
+        </p>
         <Button
           size="sm"
           variant="outline"
           className="mt-2"
           onClick={() => setRevision((value) => value + 1)}
         >
-          Повторить
+          {locale === 'en' ? 'Retry' : 'Повторить'}
         </Button>
       </div>
     );
@@ -94,6 +103,7 @@ export function SplitScene({ source, keyColumn, extract, target, parentColumn, v
 type Line = { key: string; path: string };
 
 export function SplitPlayer({ data, keyColumn }: { data: SplitSceneData; keyColumn: string }) {
+  const locale = useSettingsStore((s) => s.locale);
   const { index, next, prev } = useStepper(data.frames.length);
   const back = useRef<HTMLButtonElement>(null);
   const forward = useRef<HTMLButtonElement>(null);
@@ -160,14 +170,16 @@ export function SplitPlayer({ data, keyColumn }: { data: SplitSceneData; keyColu
     rows.map((row) => ({ key: row.key, cells: row.values.map((value) => formatCell(value).text) }));
   return (
     <section
-      aria-label="Разделение таблицы"
+      aria-label={locale === 'en' ? 'Splitting a table' : 'Разделение таблицы'}
       onKeyDown={onKeyDown}
       className="@container not-prose my-6 rounded-lg border p-4"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-medium">{frame.caption}</p>
         <span role="status" className="text-xs text-muted-foreground">
-          Шаг {index + 1} из {data.frames.length}
+          {locale === 'en'
+            ? `Step ${index + 1} of ${data.frames.length}`
+            : `Шаг ${index + 1} из ${data.frames.length}`}
           <span className="sr-only">: {frame.caption}</span>
         </span>
       </div>
@@ -197,17 +209,21 @@ export function SplitPlayer({ data, keyColumn }: { data: SplitSceneData; keyColu
       </div>
       {frame.right && (
         <p className="mt-3 text-xs text-muted-foreground">
-          Строки связаны значением ключа в первой колонке правой таблицы. Это проект, он не меняет базу.
+          {locale === 'en'
+            ? 'Rows are linked by the key in the first column of the right table. This is a design and does not change the database.'
+            : 'Строки связаны значением ключа в первой колонке правой таблицы. Это проект, он не меняет базу.'}
         </p>
       )}
       {(data.truncatedParents || data.truncatedValues) && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Показана часть данных: не более 15 исходных и 200 полученных строк.
+          {locale === 'en'
+            ? 'Only part of the data is shown: up to 15 source rows and 200 resulting rows.'
+            : 'Показана часть данных: не более 15 исходных и 200 полученных строк.'}
         </p>
       )}
       <div className="mt-4 flex justify-end gap-2">
         <Button ref={back} size="sm" variant="outline" disabled={index === 0} onClick={() => go('prev')}>
-          Назад
+          {locale === 'en' ? 'Back' : 'Назад'}
         </Button>
         <Button
           ref={forward}
@@ -215,7 +231,7 @@ export function SplitPlayer({ data, keyColumn }: { data: SplitSceneData; keyColu
           disabled={index === data.frames.length - 1}
           onClick={() => go('next')}
         >
-          Дальше
+          {locale === 'en' ? 'Next' : 'Дальше'}
         </Button>
       </div>
     </section>

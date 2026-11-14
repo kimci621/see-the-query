@@ -51,7 +51,14 @@ export const limitAnimator: Animator<StageOf<'limit'>> = (prev, stage, stageInde
     {
       id: `${stageIndex}:scissors`,
       stageIndex,
-      caption: tied ? `${head}: оставляем ${stage.kept.length}, добрали ничью` : `${head}: отрезаем лишнее`,
+      caption:
+        ctx.locale === 'en'
+          ? tied
+            ? `${head}: keep ${stage.kept.length}, including ties`
+            : `${head}: cut the remaining rows`
+          : tied
+            ? `${head}: оставляем ${stage.kept.length}, добрали ничью`
+            : `${head}: отрезаем лишнее`,
       durationMs: 600,
       frame: { tables: withTable(prev, marked).tables, decorations: scissors },
     },

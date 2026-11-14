@@ -2,7 +2,8 @@ import type { JoinExpr, Node, SelectStmt } from '@pgsql/types';
 import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
 import type { DbClient } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import type { Locale } from '@/lib/i18n';
+import { captionsForLocale } from '../captions';
 import { ident, type Prober, sqlOf, typeNames } from '../probe';
 import { prepareRecursive } from '../recursion/recursion';
 import { rowKeyOf } from '../rowkey';
@@ -19,6 +20,7 @@ export function materializeStage(
   id: string,
   source: 'cte' | 'from',
   tempTableId: string,
+  locale?: Locale,
 ): Stage & { kind: 'materialize' } {
   const last = inner.stages.at(-1);
   const output = last?.output ?? { columns: [], rows: [] };
@@ -29,7 +31,7 @@ export function materializeStage(
     tempTableId,
     name,
     inner,
-    caption: captions.materialize(name, output.rows.length),
+    caption: captionsForLocale(locale).materialize(name, output.rows.length),
     output,
     ...(last?.rowCount !== undefined ? { rowCount: last.rowCount } : {}),
   };
@@ -106,6 +108,7 @@ async function tempSourceTrace(
   temp: string,
   name: string,
   types: Map<number, string>,
+  locale?: Locale,
 ): Promise<Trace> {
   const r = await prober.rows(`SELECT ctid::text, * FROM ${ident(temp)} ORDER BY ctid`);
   const fields = r.fields.slice(1);
@@ -129,7 +132,7 @@ async function tempSourceTrace(
     kind: 'scan',
     alias: name,
     tableId: `pg_temp.${temp}`,
-    caption: captions.scan(name, name, rows.length),
+    caption: captionsForLocale(locale).scan(name, name, rows.length),
     output: { columns, rows },
   };
   return {
@@ -155,19 +158,31 @@ export async function prepareSources(
   opts: TraceOptions,
   trace: TraceFn,
 ): Promise<PreparedSources | { reason: string }> {
+  const text = (ru: string, en: string) => (opts.locale === 'en' ? en : ru);
   const ctes = (sel.withClause?.ctes ?? []).flatMap((node) =>
     'CommonTableExpr' in node ? [node.CommonTableExpr] : [],
   );
   if (sel.withClause?.recursive) {
-    if (ctes.length !== 1) return { reason: 'Рекурсивный CTE вместе с другими CTE пока не анимируется' };
-    const recursion = await prepareRecursive(ctes[0], opts.schema, prober);
+    if (ctes.length !== 1)
+      return {
+        reason: text(
+          'Рекурсивный CTE вместе с другими CTE пока не анимируется',
+          'A recursive CTE combined with other CTEs is not animated yet',
+        ),
+      };
+    const recursion = await prepareRecursive(ctes[0], opts.schema, prober, opts.locale);
     if ('reason' in recursion) return { reason: recursion.reason };
     const rewritten = replaceRangeVars(
       { ...sel, withClause: undefined },
       new Map([[recursion.name, recursion.temp]]),
     ) as SelectStmt;
     if (hasFromSubquery(rewritten.fromClause))
-      return { reason: 'Рекурсивный CTE с подзапросом в FROM пока не анимируется' };
+      return {
+        reason: text(
+          'Рекурсивный CTE с подзапросом в FROM пока не анимируется',
+          'A recursive CTE with a subquery in FROM is not animated yet',
+        ),
+      };
     return { sel: rewritten, schema: recursion.schema, stages: [recursion.stage] };
   }
   let schema = opts.schema;
@@ -178,11 +193,21 @@ export async function prepareSources(
     return { sel, schema, stages };
   for (const cte of ctes) {
     const name = cte.ctename;
-    if (!name) return { reason: 'CTE без имени не анимируется' };
+    if (!name) return { reason: text('CTE без имени не анимируется', 'An unnamed CTE cannot be animated') };
     if (cte.ctematerialized === 'CTEMaterializeNever')
-      return { reason: `CTE ${name} с NOT MATERIALIZED пока не анимируется` };
+      return {
+        reason:
+          opts.locale === 'en'
+            ? `CTE ${name} with NOT MATERIALIZED is not animated yet`
+            : `CTE ${name} с NOT MATERIALIZED пока не анимируется`,
+      };
     if (!cte.ctequery || !('SelectStmt' in cte.ctequery))
-      return { reason: `CTE ${name}: тело не SELECT, пока не анимируется` };
+      return {
+        reason: text(
+          `CTE ${name}: тело не SELECT, пока не анимируется`,
+          `CTE ${name} has a non-SELECT body and is not animated yet`,
+        ),
+      };
     const body = replaceRangeVars(cte.ctequery, names) as Node;
     const temp = `__vs_m${sequence++}`;
     await prober.run(`CREATE TEMP TABLE ${ident(temp)} AS ${sqlOf(body)}`);
@@ -199,8 +224,13 @@ export async function prepareSources(
     };
     const inner = await trace(branch, db, { ...opts, schema });
     if (inner.mode !== 'full')
-      return { reason: `CTE ${name} не анимируется: ${inner.fallbackReason ?? 'причина не указана'}` };
-    stages.push(materializeStage(name, inner, `${stages.length}:materialize`, 'cte', table.id));
+      return {
+        reason: text(
+          `CTE ${name} не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`,
+          `CTE ${name} is not animated: ${inner.fallbackReason ?? 'no reason provided'}`,
+        ),
+      };
+    stages.push(materializeStage(name, inner, `${stages.length}:materialize`, 'cte', table.id, opts.locale));
     names.set(name, temp);
   }
   let rewritten = replaceRangeVars({ ...sel, withClause: undefined }, names) as SelectStmt;
@@ -220,7 +250,10 @@ export async function prepareSources(
         const rs = node.RangeSubselect;
         const body = rs.subquery;
         if (!body || !('SelectStmt' in body)) {
-          failure = 'Подзапрос в FROM без SELECT пока не анимируется';
+          failure = text(
+            'Подзапрос в FROM без SELECT пока не анимируется',
+            'A FROM subquery without SELECT is not animated yet',
+          );
           return node;
         }
         const colnames = (rs.alias?.colnames ?? []).flatMap((n) =>
@@ -233,8 +266,10 @@ export async function prepareSources(
       }
       const table = await tempTable(prober, temp, types);
       schema = { ...schema, tables: [...schema.tables, table] };
-      const inner = await tempSourceTrace(prober, temp, alias, types);
-      stages.push(materializeStage(alias, inner, `${stages.length}:materialize`, 'from', table.id));
+      const inner = await tempSourceTrace(prober, temp, alias, types, opts.locale);
+      stages.push(
+        materializeStage(alias, inner, `${stages.length}:materialize`, 'from', table.id, opts.locale),
+      );
       return {
         RangeVar: {
           schemaname: 'pg_temp',
@@ -246,7 +281,10 @@ export async function prepareSources(
     if (!('RangeSubselect' in node)) return node;
     const rs = node.RangeSubselect;
     if (!rs.subquery || !('SelectStmt' in rs.subquery)) {
-      failure = 'Подзапрос в FROM без SELECT пока не анимируется';
+      failure = text(
+        'Подзапрос в FROM без SELECT пока не анимируется',
+        'A FROM subquery without SELECT is not animated yet',
+      );
       return node;
     }
     const alias = rs.alias?.aliasname ?? `__vs_from${stages.length}`;
@@ -266,10 +304,15 @@ export async function prepareSources(
     };
     const inner = await trace(branch, db, { ...opts, schema });
     if (inner.mode !== 'full') {
-      failure = `Подзапрос ${alias} не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`;
+      failure = text(
+        `Подзапрос ${alias} не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`,
+        `Subquery ${alias} is not animated: ${inner.fallbackReason ?? 'no reason provided'}`,
+      );
       return node;
     }
-    stages.push(materializeStage(alias, inner, `${stages.length}:materialize`, 'from', table.id));
+    stages.push(
+      materializeStage(alias, inner, `${stages.length}:materialize`, 'from', table.id, opts.locale),
+    );
     return {
       RangeVar: {
         schemaname: 'pg_temp',

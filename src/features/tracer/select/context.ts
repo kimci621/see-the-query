@@ -3,6 +3,7 @@ import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { QueryResult } from '@/features/db/types';
 import { clauseRanges } from '@/features/sql/clauses';
 import type { ClauseName, ParsedStatement } from '@/features/sql/types';
+import type { Locale } from '@/lib/i18n';
 import { ident, type Prober, sqlOf, TraceFallback, typeNames } from '../probe';
 import type { Column, Row, RowKey, SourceRange, Stage, Trace, TraceOptions } from '../types';
 import { canon, rowCanon } from '../verify';
@@ -42,6 +43,7 @@ export interface LimitParams {
 export type TraceChild = (stmt: ParsedStatement, opts?: Partial<TraceOptions>) => Promise<Trace>;
 
 export interface SelectCtx {
+  locale?: Locale;
   stmt: ParsedStatement;
   sel: SelectStmt;
   prober: Prober;
@@ -83,6 +85,7 @@ function once<T>(fn: () => Promise<T>): () => Promise<T> {
 }
 
 export function createSelectCtx(args: {
+  locale?: Locale;
   stmt: ParsedStatement;
   sel: SelectStmt;
   prober: Prober;
@@ -179,7 +182,9 @@ async function loadOutputs(ctx: SelectCtx): Promise<Output> {
   }
   // (t).* и подобное раскрываются в несколько колонок, сопоставить их с целями списка нельзя
   if (kinds.length !== probe.fields.length)
-    throw new TraceFallback('Пока не анимируется: такой список SELECT');
+    throw new TraceFallback(
+      ctx.locale === 'en' ? 'Not animated yet: this SELECT list' : 'Пока не анимируется: такой список SELECT',
+    );
   const columns = probe.fields.map((f, i): Column => {
     const k = kinds[i];
     if (k.column && f.name !== k.column) k.kind = 'renamed';
@@ -326,7 +331,11 @@ async function loadOrdered(ctx: SelectCtx): Promise<Ordered> {
     const key = row[n] as RowKey;
     // Повтор ctid: функция в SELECT размножила строку, lineage неоднозначен
     if (values.has(key))
-      throw new TraceFallback('Пока не анимируется: функция, возвращающая несколько строк');
+      throw new TraceFallback(
+        ctx.locale === 'en'
+          ? 'Not animated yet: function returning multiple rows'
+          : 'Пока не анимируется: функция, возвращающая несколько строк',
+      );
     order.push(key);
     values.set(key, row.slice(0, n));
     tuple.set(key, tupleIdx.map((i) => canon(row[i])).join('\u0002'));

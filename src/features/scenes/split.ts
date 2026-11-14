@@ -1,5 +1,6 @@
 import type { DbClient } from '@/features/db/types';
 import { ident } from '@/features/tracer/probe';
+import type { Locale } from '@/lib/i18n';
 
 export class SplitSourceMissingError extends Error {}
 
@@ -30,14 +31,20 @@ const SIMPLE_NAME = /^[a-z_][a-z0-9_]*$/i;
 const TABLE_NAME = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?$/i;
 
 // Вызывающий читает данные внутри sandbox.preview; PostgreSQL выполняет разбиение и очистку пробелов.
-export async function loadSplitScene(db: DbClient, config: SplitConfig): Promise<SplitSceneData> {
+export async function loadSplitScene(
+  db: DbClient,
+  config: SplitConfig,
+  locale: Locale = 'ru',
+): Promise<SplitSceneData> {
   const { source, keyColumn, extract, target, parentColumn, valueColumn } = config;
   if (
     !TABLE_NAME.test(source) ||
     ![keyColumn, extract, target, parentColumn, valueColumn].every((name) => SIMPLE_NAME.test(name)) ||
     keyColumn === extract
   ) {
-    throw new Error('Укажи корректные имена таблицы и колонок.');
+    throw new Error(
+      locale === 'en' ? 'Provide valid table and column names.' : 'Укажи корректные имена таблицы и колонок.',
+    );
   }
   const table = source.split('.').map(ident).join('.');
   const key = ident(keyColumn);
@@ -48,11 +55,19 @@ export async function loadSplitScene(db: DbClient, config: SplitConfig): Promise
   const keyIndex = columns.indexOf(keyColumn);
   const extractIndex = columns.indexOf(extract);
   if (keyIndex < 0 || extractIndex < 0)
-    throw new SplitSourceMissingError('В исходной таблице нет нужных колонок.');
+    throw new SplitSourceMissingError(
+      locale === 'en'
+        ? 'The source table is missing the required columns.'
+        : 'В исходной таблице нет нужных колонок.',
+    );
   const input = raw.rows.slice(0, 15);
   const keys = input.map((row) => row[keyIndex]);
   if (keys.some((item) => item == null) || new Set(keys.map(String)).size !== keys.length) {
-    throw new Error('Для сцены нужен уникальный ключ без NULL в каждой исходной строке.');
+    throw new Error(
+      locale === 'en'
+        ? 'Each source row needs a unique, non-NULL key for this scene.'
+        : 'Для сцены нужен уникальный ключ без NULL в каждой исходной строке.',
+    );
   }
   const parts = await db.query(`
     select s.${key}, btrim(v.item)
@@ -64,7 +79,7 @@ export async function loadSplitScene(db: DbClient, config: SplitConfig): Promise
   const splitRows = parts.rows.slice(0, 200).map((values, index) => ({ key: String(index), values }));
   const original: SplitTable = { title: source, columns, rows };
   const split: SplitTable = {
-    title: 'Отдельные значения',
+    title: locale === 'en' ? 'Separate values' : 'Отдельные значения',
     columns: [parentColumn, valueColumn],
     rows: splitRows,
   };
@@ -75,12 +90,29 @@ export async function loadSplitScene(db: DbClient, config: SplitConfig): Promise
   };
   return {
     frames: [
-      { left: original, right: null, caption: 'Исходная таблица: несколько значений в одной строке' },
-      { left: original, right: split, caption: 'PostgreSQL разделил список на отдельные значения' },
+      {
+        left: original,
+        right: null,
+        caption:
+          locale === 'en'
+            ? 'Source table: multiple values in one row'
+            : 'Исходная таблица: несколько значений в одной строке',
+      },
+      {
+        left: original,
+        right: split,
+        caption:
+          locale === 'en'
+            ? 'PostgreSQL split the list into separate values'
+            : 'PostgreSQL разделил список на отдельные значения',
+      },
       {
         left: normalized,
         right: { ...split, title: target },
-        caption: 'Проект двух таблиц, связанных по ключу',
+        caption:
+          locale === 'en'
+            ? 'A design with two tables linked by a key'
+            : 'Проект двух таблиц, связанных по ключу',
       },
     ],
     truncatedParents: raw.rows.length > 15,

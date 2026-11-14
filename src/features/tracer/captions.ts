@@ -1,4 +1,6 @@
 // Подписи стадий на русском: «<КЛАУЗ>: <что произошло>»
+
+import type { Locale } from '@/lib/i18n';
 import { plural, rowsWord } from '@/lib/plural';
 
 const colsWord = (n: number) => `${n} ${plural(n, 'колонка', 'колонки', 'колонок')}`;
@@ -74,6 +76,62 @@ export const captions = {
   materialize: (name: string, n: number) => `${name}: ${rowsWord(n)}`,
   error: (code: string, message: string) => `Ошибка ${code}: ${message}`,
 };
+
+const enRows = (n: number) => rowsWord(n, 'en');
+const enCount = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+const englishCaptions: typeof captions = {
+  scan: (table, alias, n) => `FROM ${table}${alias !== table ? ` AS ${alias}` : ''}: ${enRows(n)}`,
+  join: (label, pairs, noLeft, noRight) => {
+    const parts = [`${label}: ${enCount(pairs, 'pair')}`];
+    if (noLeft) parts.push(`${enRows(noLeft)} on the left without a match`);
+    if (noRight) parts.push(`${enRows(noRight)} on the right without a match`);
+    return parts.join(', ');
+  },
+  cross: (left, right) => `CROSS JOIN: ${left} × ${right} = ${enRows(left * right)}`,
+  joinCompressed: (type, n) => `${type} JOIN: ${enRows(n)}`,
+  filter: (before, after, unknown) =>
+    `WHERE: ${after} of ${enRows(before)} ${after === 1 ? 'remains' : 'remain'}${unknown ? `, ${unknown} UNKNOWN` : ''}`,
+  project: (kept, from, computed) =>
+    `SELECT: ${enCount(kept, 'column')} of ${from}${computed ? `, ${computed} computed` : ''}`,
+  group: (keys, groups, rows) => `GROUP BY ${keyList(keys)}: ${enRows(rows)} → ${enCount(groups, 'group')}`,
+  groupBy: (clause, groups, rows) => `GROUP BY ${clause}: ${enRows(rows)} → ${enCount(groups, 'group')}`,
+  having: (before, after, unknown) =>
+    `HAVING: ${after} of ${enCount(before, 'group')} ${after === 1 ? 'remains' : 'remain'}${unknown ? `, ${unknown} UNKNOWN` : ''}`,
+  aggregateNoGroup: (rows) => `Aggregate without GROUP BY: ${enRows(rows)} → 1 row`,
+  window: (functions, rows) => `WINDOW ${functions.join(', ')}: ${enRows(rows)}, rows remain separate`,
+  subqueryScalar: (value) =>
+    `Subquery: one value ${value === null || value === undefined ? 'NULL' : String(value)}`,
+  subqueryIn: (yes, unknown) => `IN: ${yes} matched${unknown ? `, ${unknown} UNKNOWN` : ''}`,
+  subqueryExists: (yes) => `EXISTS: ${yes} matched`,
+  subqueryAnyAll: (label, yes, unknown) => `${label}: ${yes} passed${unknown ? `, ${unknown} UNKNOWN` : ''}`,
+  subqueryLateral: (samples, outer, rows) =>
+    `LATERAL: ${samples} of ${enRows(outer)} shown in detail, ${enRows(rows)} total`,
+  projectNoFrom: (n) => `SELECT without FROM: ${enRows(n)}`,
+  distinct: (before, after) => `DISTINCT: ${enRows(before)} → ${after} unique`,
+  distinctOn: (on, before, after) =>
+    `DISTINCT ON (${keyList(on)}): ${enRows(before)} → ${after}, one per group`,
+  sort: (keys, n) => `ORDER BY ${keyList(keys)}: ${enRows(n)} in order`,
+  limit: (label, before, after) =>
+    `${label}: ${after} of ${enRows(before)} ${after === 1 ? 'remains' : 'remain'}`,
+  dmlInsert: (n, before) => `INSERT: +${enRows(n)}, ${before} → ${before + n}`,
+  dmlUpdate: (n, before) => `UPDATE: changed ${n} of ${enRows(before)}`,
+  dmlWhere: (op, n, before) => `WHERE: ${n} of ${enRows(before)} selected for ${op.toUpperCase()}`,
+  dmlDelete: (n, before) => `DELETE: −${enRows(n)}, ${before} → ${before - n}`,
+  dmlUpsert: (inserted, conflicts) =>
+    `INSERT ... ON CONFLICT: +${enRows(inserted)}, ${enCount(conflicts, 'conflict')}`,
+  dmlMerge: (inserted, updated, deleted) =>
+    `MERGE: +${enRows(inserted)}, ${updated} updated, ${deleted} deleted`,
+  dmlTruncate: (table, before) => `TRUNCATE ${table}: table empty, had ${enRows(before)}`,
+  ddl: () => 'DDL: schema updated',
+  expand: (fn, before, after) => `${fn}: ${enRows(before)} → ${enRows(after)}`,
+  materialize: (name, n) => `${name}: ${enRows(n)}`,
+  error: (code, message) => `Error ${code}: ${message}`,
+};
+
+export function captionsForLocale(locale: Locale = 'ru'): typeof captions {
+  return locale === 'en' ? englishCaptions : captions;
+}
 
 // «LIMIT 3», «OFFSET 2, LIMIT 3», «FETCH FIRST 3 WITH TIES», «LIMIT ALL»
 export function limitLabel(limit: number | null, offset: number, withTies: boolean): string {

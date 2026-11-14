@@ -49,17 +49,22 @@ export const projectAnimator: Animator<StageOf<'project'>> = (prev, stage, stage
 
   // Подпись в плеере обрезается по ширине: короткие части раньше длинного списка «убираем».
   // «Оставляем» без вычисленных: тот же счёт, что в подписи трассировщика на кадре collapse
-  const parts: string[] = [`оставляем ${stage.output.columns.length - stage.computed.length}`];
+  const parts: string[] = [
+    `${ctx.locale === 'en' ? 'keep' : 'оставляем'} ${stage.output.columns.length - stage.computed.length}`,
+  ];
   const renames = Object.entries(stage.renamed).map(([from, to]) => `${from} → ${to}`);
-  if (renames.length) parts.push(`переименовываем ${renames.join(', ')}`);
-  if (stage.computed.length) parts.push(`вычисляем ${stage.computed.join(', ')}`);
-  if (stage.removed.length) parts.push(`убираем ${stage.removed.join(', ')}`);
+  if (renames.length)
+    parts.push(`${ctx.locale === 'en' ? 'rename' : 'переименовываем'} ${renames.join(', ')}`);
+  if (stage.computed.length)
+    parts.push(`${ctx.locale === 'en' ? 'compute' : 'вычисляем'} ${stage.computed.join(', ')}`);
+  if (stage.removed.length)
+    parts.push(`${ctx.locale === 'en' ? 'remove' : 'убираем'} ${stage.removed.join(', ')}`);
 
   // CASE WHEN: по очереди подсвечиваем строки, где сработала каждая ветка
   const casePhases = (stage.branches ?? []).flatMap((branch, bi) =>
     branch.labels.map((label, li) => {
       const markedBranch = mapRows(clearMarks(cur), (r) =>
-        branch.fired[r.key] === li ? { badge: `ветка ${li + 1}` } : {},
+        branch.fired[r.key] === li ? { badge: `${ctx.locale === 'en' ? 'branch' : 'ветка'} ${li + 1}` } : {},
       );
       return {
         id: `${stageIndex}:case${bi}:${li}`,

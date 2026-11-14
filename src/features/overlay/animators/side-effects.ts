@@ -28,7 +28,7 @@ export function sideEffectPhases(
     const table = rebuildTable(
       {
         id: `t:${effect.tableId}`,
-        title: `Добавлено: ${name}`,
+        title: `${ctx.locale === 'en' ? 'Added' : 'Добавлено'}: ${name}`,
         x: focused.x,
         y,
         fold: ctx.folded(effect.tableId),
@@ -40,7 +40,7 @@ export function sideEffectPhases(
       rows: table.rows.map((row) => ({
         ...row,
         state: 'new' as const,
-        badge: 'побочный эффект',
+        badge: ctx.locale === 'en' ? 'side effect' : 'побочный эффект',
         origin: { x: focused.x + ghostWidth(focused) / 2 - table.x, y: focused.y + rowTop(0) - table.y },
       })),
     };
@@ -65,7 +65,10 @@ export function sideEffectPhases(
     return {
       id: `${stageIndex}:trigger:${index}`,
       stageIndex,
-      caption: `Побочные изменения: +${effect.added.rows.length} в ${name}; возможный триггер ${candidates}`,
+      caption:
+        ctx.locale === 'en'
+          ? `Side effects: +${effect.added.rows.length} in ${name}; possible trigger ${candidates}`
+          : `Побочные изменения: +${effect.added.rows.length} в ${name}; возможный триггер ${candidates}`,
       durationMs: 650,
       frame,
     };
@@ -103,7 +106,7 @@ export function routingPhases(
       rows: template.rows.map((row) => ({
         ...row,
         state: 'new' as const,
-        badge: 'секция',
+        badge: ctx.locale === 'en' ? 'partition' : 'секция',
         origin: { x: focused.x + ghostWidth(focused) / 2 - x, y: focused.y + rowTop(0) - y },
       })),
     };
@@ -134,7 +137,7 @@ export function routingPhases(
     {
       id: `${stageIndex}:routing`,
       stageIndex,
-      caption: `Маршрутизация: строк: ${count}, секций: ${groups.length}${stage.partitionKey ? `; ${stage.partitionKey}` : ''}`,
+      caption: `${ctx.locale === 'en' ? `Routing: rows: ${count}, partitions: ${groups.length}` : `Маршрутизация: строк: ${count}, секций: ${groups.length}`}${stage.partitionKey ? `; ${stage.partitionKey}` : ''}`,
       durationMs: 650,
       frame,
     },

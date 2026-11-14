@@ -1,11 +1,27 @@
 import { toast } from 'sonner';
 import { describe, expect, it, vi } from 'vitest';
 import { DbException, type QueryResult } from '@/features/db/types';
+import { useSettingsStore } from '@/stores/settings';
 import { notifyApplied, notifyDbError } from './notifyDbError';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 describe('notifyDbError', () => {
+  it('ошибка на английском сохраняет оригинальный текст Postgres', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    try {
+      notifyDbError(
+        new DbException({ code: '42P01', message: 'relation "books" does not exist' }),
+        'select * from books',
+      );
+      expect(toast.error).toHaveBeenLastCalledWith(
+        'Table books does not exist',
+        expect.objectContaining({ description: expect.stringContaining('relation "books" does not exist') }),
+      );
+    } finally {
+      useSettingsStore.setState({ locale: 'ru' });
+    }
+  });
   it('ошибка Postgres: заголовок и тело из словаря, оригинал в описании', () => {
     const e = new DbException({ code: '42P01', message: 'relation "books" does not exist' });
     notifyDbError(e, 'select * from books');

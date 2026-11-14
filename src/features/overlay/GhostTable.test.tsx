@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { STUB_WIDTH } from '@/features/board/layout';
+import { useSettingsStore } from '@/stores/settings';
 import { GhostTableView } from './GhostTable';
 import { COL_WIDTH, ghostWidth, marksWidth } from './geometry';
 import type { GhostTable } from './types';
@@ -25,6 +26,16 @@ const table: GhostTable = {
 };
 
 describe('GhostTableView', () => {
+  afterEach(() => useSettingsStore.setState({ locale: 'ru' }));
+
+  it('подписывает скрытые строки, колонки и состояния на английском', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    render(<GhostTableView table={{ ...table, folds: [{ at: 2, count: 1 }] }} />);
+    expect(screen.getByTestId('ghost-hidden')).toHaveTextContent('… 42 more rows');
+    expect(screen.getByTestId('ghost-folded')).toHaveTextContent('+1 column');
+    expect(screen.getByRole('img', { name: 'filtered out' })).toBeInTheDocument();
+  });
+
   it('полное значение ячейки доступно для чтения', () => {
     render(<GhostTableView table={table} />);
     const cell = screen.getByText('Тихий Дон');

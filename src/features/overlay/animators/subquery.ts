@@ -1,4 +1,6 @@
 import type { Relation } from '@/features/tracer/types';
+import type { Locale } from '@/lib/i18n';
+import { rowsWord } from '@/lib/plural';
 import { clearMarks, counterNear, currentTable, mapRows, rebuildTable, stageRows, withTable } from '../frame';
 import { ghostHeight, ghostWidth, rowAnchor, TABLE_GAP } from '../geometry';
 import type { Animator, Decoration, Frame, GhostTable, Phase, StageOf } from '../types';
@@ -8,7 +10,13 @@ function miniTable(id: string, title: string, relation: Relation, x: number, y: 
   return { ...rebuildTable({ id, title, x, y }, relation, undefined, relation.rows.length), dashed: true };
 }
 
-function samplePhases(prev: Frame, stage: StageOf<'subquery'>, stageIndex: number, cur: GhostTable): Phase[] {
+function samplePhases(
+  prev: Frame,
+  stage: StageOf<'subquery'>,
+  stageIndex: number,
+  cur: GhostTable,
+  locale?: Locale,
+): Phase[] {
   const phases: Phase[] = [];
   const x = cur.x + ghostWidth(cur) + TABLE_GAP * 2;
   let y = cur.y;
@@ -17,7 +25,13 @@ function samplePhases(prev: Frame, stage: StageOf<'subquery'>, stageIndex: numbe
   for (const [i, sample] of stage.samples.entries()) {
     const inner = sample.inner.stages.at(-1)?.output;
     if (!inner) continue;
-    const table = miniTable(`${stageIndex}:sample${i}`, `подзапрос для строки ${i + 1}`, inner, x, y);
+    const table = miniTable(
+      `${stageIndex}:sample${i}`,
+      locale === 'en' ? `subquery for row ${i + 1}` : `подзапрос для строки ${i + 1}`,
+      inner,
+      x,
+      y,
+    );
     tables.push(table);
     const anchor = rowAnchor(cur, sample.outer, 'right');
     if (anchor)
@@ -31,7 +45,7 @@ function samplePhases(prev: Frame, stage: StageOf<'subquery'>, stageIndex: numbe
     phases.push({
       id: `${stageIndex}:sample${i}`,
       stageIndex,
-      caption: `${stage.caption}: строка ${i + 1}`,
+      caption: `${stage.caption}: ${locale === 'en' ? 'row' : 'строка'} ${i + 1}`,
       durationMs: 550,
       frame: {
         tables: [...prev.tables.filter((t) => t.id !== cur.id), cur, ...tables],
@@ -51,10 +65,16 @@ export const subqueryAnimator: Animator<StageOf<'subquery'>> = (prev, stage, sta
 
   if (stage.mode === 'scalar') {
     const relation: Relation = {
-      columns: [{ name: 'значение', type: 'unknown' }],
+      columns: [{ name: ctx.locale === 'en' ? 'value' : 'значение', type: 'unknown' }],
       rows: [{ key: 'r:0', lineage: {}, values: [stage.value ?? null] }],
     };
-    const mini = miniTable(`${stageIndex}:value`, 'подзапрос', relation, ctx.workArea.x, ctx.workArea.y);
+    const mini = miniTable(
+      `${stageIndex}:value`,
+      ctx.locale === 'en' ? 'subquery' : 'подзапрос',
+      relation,
+      ctx.workArea.x,
+      ctx.workArea.y,
+    );
     const anchor = rowAnchor(cur, cur.rows[0]?.key ?? '', 'right');
     const decorations: Decoration[] = anchor
       ? [
@@ -79,7 +99,7 @@ export const subqueryAnimator: Animator<StageOf<'subquery'>> = (prev, stage, sta
   }
 
   if (stage.samples.length) {
-    const samples = samplePhases(prev, stage, stageIndex, cur);
+    const samples = samplePhases(prev, stage, stageIndex, cur, ctx.locale);
     if (stage.mode === 'lateral') {
       const result = rebuildTable(cur, stage.output, undefined, stageRows(stage));
       return [
@@ -91,7 +111,15 @@ export const subqueryAnimator: Animator<StageOf<'subquery'>> = (prev, stage, sta
           durationMs: 700,
           frame: {
             tables: [result],
-            decorations: [counterNear(result, `${stageIndex}:counter`, `${stage.output.rows.length} строк`)],
+            decorations: [
+              counterNear(
+                result,
+                `${stageIndex}:counter`,
+                ctx.locale === 'en'
+                  ? rowsWord(stage.output.rows.length, 'en')
+                  : `${stage.output.rows.length} строк`,
+              ),
+            ],
           },
         },
       ];
@@ -116,18 +144,29 @@ export const subqueryAnimator: Animator<StageOf<'subquery'>> = (prev, stage, sta
     {
       id: `${stageIndex}:verdicts`,
       stageIndex,
-      caption: unknown ? `${stage.caption}: UNKNOWN у ${unknown} строк` : `${stage.caption}`,
+      caption: unknown
+        ? `${stage.caption}: ${ctx.locale === 'en' ? `UNKNOWN for ${rowsWord(unknown, 'en')}` : `UNKNOWN у ${unknown} строк`}`
+        : `${stage.caption}`,
       durationMs: 650,
       frame: { tables: withTable(prev, marked).tables, decorations: [] },
     },
     {
       id: `${stageIndex}:counter`,
       stageIndex,
-      caption: `${label}: прошло ${yes} из ${Object.keys(verdicts).length}`,
+      caption:
+        ctx.locale === 'en'
+          ? `${label}: ${yes} of ${Object.keys(verdicts).length} passed`
+          : `${label}: прошло ${yes} из ${Object.keys(verdicts).length}`,
       durationMs: 450,
       frame: {
         tables: withTable(prev, marked).tables,
-        decorations: [counterNear(marked, `${stageIndex}:verdict-counter`, `${yes} да`)],
+        decorations: [
+          counterNear(
+            marked,
+            `${stageIndex}:verdict-counter`,
+            `${yes} ${ctx.locale === 'en' ? 'yes' : 'да'}`,
+          ),
+        ],
       },
     },
   ];

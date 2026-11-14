@@ -9,14 +9,18 @@ import { rowsWord } from '@/lib/plural';
 import { useBoardStore } from '@/stores/board';
 import { useSettingsStore } from '@/stores/settings';
 
-// Тост ошибки применения: объяснение словаря по-русски и оригинал Postgres (спека 5.14).
+// Тост ошибки применения: объяснение словаря и оригинал Postgres (спека 5.14).
 // sql - оператор или текст, из которого пришла ошибка: словарь по нему ищет таблицы.
 export function notifyDbError(e: unknown, sql: string): void {
   if (!(e instanceof DbException)) {
     toast.error(message(useSettingsStore.getState().locale, 'Не получилось'), { description: String(e) });
     return;
   }
-  const { title, body } = explainError(e.db, { sql, schema: useBoardStore.getState().schema });
+  const { title, body } = explainError(e.db, {
+    sql,
+    schema: useBoardStore.getState().schema,
+    locale: useSettingsStore.getState().locale,
+  });
   // кода нет в словаре: заголовок общий, поэтому код пишем в него; тело там и есть оригинал, второй раз не печатаем
   toast.error(e.db.code in DICTIONARY ? title : `${title} (${e.db.code})`, {
     description: body === e.db.message ? body : `${body}\n${e.db.message}`,

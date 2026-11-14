@@ -7,6 +7,10 @@ import type { Animator, Decoration, Phase, StageOf } from '../types';
 import { genericAnimator } from './generic';
 
 export const expandAnimator: Animator<StageOf<'expand'>> = (prev, stage, stageIndex, ctx) => {
+  const elements = (n: number) =>
+    ctx.locale === 'en'
+      ? `${n} ${n === 1 ? 'element' : 'elements'}`
+      : `${n} ${plural(n, 'элемент', 'элемента', 'элементов')}`;
   const source = prev.tables.find((table) => table.id === `t:${stage.sourceAlias}`);
   if (!source) return genericAnimator(prev, stage, stageIndex, ctx);
   const others = prev.tables.filter((table) => table.id !== source.id);
@@ -17,7 +21,7 @@ export const expandAnimator: Animator<StageOf<'expand'>> = (prev, stage, stageIn
     })),
     (row) => {
       const n = children.get(row.key) ?? 0;
-      return { badge: `${n} ${plural(n, 'элемент', 'элемента', 'элементов')}` };
+      return { badge: elements(n) };
     },
   );
   const columns = stage.output.columns.flatMap((column, i) =>
@@ -56,16 +60,12 @@ export const expandAnimator: Animator<StageOf<'expand'>> = (prev, stage, stageIn
       ? { x: left, y: source.y, width: result.x + ghostWidth(result) + rem(7) - left, height: rowTop(13) }
       : undefined;
   const count = stage.output.rows.length;
-  const counter = counterNear(
-    result,
-    `${stageIndex}:counter`,
-    `${count} ${plural(count, 'элемент', 'элемента', 'элементов')}`,
-  );
+  const counter = counterNear(result, `${stageIndex}:counter`, elements(count));
   const phases: Phase[] = [
     {
       id: `${stageIndex}:source`,
       stageIndex,
-      caption: `${stage.fn}: раскрываем ${stage.sourceColumn}`,
+      caption: `${stage.fn}: ${ctx.locale === 'en' ? 'expand' : 'раскрываем'} ${stage.sourceColumn}`,
       durationMs: 500,
       frame: { tables: [...others, marked], decorations: [] },
     },
@@ -79,7 +79,10 @@ export const expandAnimator: Animator<StageOf<'expand'>> = (prev, stage, stageIn
   phases.push({
     id: `${stageIndex}:columns`,
     stageIndex,
-    caption: `${stage.fn}: появляются колонки ${stage.alias}`,
+    caption:
+      ctx.locale === 'en'
+        ? `${stage.fn}: columns for ${stage.alias} appear`
+        : `${stage.fn}: появляются колонки ${stage.alias}`,
     durationMs: 400,
     frame: { tables: [...others, marked, empty], decorations: [counter] },
   });
@@ -90,7 +93,7 @@ export const expandAnimator: Animator<StageOf<'expand'>> = (prev, stage, stageIn
     phases.push({
       id: `${stageIndex}:rows:${n}`,
       stageIndex,
-      caption: `${stage.fn}: элементы становятся строками`,
+      caption: `${stage.fn}: ${ctx.locale === 'en' ? 'elements become rows' : 'элементы становятся строками'}`,
       durationMs: 250,
       frame: { tables: [...others, marked, { ...result, rows: shown }], decorations: [counter], camera },
     });
@@ -142,7 +145,7 @@ export const expandAnimator: Animator<StageOf<'expand'>> = (prev, stage, stageIn
     durationMs: 500,
     frame: {
       tables: [...others, merged],
-      decorations: [counterNear(merged, `${stageIndex}:total`, rowsWord(stageRows(stage)))],
+      decorations: [counterNear(merged, `${stageIndex}:total`, rowsWord(stageRows(stage), ctx.locale))],
     },
   });
   return phases;

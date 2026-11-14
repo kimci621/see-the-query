@@ -67,12 +67,12 @@ export const windowAnimator: Animator<StageOf<'window'>> = (prev, stage, stageIn
   rows.push(...colored.rows.filter((r) => !groupOf.has(r.key)));
   const partitioned = { ...colored, rows };
 
-  const head = `ОКНО ${stage.functions.join(', ')}`;
+  const head = `${ctx.locale === 'en' ? 'WINDOW' : 'ОКНО'} ${stage.functions.join(', ')}`;
   const phases: Phase[] = [
     {
       id: `${stageIndex}:partitions`,
       stageIndex,
-      caption: `${head}: строки окрашиваются по партициям, строки не схлопываются`,
+      caption: `${head}: ${ctx.locale === 'en' ? 'rows are colored by partition and remain separate' : 'строки окрашиваются по партициям, строки не схлопываются'}`,
       durationMs: 650,
       frame: { tables: withTable(prev, partitioned).tables, decorations: [] },
     },
@@ -105,7 +105,14 @@ export const windowAnimator: Animator<StageOf<'window'>> = (prev, stage, stageIn
         frame: {
           tables: withTable(prev, partitioned).tables,
           decorations: [
-            { kind: 'bracket', table: cur.id, fromRow: from, toRow: to, color: 7, label: 'рамка' },
+            {
+              kind: 'bracket',
+              table: cur.id,
+              fromRow: from,
+              toRow: to,
+              color: 7,
+              label: ctx.locale === 'en' ? 'frame' : 'рамка',
+            },
             { kind: 'scanner', table: cur.id, rowIndex: atRow },
           ],
         },
@@ -136,13 +143,16 @@ export const windowAnimator: Animator<StageOf<'window'>> = (prev, stage, stageIn
     }
     const ties = mapRows(colored, (r) => {
       const text = formatCell(r.values[orderCol], cur.columns[orderCol]?.type).text;
-      return (seen.get(text) ?? 0) > 1 ? { badge: 'ничья' } : {};
+      return (seen.get(text) ?? 0) > 1 ? { badge: ctx.locale === 'en' ? 'tie' : 'ничья' } : {};
     });
     if ([...seen.values()].some((n) => n > 1))
       tiePhase.push({
         id: `${stageIndex}:ties`,
         stageIndex,
-        caption: `${head}: равные ключи ${stage.orderKeys.join(', ')} дают ничью`,
+        caption:
+          ctx.locale === 'en'
+            ? `${head}: equal keys ${stage.orderKeys.join(', ')} form a tie`
+            : `${head}: равные ключи ${stage.orderKeys.join(', ')} дают ничью`,
         durationMs: 550,
         frame: { tables: withTable(prev, ties).tables, decorations: brackets },
       });

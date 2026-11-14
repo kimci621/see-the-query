@@ -7,13 +7,19 @@ import { statementAt } from '@/features/sql/statements';
 import type { ParsedStatement } from '@/features/sql/types';
 import { traceStatement } from '@/features/tracer/trace';
 import type { Trace } from '@/features/tracer/types';
+import type { Locale } from '@/lib/i18n';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { touchedOf } from './touched';
 import { useParserReady } from './useParsedText';
 
 const DEBOUNCE_MS = 250;
+const appliedReason = (locale: Locale) =>
+  locale === 'en'
+    ? 'Query applied. Edit the text to return to preview'
+    : 'Запрос применён. Измени текст, и превью вернётся';
 
 // Живое превью (спека 5.3): парсим текст, берём оператор под курсором, трассируем его
 // в транзакции песочницы. Нет схемы или трассировщик сломался → Trace «только итог».
@@ -22,6 +28,7 @@ export function useLiveTrace(sandbox: Sandbox | null): void {
   const text = useEditorStore((s) => s.text);
   const cursor = useEditorStore((s) => s.cursor);
   const schema = useBoardStore((s) => s.schema);
+  const locale = useSettingsStore((s) => s.locale);
   const parserReady = useParserReady();
   const [dataVersion, setDataVersion] = useState(0);
 
@@ -49,21 +56,29 @@ export function useLiveTrace(sandbox: Sandbox | null): void {
   useEffect(() => {
     if (!sandbox || !parserReady) return;
     const generation = useSceneStore.getState().nextGeneration();
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       const cursor = useEditorStore.getState().cursor;
-      void runPreview(text, cursor, generation, sandbox, schema);
+      void runPreview(text, cursor, generation, sandbox, schema, locale, controller.signal);
     }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [sandbox, parserReady, text, stmtIndex, dataVersion, schema]);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [sandbox, parserReady, text, stmtIndex, dataVersion, schema, locale]);
 }
 
 // Трасса без шагов: подсветка из редактора, итог задаёт вызывающий
-function baseTrace(stmt: ParsedStatement, schema: ReturnType<typeof useBoardStore.getState>['schema']) {
+function baseTrace(
+  stmt: ParsedStatement,
+  schema: ReturnType<typeof useBoardStore.getState>['schema'],
+  locale: Locale,
+) {
   return {
     sql: stmt.text,
     statementType: stmt.kind,
     mode: 'final-only' as const,
-    fallbackReason: 'Пошаговый разбор недоступен',
+    fallbackReason: locale === 'en' ? 'Step-by-step tracing is unavailable' : 'Пошаговый разбор недоступен',
     touched: touchedOf(stmt, schema),
     stages: [],
     notices: [],
@@ -72,9 +87,10 @@ function baseTrace(stmt: ParsedStatement, schema: ReturnType<typeof useBoardStor
 
 // Итог «Применить» для панели результата: последний результат оператора, без сцены (спека 3.9)
 export function appliedTrace(stmt: ParsedStatement, results: QueryResult[], timingMs: number): Trace {
+  const locale = useSettingsStore.getState().locale;
   return {
-    ...baseTrace(stmt, useBoardStore.getState().schema),
-    fallbackReason: 'Запрос применён. Измени текст, и превью вернётся',
+    ...baseTrace(stmt, useBoardStore.getState().schema, locale),
+    fallbackReason: appliedReason(locale),
     result: results.at(-1) ?? null,
     error: null,
     timingMs,
@@ -87,6 +103,8 @@ async function runPreview(
   generation: number,
   sandbox: Sandbox,
   schema: ReturnType<typeof useBoardStore.getState>['schema'],
+  locale: Locale,
+  signal: AbortSignal,
 ): Promise<void> {
   const editor = useEditorStore.getState();
   const scene = useSceneStore.getState();
@@ -106,29 +124,39 @@ async function runPreview(
   // Применённый оператор повторно не выполняем: CREATE дал бы «уже есть», INSERT показал бы следующий id
   const applied = editor.applied[stmt.index];
   if (applied) {
-    scene.setTrace(applied, generation);
+    const reason = appliedReason(locale);
+    scene.setTrace(
+      applied.fallbackReason && applied.fallbackReason !== reason
+        ? { ...applied, fallbackReason: reason }
+        : applied,
+      generation,
+    );
     return;
   }
   const started = performance.now();
-  const base = baseTrace(stmt, schema);
+  const base = baseTrace(stmt, schema, locale);
   try {
     const traced = schema
       ? await sandbox.preview(async (db): Promise<Trace | null> => {
           try {
             return await traceStatement(stmt, db, {
               schema,
+              locale,
+              signal,
               ...(sandbox.datasetId === 'big_bookstore' ? { includePlan: true } : {}),
             });
           } catch (e) {
             // Ошибку базы показываем как есть, баг трассировщика не должен прятать итог
-            if (e instanceof DbException) throw e;
+            if (signal.aborted || e instanceof DbException) throw e;
             if (import.meta.env.DEV) console.error('[tracer]', e);
             return null;
           }
-        })
+        }, signal)
       : null;
+    if (signal.aborted) return;
     // Итог без трассы: отдельное превью, в транзакции трассировщика оператор уже выполнялся
-    const out = traced ?? (await sandbox.preview((db) => db.query(stmt.text)));
+    const out = traced ?? (await sandbox.preview((db) => db.query(stmt.text), signal));
+    if (signal.aborted) return;
     // Подсветку колонок по-прежнему считает редактор
     if ('stages' in out) {
       useSceneStore.getState().setTrace({ ...out, touched: base.touched }, generation);
@@ -145,6 +173,7 @@ async function runPreview(
       generation,
     );
   } catch (e) {
+    if (signal.aborted) return;
     const error: DbError = e instanceof DbException ? e.db : { code: 'VS000', message: String(e) };
     useSceneStore.getState().setTrace(
       {

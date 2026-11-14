@@ -7,6 +7,7 @@ import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { effectiveSpeed, useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { makeAnimatorContext } from './context';
 import { Decorations } from './Decorations';
 import { GhostTableView } from './GhostTable';
@@ -64,6 +65,7 @@ export function OverlayLayer() {
   const stale = useSceneStore((s) => s.stale);
   const hidden = useSceneStore((s) => s.hidden);
   const schema = useBoardStore((s) => s.schema);
+  const locale = useSettingsStore((s) => s.locale);
   const expanded = useBoardStore((s) => s.expandedTables);
   // Смена шрифта браузера меняет размеры нод (rem): призраки пересобираются по новой раскладке
   const rootFont = useBoardStore((s) => s.rootFont);
@@ -87,7 +89,7 @@ export function OverlayLayer() {
       columns: trace.touched.columns,
       expanded: [...(trace.touched.expanded ?? []), ...expanded],
     };
-    const playback = buildPlayback(trace, makeAnimatorContext(rf, schema, touched));
+    const playback = buildPlayback(trace, makeAnimatorContext(rf, schema, touched, locale));
     // Трасса та же, сменилась только свёртка: меняем призраки на месте, шаг и видимость сцены не трогаем
     if (builtFor.current?.trace === trace && builtFor.current.schema === schema) {
       useSceneStore.setState({ playback });
@@ -98,7 +100,7 @@ export function OverlayLayer() {
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
     // таймлайн и плеер её вернут
     if (lessonStart() || !userDrivesScene()) scene.hide();
-  }, [trace, schema, rf, expanded, rootFont]);
+  }, [trace, schema, rf, expanded, rootFont, locale]);
 
   const active = !!playback && playback.phases.length > 0 && !hidden;
 

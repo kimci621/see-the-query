@@ -51,7 +51,7 @@ export function ResultsPanel() {
         ? { error: trace.error, sql: trace.sql }
         : null;
     if (err)
-      return `${message(locale, 'Ошибка')}: ${explainError(err.error, { sql: err.sql, schema }).title}`;
+      return `${message(locale, 'Ошибка')}: ${explainError(err.error, { sql: err.sql, schema, locale }).title}`;
     if (result)
       return isDml
         ? counted

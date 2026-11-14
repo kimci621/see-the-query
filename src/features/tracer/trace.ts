@@ -1,7 +1,7 @@
 import type { FuncCall, Node, SelectStmt } from '@pgsql/types';
 import { type DbClient, DbException, type QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from './captions';
+import { captionsForLocale } from './captions';
 import { explainPlan } from './explain';
 import { prepareSources } from './materialize/materialize';
 import type { Prober } from './probe';
@@ -66,6 +66,7 @@ export async function traceStatement(
 }
 
 async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions): Promise<Trace> {
+  const captions = captionsForLocale(opts.locale);
   const started = performance.now();
   const prober = createProber(db, { signal: opts.signal, maxRows: opts.maxRows ?? 2000 });
   const touched = touchedOf(stmt.ast, opts.schema);
@@ -82,7 +83,10 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
   if (stmt.kind === 'tcl') {
     return finish({
       mode: 'final-only',
-      fallbackReason: 'Команды транзакций в превью не выполняются',
+      fallbackReason:
+        opts.locale === 'en'
+          ? 'Transaction commands are not run in preview'
+          : 'Команды транзакций в превью не выполняются',
       stages: [],
       result: null,
       error: null,
@@ -101,7 +105,7 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
     if (!(e instanceof DbException)) throw e;
     const error = e.db;
     const focus = error.code === '42803' ? groupingErrorFocus(error.message, stmt.ast, opts.schema) : null;
-    const before = focus ? await groupingStages(stmt, prober, opts.schema) : { stages: [] };
+    const before = focus ? await groupingStages(stmt, prober, opts.schema, opts.locale) : { stages: [] };
     const stage: Stage = {
       id: `${before.stages.length}:error`,
       kind: 'error',
@@ -113,7 +117,7 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
     };
     return finish({
       mode: 'final-only',
-      fallbackReason: 'Запрос завершился ошибкой',
+      fallbackReason: opts.locale === 'en' ? 'The query failed' : 'Запрос завершился ошибкой',
       stages: [...before.stages, stage],
       result: null,
       error,
@@ -121,11 +125,16 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
   }
   const finalOnly = (fallbackReason: string) =>
     finish({ mode: 'final-only', fallbackReason, stages: [], result: reference, error: null });
+  const text = (ru: string, en: string) => (opts.locale === 'en' ? en : ru);
+  const mismatch = text('Сверка с прямым выполнением не сошлась', 'The trace did not match direct execution');
 
   if (typeof special === 'string') return finalOnly(special);
-  if (!('SelectStmt' in stmt.ast)) return finalOnly('Пока не анимируется');
+  if (!('SelectStmt' in stmt.ast)) return finalOnly(text('Пока не анимируется', 'Not animated yet'));
   let sel = stmt.ast.SelectStmt;
-  if (hasSrfTarget(sel)) return finalOnly('set-returning функция в списке SELECT');
+  if (hasSrfTarget(sel))
+    return finalOnly(
+      text('set-returning функция в списке SELECT', 'Set-returning function in the SELECT list'),
+    );
   const srfItems = findSrfFromItems(stmt);
   const srf = srfItems[0];
   const srfNode = srf && sel.fromClause?.[1];
@@ -133,7 +142,12 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
     srf &&
     (srfItems.length !== 1 || sel.fromClause?.length !== 2 || !srfNode || !('RangeFunction' in srfNode))
   )
-    return finalOnly('Такая комбинация функций в FROM пока не анимируется');
+    return finalOnly(
+      text(
+        'Такая комбинация функций в FROM пока не анимируется',
+        'This combination of functions in FROM is not animated yet',
+      ),
+    );
   if (srf && srfNode) sel = { ...sel, fromClause: sel.fromClause?.slice(0, 1) };
   let schema = opts.schema;
   let prefix: Stage[] = [];
@@ -157,8 +171,14 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
         });
         return finalOnly(
           name
-            ? `Функция ${name} в FROM пока не анимируется`
-            : `Источник в FROM пока не анимируется: ${e.db.message}`,
+            ? text(
+                `Функция ${name} в FROM пока не анимируется`,
+                `Function ${name} in FROM is not animated yet`,
+              )
+            : text(
+                `Источник в FROM пока не анимируется: ${e.db.message}`,
+                `The FROM source is not animated yet: ${e.db.message}`,
+              ),
         );
       }
       throw e;
@@ -170,25 +190,42 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
   }
   if (srf && srfNode) sel = { ...sel, fromClause: [...(sel.fromClause ?? []), withSrfOrdinal(srfNode, srf)] };
   // Проверяем уже переписанный SELECT: подзапрос в FROM стал TEMP-источником
-  const reason = unsupportedReason({ ...stmt, ast: { SelectStmt: sel } }, Boolean(srf));
+  const reason = unsupportedReason({ ...stmt, ast: { SelectStmt: sel } }, Boolean(srf), opts.locale);
   if (reason !== null) return finalOnly(reason);
   const volatile = selectFeatures(sel).has('volatile');
 
   // UNION / INTERSECT / EXCEPT: обе ветви трассируются отдельно, итог считается по кратностям
   if (sel.op && sel.op !== 'SETOP_NONE') {
     const op = setopOf(sel);
-    if (!op || !sel.larg || !sel.rarg) return finalOnly('Множество без одной из ветвей не анимируется');
-    if (sel.limitCount || sel.limitOffset) return finalOnly('LIMIT над множествами пока не анимируется');
-    if (setopDepth(sel) > 3) return finalOnly('Вложенность множеств глубже 3 не анимируется');
+    if (!op || !sel.larg || !sel.rarg)
+      return finalOnly(
+        text(
+          'Множество без одной из ветвей не анимируется',
+          'A set operation without both branches cannot be animated',
+        ),
+      );
+    if (sel.limitCount || sel.limitOffset)
+      return finalOnly(
+        text('LIMIT над множествами пока не анимируется', 'LIMIT over set operations is not animated yet'),
+      );
+    if (setopDepth(sel) > 3)
+      return finalOnly(
+        text(
+          'Вложенность множеств глубже 3 не анимируется',
+          'Set operations nested deeper than 3 levels are not animated',
+        ),
+      );
     const left = await traceStatement(branchStatement(stmt, sel.larg), db, { ...opts, schema });
     const right = await traceStatement(branchStatement(stmt, sel.rarg), db, { ...opts, schema });
     if (left.mode !== 'full' || right.mode !== 'full')
       return finalOnly(
-        `Ветвь множества не анимируется: ${left.fallbackReason ?? right.fallbackReason ?? 'причина не указана'}`,
+        text(
+          `Ветвь множества не анимируется: ${left.fallbackReason ?? right.fallbackReason ?? 'причина не указана'}`,
+          `A set-operation branch is not animated: ${left.fallbackReason ?? right.fallbackReason ?? 'no reason provided'}`,
+        ),
       );
-    const stage = setopStage(left, right, op);
-    if (!sameResult(stage.output, reference, null))
-      return finalOnly('Сверка с прямым выполнением не сошлась');
+    const stage = setopStage(left, right, op, opts.locale);
+    if (!sameResult(stage.output, reference, null)) return finalOnly(mismatch);
     const stages: Stage[] = [stage];
     // ORDER BY над множеством сортирует уже готовый итог, а не одну ветвь
     if (sel.sortClause) {
@@ -236,13 +273,18 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
           output: { columns, rows },
         });
       } catch (e) {
-        if (e instanceof DbException) return finalOnly('ORDER BY над множеством не удалось посчитать');
+        if (e instanceof DbException)
+          return finalOnly(
+            text(
+              'ORDER BY над множеством не удалось посчитать',
+              'Could not calculate ORDER BY over the set operation',
+            ),
+          );
         throw e;
       }
     }
     const last = stages.at(-1);
-    if (!last || !sameResult(last.output, reference, null))
-      return finalOnly('Сверка с прямым выполнением не сошлась');
+    if (!last || !sameResult(last.output, reference, null)) return finalOnly(mismatch);
     return finish({ mode: 'full', stages, result: reference, error: null });
   }
 
@@ -275,11 +317,12 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
     return finish({ mode: 'full', stages: [stage], result: reference, error: null });
   }
 
-  const from = flattenFrom(sel, schema, srf);
+  const from = flattenFrom(sel, schema, srf, opts.locale);
   if (!from.ok) return finalOnly(from.reason);
 
   const { sources, joins } = from;
   const args = {
+    locale: opts.locale,
     stmt,
     sel,
     prober,
@@ -303,14 +346,17 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
       await runSelect(ctx);
     } catch (e) {
       if (!(e instanceof ProbeOverflow)) throw e;
-      if (srf) return finalOnly('Слишком много строк для функции в FROM');
+      if (srf)
+        return finalOnly(
+          text('Слишком много строк для функции в FROM', 'Too many rows for the function in FROM'),
+        );
       ctx = createCtx();
       compressed = await runCompressed(ctx);
     }
   } catch (e) {
     if (e instanceof TraceFallback) return finalOnly(e.message);
     if (!(e instanceof DbException)) throw e;
-    return finalOnly(`Проба не удалась: ${e.db.message}`);
+    return finalOnly(text(`Проба не удалась: ${e.db.message}`, `Probe failed: ${e.db.message}`));
   }
   if (compressed) {
     // Строк на стадиях нет, сверяем итог по тем же фрагментам, что и счётчики. С volatile-ключом порядок
@@ -322,7 +368,7 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
       sameResult({ columns: [], rows }, reference, orderKeys, stableCanon(await ctx.outputs()));
     return ok
       ? finish({ mode: 'full', stages: ctx.stages, result: reference, error: null })
-      : finalOnly('Сверка с прямым выполнением не сошлась');
+      : finalOnly(mismatch);
   }
 
   // Принцип честности: финальная стадия обязана совпасть с прямым выполнением.
@@ -337,7 +383,7 @@ async function traceCore(stmt: ParsedStatement, db: DbClient, opts: TraceOptions
   if (ok && ordered && hidden) ok = await sameSeries(ctx, last.output, ordered, canonOf);
   if (!ok) {
     if (import.meta.env?.DEV) console.warn('[tracer] сверка не сошлась', stmt.text);
-    return finalOnly('Сверка с прямым выполнением не сошлась');
+    return finalOnly(mismatch);
   }
   return finish({ mode: 'full', stages: ctx.stages, result: reference, error: null });
 }
@@ -378,14 +424,15 @@ async function groupingStages(
   stmt: ParsedStatement,
   prober: Prober,
   schema: TraceOptions['schema'],
+  locale: TraceOptions['locale'],
 ): Promise<{ stages: Stage[]; group?: Extract<Stage, { kind: 'error' }>['group'] }> {
   const sel = 'SelectStmt' in stmt.ast ? stmt.ast.SelectStmt : null;
   if (!sel?.fromClause || !sel.groupClause || unsupportedReason(stmt) !== null) return { stages: [] };
   if (selectFeatures(sel).has('volatile')) return { stages: [] };
-  const from = flattenFrom(sel, schema);
+  const from = flattenFrom(sel, schema, undefined, locale);
   if (!from.ok) return { stages: [] };
   const reference = { fields: [], rows: [] };
-  const ctx = createSelectCtx({ stmt, sel, prober, reference, volatile: false, ...from, schema });
+  const ctx = createSelectCtx({ stmt, sel, prober, reference, volatile: false, ...from, schema, locale });
   try {
     for (const step of [scanStep, joinStep, filterStep, groupStep])
       if (step.applies(ctx)) await step.run(ctx);

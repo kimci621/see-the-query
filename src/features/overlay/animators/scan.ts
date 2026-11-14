@@ -35,7 +35,7 @@ export const scanAnimator: Animator<StageOf<'scan'>> = (prev, stage, stageIndex,
     {
       id: `${stageIndex}:appear`,
       stageIndex,
-      caption: `Берём таблицу ${title}`,
+      caption: ctx.locale === 'en' ? `Take table ${title}` : `Берём таблицу ${title}`,
       durationMs: 500,
       frame: appear,
     },

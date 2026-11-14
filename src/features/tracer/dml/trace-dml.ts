@@ -1,7 +1,7 @@
 import type { DbClient } from '@/features/db/types';
 import { DbException } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { type Prober, TraceFallback } from '../probe';
 import type { Special, TraceFn } from '../route';
 import type { Row, RowKey, Stage, TraceOptions } from '../types';
@@ -62,9 +62,17 @@ export async function traceDml(
       (item) => item.MergeWhenClause.matchKind === 'MERGE_WHEN_NOT_MATCHED_BY_SOURCE',
     )
   )
-    throw new TraceFallback('Пока не анимируется: WHEN NOT MATCHED BY SOURCE');
+    throw new TraceFallback(
+      opts.locale === 'en'
+        ? 'Not animated yet: WHEN NOT MATCHED BY SOURCE'
+        : 'Пока не анимируется: WHEN NOT MATCHED BY SOURCE',
+    );
   if ((op === 'update' || op === 'delete') && hasVolatile(body.whereClause))
-    throw new TraceFallback('Пока не анимируется: случайные значения в WHERE');
+    throw new TraceFallback(
+      opts.locale === 'en'
+        ? 'Not animated yet: random values in WHERE'
+        : 'Пока не анимируется: случайные значения в WHERE',
+    );
 
   const stages: Stage[] = [];
   const materialized = op === 'insert' ? await sourceTrace(body, target, db, opts, traceSelect) : null;
@@ -81,8 +89,10 @@ export async function traceDml(
     );
   const before = where ? where.stages[0].output : await snapshot(prober, target);
   const cascadeBefore =
-    op === 'delete' || op === 'update' ? await captureCascades(target.table.id, opts.schema, prober, op) : [];
-  const triggerBefore = await captureTriggerEffects(target, opts.schema, prober, op);
+    op === 'delete' || op === 'update'
+      ? await captureCascades(target.table.id, opts.schema, prober, op, opts.locale)
+      : [];
+  const triggerBefore = await captureTriggerEffects(target, opts.schema, prober, op, opts.locale);
   const collisionKeys = body.onConflictClause
     ? [
         ...new Set(
@@ -103,13 +113,13 @@ export async function traceDml(
       kind: 'error',
       error: run.error,
       focus: errorFocus(run.error, target, opts.schema),
-      caption: captions.error(run.error.code, run.error.message),
+      caption: captionsForLocale(opts.locale).error(run.error.code, run.error.message),
       output: { columns: [], rows: [] },
       ...extra,
     });
     return {
       mode: 'final-only',
-      fallbackReason: 'Запрос завершился ошибкой',
+      fallbackReason: opts.locale === 'en' ? 'The query failed' : 'Запрос завершился ошибкой',
       stages,
       result: null,
       error: run.error,
@@ -180,7 +190,7 @@ export async function traceDml(
   } catch {
     return {
       mode: 'final-only',
-      fallbackReason: 'Проба каскада не удалась',
+      fallbackReason: opts.locale === 'en' ? 'Cascade probe failed' : 'Проба каскада не удалась',
       stages: [],
       result: userResult(run.value, prefix),
       error: null,
@@ -193,16 +203,24 @@ export async function traceDml(
       const expected = [...byKey.values(), ...added].filter((item) => !deleted.includes(item.key));
       const values = (rows: Row[]) => rows.map((item) => JSON.stringify(item.values)).sort();
       if (!sameValue(values(observed.rows), values(expected))) {
-        throw new TraceFallback('Пока не анимируется: триггер изменил целевую таблицу');
+        throw new TraceFallback(
+          opts.locale === 'en'
+            ? 'Not animated yet: a trigger changed the target table'
+            : 'Пока не анимируется: триггер изменил целевую таблицу',
+        );
       }
-      effects = await triggerEffects(prober, triggerBefore);
+      effects = await triggerEffects(prober, triggerBefore, opts.locale);
     } catch (error) {
       if (opts.signal?.aborted || (error instanceof DbException && error.db.code.startsWith('VS')))
         throw error;
       return {
         mode: 'final-only',
         fallbackReason:
-          error instanceof TraceFallback ? error.message : 'Побочные изменения не удалось проверить',
+          error instanceof TraceFallback
+            ? error.message
+            : opts.locale === 'en'
+              ? 'Could not check side effects'
+              : 'Побочные изменения не удалось проверить',
         stages: [],
         result: userResult(run.value, prefix),
         error: null,
@@ -223,14 +241,14 @@ export async function traceDml(
     ...(effects?.length ? { triggerEffects: effects } : {}),
     caption:
       op === 'update'
-        ? captions.dmlUpdate(updated.length, before.rows.length)
+        ? captionsForLocale(opts.locale).dmlUpdate(updated.length, before.rows.length)
         : op === 'delete'
-          ? captions.dmlDelete(deleted.length, before.rows.length)
+          ? captionsForLocale(opts.locale).dmlDelete(deleted.length, before.rows.length)
           : body.onConflictClause
-            ? captions.dmlUpsert(inserted.length, conflicts.length)
+            ? captionsForLocale(opts.locale).dmlUpsert(inserted.length, conflicts.length)
             : op === 'merge'
-              ? captions.dmlMerge(inserted.length, updated.length, deleted.length)
-              : captions.dmlInsert(inserted.length, before.rows.length),
+              ? captionsForLocale(opts.locale).dmlMerge(inserted.length, updated.length, deleted.length)
+              : captionsForLocale(opts.locale).dmlInsert(inserted.length, before.rows.length),
     output: { columns: target.columns, rows: [...byKey.values(), ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
     ...(defaulted.length ? { defaulted } : {}),
@@ -243,7 +261,10 @@ export async function traceDml(
     if (where.hit.length !== actual.size || where.hit.some((key) => !actual.has(key)))
       return {
         mode: 'final-only',
-        fallbackReason: 'Сверка с прямым выполнением не сошлась',
+        fallbackReason:
+          opts.locale === 'en'
+            ? 'The trace did not match direct execution'
+            : 'Сверка с прямым выполнением не сошлась',
         stages: [],
         result: userResult(run.value, prefix),
         error: null,

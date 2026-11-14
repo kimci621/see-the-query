@@ -126,7 +126,7 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
       rebuildTable(
         {
           id: `a:${table.id}`,
-          title: 'попытка',
+          title: ctx.locale === 'en' ? 'attempt' : 'попытка',
           x: ctx.workArea.x,
           y: ctx.workArea.y,
           fold: ctx.folded(table.id),
@@ -148,7 +148,7 @@ export const constraintErrorAnimator: Animator<StageOf<'error'>> = (prev, stage,
     {
       id: `${stageIndex}:constraint-attempt`,
       stageIndex,
-      caption: `${stage.caption}: проверяем новую строку`,
+      caption: `${stage.caption}: ${ctx.locale === 'en' ? 'checking the new row' : 'проверяем новую строку'}`,
       durationMs: 450,
       frame: withFocus(withTable(base, attempted)),
     },

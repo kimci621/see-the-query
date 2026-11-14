@@ -8,7 +8,7 @@ export function explainError(err: DbError, ctx: ErrorContext): ErrorExplanation 
   if (entry) return entry(err, ctx);
   // кода нет в словаре: показываем оригинал. Код карточка печатает рядом с заголовком сама
   return {
-    title: 'Postgres отклонил запрос',
+    title: ctx.locale === 'en' ? 'Postgres rejected the query' : 'Postgres отклонил запрос',
     body: err.message,
     suggestion: err.hint,
     highlight: { tableIds: [], columns: [] },

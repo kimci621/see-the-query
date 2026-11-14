@@ -63,7 +63,7 @@ export const distinctAnimator: Animator<StageOf<'distinct'>> = (prev, stage, sta
     {
       id: `${stageIndex}:stack`,
       stageIndex,
-      caption: `${head}: одинаковые строки собираются в стопки`,
+      caption: `${head}: ${ctx.locale === 'en' ? 'identical rows gather into stacks' : 'одинаковые строки собираются в стопки'}`,
       durationMs: 800,
       frame: { tables: withTable(prev, stacked).tables, decorations: [] },
     },

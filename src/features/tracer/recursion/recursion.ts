@@ -1,5 +1,6 @@
 import type { Node, SelectStmt } from '@pgsql/types';
 import type { ColumnInfo, SchemaSnapshot, TableInfo } from '@/features/db/introspect';
+import type { Locale } from '@/lib/i18n';
 import { rowsWord } from '@/lib/plural';
 import { replaceRangeVars } from '../materialize/replace';
 import { ident, type Prober, sqlOf, typeNames } from '../probe';
@@ -88,16 +89,38 @@ export async function prepareRecursive(
   cte: { ctename?: string; ctequery?: Node; aliascolnames?: Node[] },
   schema: SchemaSnapshot,
   prober: Prober,
+  locale: Locale = 'ru',
 ): Promise<RecursionResult | { reason: string }> {
   const name = cte.ctename;
-  if (!name) return { reason: 'Рекурсивный CTE без имени не анимируется' };
+  if (!name)
+    return {
+      reason:
+        locale === 'en'
+          ? 'An unnamed recursive CTE cannot be animated'
+          : 'Рекурсивный CTE без имени не анимируется',
+    };
   if (!cte.ctequery || !('SelectStmt' in cte.ctequery))
-    return { reason: 'Рекурсивный CTE без SELECT пока не анимируется' };
+    return {
+      reason:
+        locale === 'en'
+          ? 'A recursive CTE without SELECT is not animated yet'
+          : 'Рекурсивный CTE без SELECT пока не анимируется',
+    };
   const body = cte.ctequery.SelectStmt as SelectStmt;
   if (body.op !== 'SETOP_UNION' || !body.larg || !body.rarg)
-    return { reason: 'Рекурсивный CTE поддерживает только UNION / UNION ALL' };
+    return {
+      reason:
+        locale === 'en'
+          ? 'Recursive CTE animation supports only UNION / UNION ALL'
+          : 'Рекурсивный CTE поддерживает только UNION / UNION ALL',
+    };
   if (hasVolatile(body.larg) || hasVolatile(body.rarg))
-    return { reason: 'Рекурсивный CTE с volatile-функцией не анимируется' };
+    return {
+      reason:
+        locale === 'en'
+          ? 'A recursive CTE with a volatile function is not animated'
+          : 'Рекурсивный CTE с volatile-функцией не анимируется',
+    };
   const all = Boolean(body.all);
   const aliases = (cte.aliascolnames ?? []).flatMap((node) =>
     'String' in node ? [node.String.sval ?? ''] : [],
@@ -140,7 +163,8 @@ export async function prepareRecursive(
       break;
     }
   }
-  if (!stopped) return { reason: 'Рекурсия глубже 50 итераций' };
+  if (!stopped)
+    return { reason: locale === 'en' ? 'Recursion exceeds 50 iterations' : 'Рекурсия глубже 50 итераций' };
   const final = await relationOf(prober, current, name, types);
   const table = await tempTable(prober, current, types);
   const nextSchema = { ...schema, tables: [...schema.tables, table] };
@@ -149,7 +173,10 @@ export async function prepareRecursive(
     kind: 'recursion',
     name,
     iterations,
-    caption: `WITH RECURSIVE ${name}: ${iterations.length} итераций, ${rowsWord(final.rows.length)}`,
+    caption:
+      locale === 'en'
+        ? `WITH RECURSIVE ${name}: ${iterations.length} ${iterations.length === 1 ? 'iteration' : 'iterations'}, ${rowsWord(final.rows.length, 'en')}`
+        : `WITH RECURSIVE ${name}: ${iterations.length} итераций, ${rowsWord(final.rows.length)}`,
     output: final,
   };
   return { name, temp: current, schema: nextSchema, stage, rows: final.rows.length };

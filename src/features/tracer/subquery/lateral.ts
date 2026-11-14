@@ -1,7 +1,8 @@
 import type { Node, RangeSubselect, SelectStmt } from '@pgsql/types';
 import type { QueryResult } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import type { Locale } from '@/lib/i18n';
+import { captionsForLocale } from '../captions';
 import { type Prober, sqlOf, typeNames } from '../probe';
 import { resultKey } from '../rowkey';
 import { rangeOf } from '../select/context';
@@ -29,14 +30,27 @@ interface LateralItem {
 
 // LATERAL после запятой в FROM: подзапрос видит строки предыдущих источников.
 // JOIN LATERAL с ON пока не берём: условие ON живёт снаружи подзапроса
-function lateralItem(sel: SelectStmt): LateralItem | { reason: string } {
+function lateralItem(sel: SelectStmt, locale: Locale = 'ru'): LateralItem | { reason: string } {
+  const text = (ru: string, en: string) => (locale === 'en' ? en : ru);
   const items = sel.fromClause ?? [];
   const found = items.flatMap((node, i) =>
     'RangeSubselect' in node && node.RangeSubselect.lateral ? [i] : [],
   );
-  if (!found.length) return { reason: 'LATERAL не найден' };
-  if (found.length > 1) return { reason: 'Несколько LATERAL в одном FROM пока не анимируются' };
-  if (found[0] === 0) return { reason: 'LATERAL без источника слева не анимируется' };
+  if (!found.length) return { reason: text('LATERAL не найден', 'LATERAL not found') };
+  if (found.length > 1)
+    return {
+      reason: text(
+        'Несколько LATERAL в одном FROM пока не анимируются',
+        'Multiple LATERAL items in one FROM are not animated yet',
+      ),
+    };
+  if (found[0] === 0)
+    return {
+      reason: text(
+        'LATERAL без источника слева не анимируется',
+        'LATERAL without a left source is not animated',
+      ),
+    };
   for (const item of items) {
     let lateral = false;
     const walk = (node: unknown): void => {
@@ -53,7 +67,13 @@ function lateralItem(sel: SelectStmt): LateralItem | { reason: string } {
       }
     };
     walk(item);
-    if (lateral) return { reason: 'JOIN LATERAL с условием ON пока не анимируется' };
+    if (lateral)
+      return {
+        reason: text(
+          'JOIN LATERAL с условием ON пока не анимируется',
+          'JOIN LATERAL with an ON condition is not animated yet',
+        ),
+      };
   }
   const index = found[0] ?? 0;
   return {
@@ -84,10 +104,14 @@ export async function traceLateral(
   opts: TraceOptions,
   trace: TraceChild,
 ): Promise<{ stages: Stage[]; output: Relation } | { reason: string }> {
-  const found = lateralItem(sel);
+  const text = (ru: string, en: string) => (opts.locale === 'en' ? en : ru);
+  const found = lateralItem(sel, opts.locale);
   if ('reason' in found) return found;
   const body = found.subselect.subquery;
-  if (!body || !('SelectStmt' in body)) return { reason: 'LATERAL без SELECT пока не анимируется' };
+  if (!body || !('SelectStmt' in body))
+    return {
+      reason: text('LATERAL без SELECT пока не анимируется', 'LATERAL without SELECT is not animated yet'),
+    };
 
   // Внешняя часть без LATERAL: её стадии нужны сцене слева
   const star: Node = { ResTarget: { val: { ColumnRef: { fields: [{ A_Star: {} }] } } } };
@@ -95,10 +119,19 @@ export async function traceLateral(
   const outer = await trace(childStatement(stmt, outerSel), { ...opts, schema: opts.schema });
   if (outer.mode !== 'full')
     return {
-      reason: `Внешняя часть LATERAL не анимируется: ${outer.fallbackReason ?? 'причина не указана'}`,
+      reason: text(
+        `Внешняя часть LATERAL не анимируется: ${outer.fallbackReason ?? 'причина не указана'}`,
+        `The outer part of LATERAL is not animated: ${outer.fallbackReason ?? 'no reason provided'}`,
+      ),
     };
   const outerRelation = outer.stages.at(-1)?.output ?? { columns: [], rows: [] };
-  if (!outerRelation.rows.length) return { reason: 'LATERAL без внешних строк пока не анимируется' };
+  if (!outerRelation.rows.length)
+    return {
+      reason: text(
+        'LATERAL без внешних строк пока не анимируется',
+        'LATERAL without outer rows is not animated yet',
+      ),
+    };
 
   const names = innerNames(opts.schema, body.SelectStmt);
   const samples: Array<{ outer: string; inner: Trace }> = [];
@@ -107,7 +140,10 @@ export async function traceLateral(
     const inner = await trace(childStatement(stmt, ast as SelectStmt), { ...opts, schema: opts.schema });
     if (inner.mode !== 'full')
       return {
-        reason: `LATERAL не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`,
+        reason: text(
+          `LATERAL не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`,
+          `LATERAL is not animated: ${inner.fallbackReason ?? 'no reason provided'}`,
+        ),
       };
     samples.push({ outer: row.key, inner });
   }
@@ -130,7 +166,11 @@ export async function traceLateral(
     mode: 'lateral',
     samples,
     limit3: outerRelation.rows.length > 3,
-    caption: captions.subqueryLateral(samples.length, outerRelation.rows.length, output.rows.length),
+    caption: captionsForLocale(opts.locale).subqueryLateral(
+      samples.length,
+      outerRelation.rows.length,
+      output.rows.length,
+    ),
     output,
   };
   const stages: Stage[] = [...outer.stages, stage];
@@ -143,7 +183,7 @@ export async function traceLateral(
       sortKeys: sel.sortClause.map(sqlOf),
       keyColumns: [],
       sourceRange: rangeOf(stmt, 'order'),
-      caption: captions.sort(sel.sortClause.map(sqlOf), output.rows.length),
+      caption: captionsForLocale(opts.locale).sort(sel.sortClause.map(sqlOf), output.rows.length),
       output,
     });
   }

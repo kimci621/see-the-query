@@ -1,5 +1,5 @@
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import type { Prober } from '../probe';
 import type { Special } from '../route';
 import type { Relation, Stage, TraceOptions } from '../types';
@@ -33,7 +33,10 @@ export async function traceTruncate(
 ): Promise<Special | string | null> {
   const body = (stmt.ast as unknown as { TruncateStmt?: TruncateNode }).TruncateStmt;
   const relations = body?.relations ?? [];
-  if (relations.length !== 1) return 'Пока не анимируется: TRUNCATE нескольких таблиц';
+  if (relations.length !== 1)
+    return opts.locale === 'en'
+      ? 'Not animated yet: TRUNCATE of multiple tables'
+      : 'Пока не анимируется: TRUNCATE нескольких таблиц';
   const target = resolveTarget(opts.schema, relations[0].RangeVar);
   if (!target) return null;
   const before = await snapshot(prober, target);
@@ -51,12 +54,12 @@ export async function traceTruncate(
       kind: 'error',
       error: run.error,
       focus: errorFocus(run.error, target, opts.schema),
-      caption: captions.error(run.error.code, run.error.message),
+      caption: captionsForLocale(opts.locale).error(run.error.code, run.error.message),
       output: { columns: [], rows: [] },
     };
     return {
       mode: 'final-only',
-      fallbackReason: 'Запрос завершился ошибкой',
+      fallbackReason: opts.locale === 'en' ? 'The query failed' : 'Запрос завершился ошибкой',
       stages: [stage],
       result: null,
       error: run.error,
@@ -82,7 +85,7 @@ export async function traceTruncate(
             updated: [],
           }))
           .filter((item) => item.deleted.length),
-        caption: captions.dmlTruncate(target.table.name, before.rows.length),
+        caption: captionsForLocale(opts.locale).dmlTruncate(target.table.name, before.rows.length),
         output: before,
         sourceRange: { from: stmt.from, to: stmt.to },
       },

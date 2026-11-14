@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { LexemeSceneData } from '@/features/scenes/lexemes';
+import { useSettingsStore } from '@/stores/settings';
 import { LexemePlayer } from './LexemeScene';
 
 const data: LexemeSceneData = {
@@ -19,6 +20,17 @@ const data: LexemeSceneData = {
 };
 
 describe('сцена полнотекстового поиска', () => {
+  afterEach(() => useSettingsStore.setState({ locale: 'ru' }));
+
+  it('показывает английские подписи и сохраняет исходный текст', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    render(<LexemePlayer data={data} />);
+    const scene = screen.getByRole('region', { name: 'Text search analysis' });
+    expect(within(scene).getByText('Книги о чтении')).toBeVisible();
+    fireEvent.click(within(scene).getByRole('button', { name: 'Next' }));
+    expect(within(scene).getByText('stop word')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Step 2 of 4: Parsing and stop words');
+  });
   it('объявляет шаги, обозначает стоп-слово и сохраняет фокус', () => {
     render(<LexemePlayer data={data} />);
     const scene = screen.getByRole('region', { name: 'Разбор текста для поиска' });

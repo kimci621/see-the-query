@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { act } from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fullPipelineTrace, testCtx } from '@/features/overlay/__fixtures__/traces';
 import { buildPlayback } from '@/features/overlay/playback';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { Timeline } from './Timeline';
 
 function load(autoplay = false) {
@@ -16,6 +17,18 @@ function load(autoplay = false) {
 
 describe('Timeline', () => {
   beforeEach(() => useSceneStore.setState(useSceneStore.getInitialState(), true));
+  afterEach(() => useSettingsStore.setState({ locale: 'ru' }));
+
+  it('подписывает плеер и доступные элементы на английском', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    load();
+    render(<Timeline />);
+    expect(screen.getByRole('list', { name: 'Query execution steps' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous step' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next step' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Scene position' })).toBeInTheDocument();
+  });
 
   it('ползунок позиции доступен по имени', () => {
     load();

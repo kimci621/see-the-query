@@ -1,6 +1,7 @@
 import type { JoinExpr, Node, RangeVar, SelectStmt } from '@pgsql/types';
 import type { SchemaSnapshot, TableInfo } from '@/features/db/introspect';
-import { captions } from '../captions';
+import type { Locale } from '@/lib/i18n';
+import { captionsForLocale } from '../captions';
 import { ident, sqlOf } from '../probe';
 import { rowKeyOf } from '../rowkey';
 import type { SrfFromItem } from '../srf';
@@ -36,16 +37,24 @@ export function flattenFrom(
   sel: SelectStmt,
   schema: SchemaSnapshot,
   srf?: SrfFromItem,
+  locale: Locale = 'ru',
 ): { ok: true; sources: Source[]; joins: JoinNode[] } | { ok: false; reason: string } {
   const sources: Source[] = [];
   const joins: JoinNode[] = [];
-  const complex = 'Пока не анимируется: сложный FROM';
+  const complex = locale === 'en' ? 'Not animated yet: complex FROM' : 'Пока не анимируется: сложный FROM';
   const pushSource = (rv: RangeVar): string | null => {
     const table = findTable(schema, rv.schemaname, rv.relname ?? '');
-    if (!table) return 'Пока не анимируется: источник не поддерживается';
+    if (!table)
+      return locale === 'en'
+        ? 'Not animated yet: unsupported source'
+        : 'Пока не анимируется: источник не поддерживается';
     // У представления нет ctid, у секций родителя ctid повторяются
-    if (table.kind === 'view') return 'Пока не анимируется: представление';
-    if (table.kind === 'partitioned') return 'Пока не анимируется: секционированная таблица';
+    if (table.kind === 'view')
+      return locale === 'en' ? 'Not animated yet: view' : 'Пока не анимируется: представление';
+    if (table.kind === 'partitioned')
+      return locale === 'en'
+        ? 'Not animated yet: partitioned table'
+        : 'Пока не анимируется: секционированная таблица';
     const alias = rv.alias?.aliasname ?? rv.relname ?? '';
     // Один алиас дважды Postgres не пропустит, но lineage без него сломался бы молча
     if (sources.some((s) => s.alias === alias)) return complex;
@@ -246,7 +255,7 @@ export const joinStep: SelectStep = {
           sourceAlias: item.sourceAlias,
           sourceColumn: item.sourceColumn,
           children: [...grouped].map(([parent, keys]) => ({ parent, keys })),
-          caption: captions.expand(item.fn, leftCount, ctx.rows.length),
+          caption: captionsForLocale(ctx.locale).expand(item.fn, leftCount, ctx.rows.length),
           output: { columns: ctx.columns, rows: ctx.rows },
         });
         leftCount = ctx.rows.length;
@@ -267,8 +276,13 @@ export const joinStep: SelectStep = {
         sourceRange: rangeOf(ctx.stmt, 'from'),
         caption:
           j.jointype === 'cross'
-            ? captions.cross(leftCount, scanned[k + 1])
-            : captions.join(joinLabel(j), pairs.length - lonelyLeft - lonelyRight, lonelyLeft, lonelyRight),
+            ? captionsForLocale(ctx.locale).cross(leftCount, scanned[k + 1])
+            : captionsForLocale(ctx.locale).join(
+                joinLabel(j),
+                pairs.length - lonelyLeft - lonelyRight,
+                lonelyLeft,
+                lonelyRight,
+              ),
         output: { columns: ctx.columns, rows: ctx.rows },
       });
       leftCount = ctx.rows.length;

@@ -1,3 +1,4 @@
+import type { Locale } from '@/lib/i18n';
 import { rowsWord } from '@/lib/plural';
 import { resultKey } from '../rowkey';
 import type { Relation, Row, Stage, Trace } from '../types';
@@ -53,7 +54,12 @@ export function setopLabel(op: SetopOp): string {
 }
 
 // Итог множества по канону с кратностями; колонки берём из левой ветви, как PostgreSQL
-export function setopStage(left: Trace, right: Trace, op: SetopOp): Stage & { kind: 'setop' } {
+export function setopStage(
+  left: Trace,
+  right: Trace,
+  op: SetopOp,
+  locale: Locale = 'ru',
+): Stage & { kind: 'setop' } {
   const leftRelation = left.stages.at(-1)?.output;
   const rightRelation = right.stages.at(-1)?.output;
   if (!leftRelation || !rightRelation) throw new Error('setop: у ветви нет выходной стадии');
@@ -66,7 +72,7 @@ export function setopStage(left: Trace, right: Trace, op: SetopOp): Stage & { ki
     kind: 'setop',
     op,
     branches: [left, right],
-    caption: `${setopLabel(op)}: ${rowsWord(output.rows.length)}`,
+    caption: `${setopLabel(op)}: ${rowsWord(output.rows.length, locale)}`,
     output,
   };
 }

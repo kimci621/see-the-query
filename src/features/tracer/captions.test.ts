@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { captions, keyList, limitLabel } from './captions';
+import { captions, captionsForLocale, keyList, limitLabel } from './captions';
 
 describe('captions', () => {
+  it.each([
+    [0, '0 rows'],
+    [1, '1 row'],
+    [2, '2 rows'],
+  ])('английские счётчики для %i строк', (count, expected) => {
+    const en = captionsForLocale('en');
+    expect(en.scan('book', 'b', count)).toBe(`FROM book AS b: ${expected}`);
+    expect(en.cross(1, count)).toBe(`CROSS JOIN: 1 × ${count} = ${expected}`);
+    expect(en.dmlInsert(count, 6)).toBe(`INSERT: +${expected}, 6 → ${6 + count}`);
+    expect(en.window(['row_number'], count)).toContain(expected);
+  });
+
+  it('подписи доступны по-русски и по-английски без изменения SQL-имён', () => {
+    const en = captionsForLocale('en');
+    expect(en.filter(2, 1, 1)).toBe('WHERE: 1 of 2 rows remains, 1 UNKNOWN');
+    expect(en.join('LEFT JOIN', 1, 1, 0)).toBe('LEFT JOIN: 1 pair, 1 row on the left without a match');
+    expect(captionsForLocale('ru').filter(2, 1, 1)).toBe('WHERE: осталось 1 из 2 строк, UNKNOWN у 1');
+  });
   it('подписи стадий', () => {
     expect(captions.scan('book', 'b', 11)).toBe('FROM book AS b: 11 строк');
     expect(captions.filter(11, 7, 1)).toBe('WHERE: осталось 7 из 11 строк, UNKNOWN у 1');

@@ -1,8 +1,26 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { TwoSessionsBlock } from '@/features/lessons/mdx/TwoSessionsBlock';
+import { useSettingsStore } from '@/stores/settings';
 
 describe('две сессии', () => {
+  afterEach(() => useSettingsStore.setState({ locale: 'ru' }));
+
+  it('показывает английский сценарий ожидания и освобождения блокировки', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    render(<TwoSessionsBlock id="lock-for-update" />);
+    const scene = screen.getByRole('region', { name: 'Waiting for a row lock' });
+    expect(within(scene).getByRole('region', { name: 'Session A' })).toBeVisible();
+    const next = within(scene).getByRole('button', { name: 'Next' });
+    fireEvent.click(next);
+    fireEvent.click(next);
+    fireEvent.click(next);
+    expect(within(scene).getByText('B waits for A’s transaction to end.')).toBeVisible();
+    expect(within(scene).getByText('Waiting')).toBeVisible();
+    fireEvent.click(next);
+    expect(within(scene).getByText('B acquired the lock after A committed.')).toBeVisible();
+  });
+
   it('показывает шаги отдельно и не раскрывает будущие результаты как выполненные', () => {
     render(<TwoSessionsBlock id="tx-basic" />);
     const scene = screen.getByRole('region', { name: 'Фиксация транзакции' });

@@ -1,5 +1,5 @@
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { ident, type Prober, TraceFallback } from '../probe';
 import type { Special } from '../route';
 import type { Relation, Row, Stage, TraceOptions } from '../types';
@@ -25,7 +25,11 @@ export async function tracePartitionInsert(
   const table = findTable(opts.schema, body.relation.schemaname, body.relation.relname);
   if (table?.kind !== 'partitioned') return null;
   if (body.withClause || body.onConflictClause || body.returningClause?.options?.length) {
-    throw new TraceFallback('Пока не анимируется: сложный INSERT в секционированную таблицу');
+    throw new TraceFallback(
+      opts.locale === 'en'
+        ? 'Not animated yet: complex INSERT into a partitioned table'
+        : 'Пока не анимируется: сложный INSERT в секционированную таблицу',
+    );
   }
   const target = targetOf(table, body.relation.alias?.aliasname ?? table.name);
   const regclass = `'${target.sql.replaceAll("'", "''")}'::regclass`;
@@ -34,7 +38,11 @@ export async function tracePartitionInsert(
       and tgrelid in (select relid from pg_partition_tree(${regclass})) limit 1
   `);
   if (trigger.rows.length)
-    throw new TraceFallback('Пока не анимируется: триггеры на секционированной таблице');
+    throw new TraceFallback(
+      opts.locale === 'en'
+        ? 'Not animated yet: triggers on a partitioned table'
+        : 'Пока не анимируется: триггеры на секционированной таблице',
+    );
   const leafRows = await prober.run(`
     select p.relid::oid::text, n.nspname, c.relname
     from pg_partition_tree(${regclass}) p
@@ -64,12 +72,12 @@ export async function tracePartitionInsert(
       kind: 'error',
       error: run.error,
       focus: errorFocus(run.error, target, opts.schema),
-      caption: captions.error(run.error.code, run.error.message),
+      caption: captionsForLocale(opts.locale).error(run.error.code, run.error.message),
       output: { columns: [], rows: [] },
     };
     return {
       mode: 'final-only',
-      fallbackReason: 'Запрос завершился ошибкой',
+      fallbackReason: opts.locale === 'en' ? 'The query failed' : 'Запрос завершился ошибкой',
       stages: [errorStage],
       result: null,
       error: run.error,
@@ -80,7 +88,10 @@ export async function tracePartitionInsert(
   if (before.length + run.value.rows.length > (opts.maxRows ?? 2000)) {
     return {
       mode: 'final-only',
-      fallbackReason: 'Пока не анимируется: таблица больше лимита строк',
+      fallbackReason:
+        opts.locale === 'en'
+          ? 'Not animated yet: table exceeds the row limit'
+          : 'Пока не анимируется: таблица больше лимита строк',
       stages: [],
       result,
       error: null,
@@ -94,7 +105,10 @@ export async function tracePartitionInsert(
     if (!partitionId) {
       return {
         mode: 'final-only',
-        fallbackReason: 'Не удалось определить секцию вставленной строки',
+        fallbackReason:
+          opts.locale === 'en'
+            ? 'Could not determine the inserted row’s partition'
+            : 'Не удалось определить секцию вставленной строки',
         stages: [],
         result,
         error: null,
@@ -123,7 +137,7 @@ export async function tracePartitionInsert(
     cascades: [],
     routing,
     partitionKey,
-    caption: captions.dmlInsert(added.length, before.length),
+    caption: captionsForLocale(opts.locale).dmlInsert(added.length, before.length),
     output: { columns: target.columns, rows: [...before, ...added] },
     sourceRange: { from: stmt.from, to: stmt.to },
   };

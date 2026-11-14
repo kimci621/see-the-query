@@ -1,6 +1,6 @@
 import type { CaseExpr, CaseWhen } from '@pgsql/types';
 import { DbException } from '@/features/db/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { sqlOf } from '../probe';
 import type { Column, RowKey } from '../types';
 import { hasVolatile } from '../whitelist';
@@ -93,7 +93,11 @@ export const projectStep: SelectStep = {
       ...(branches ? { branches } : {}),
       volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'select'),
-      caption: captions.project(out.columns.length - p.computed.length, input.length, p.computed.length),
+      caption: captionsForLocale(ctx.locale).project(
+        out.columns.length - p.computed.length,
+        input.length,
+        p.computed.length,
+      ),
       output: { columns: ctx.columns, rows: ctx.rows },
     });
   },

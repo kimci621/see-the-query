@@ -35,7 +35,7 @@ export const sortAnimator: Animator<StageOf<'sort'>> = (prev, stage, stageIndex,
     {
       id: `${stageIndex}:keys`,
       stageIndex,
-      caption: `ORDER BY: сортируем по ${keyList(stage.sortKeys)}`,
+      caption: `ORDER BY: ${ctx.locale === 'en' ? 'sort by' : 'сортируем по'} ${keyList(stage.sortKeys)}`,
       durationMs: 400,
       frame: { tables: withTable(prev, keys).tables, decorations: [] },
     },

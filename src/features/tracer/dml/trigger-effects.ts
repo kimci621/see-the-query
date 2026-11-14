@@ -1,4 +1,5 @@
 import type { SchemaSnapshot } from '@/features/db/introspect';
+import type { Locale } from '@/lib/i18n';
 import { type Prober, TraceFallback } from '../probe';
 import type { Relation } from '../types';
 import { cascadeTargets } from './cascade';
@@ -41,6 +42,7 @@ export async function captureTriggerEffects(
   schema: SchemaSnapshot,
   prober: Prober,
   op: 'insert' | 'update' | 'delete' | 'merge',
+  locale: Locale = 'ru',
 ): Promise<TriggerCapture | null> {
   const events: Array<'update' | 'delete'> =
     op === 'merge' ? ['update', 'delete'] : op === 'delete' ? ['delete'] : ['update'];
@@ -63,7 +65,11 @@ export async function captureTriggerEffects(
   );
   // ponytail: пробуем не более 30 таблиц; для больших схем нужен механизм наблюдения изменений сервера.
   if (tables.length > 30)
-    throw new TraceFallback('Пока не анимируется: слишком много таблиц для проверки триггеров');
+    throw new TraceFallback(
+      locale === 'en'
+        ? 'Not animated yet: too many tables to check triggers'
+        : 'Пока не анимируется: слишком много таблиц для проверки триггеров',
+    );
   const captured: CapturedTable[] = [];
   for (const table of tables) {
     const other = targetOf(table);
@@ -73,17 +79,29 @@ export async function captureTriggerEffects(
 }
 
 // Сравнение по ctid сохраняет все значения, включая время; UPDATE и DELETE требуют отдельной модели.
-export async function triggerEffects(prober: Prober, captured: TriggerCapture): Promise<TriggerEffect[]> {
+export async function triggerEffects(
+  prober: Prober,
+  captured: TriggerCapture,
+  locale: Locale = 'ru',
+): Promise<TriggerEffect[]> {
   const effects: TriggerEffect[] = [];
   if ((await schemaShape(prober)) !== captured.schemaShape) {
-    throw new TraceFallback('Пока не анимируется: триггер изменил структуру базы');
+    throw new TraceFallback(
+      locale === 'en'
+        ? 'Not animated yet: a trigger changed the database structure'
+        : 'Пока не анимируется: триггер изменил структуру базы',
+    );
   }
   for (const { target, before } of captured.tables) {
     const after = await snapshot(prober, target);
     const oldKeys = new Set(before.rows.map((row) => row.key));
     const newKeys = new Set(after.rows.map((row) => row.key));
     if (before.rows.some((row) => !newKeys.has(row.key))) {
-      throw new TraceFallback('Пока не анимируется: побочный UPDATE или DELETE');
+      throw new TraceFallback(
+        locale === 'en'
+          ? 'Not animated yet: a side effect performed UPDATE or DELETE'
+          : 'Пока не анимируется: побочный UPDATE или DELETE',
+      );
     }
     const added = after.rows.filter((row) => !oldKeys.has(row.key));
     if (added.length) {

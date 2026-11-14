@@ -1,5 +1,6 @@
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { Column, RowKey, Stage } from '@/features/tracer/types';
+import type { Locale } from '@/lib/i18n';
 
 // Состояние строки на сцене: от него зависят цвет, иконка и зачёркивание
 export type RowState =
@@ -99,6 +100,7 @@ export interface Phase {
 }
 
 export interface AnimatorContext {
+  locale?: Locale;
   nodeRect(tableId: string): { x: number; y: number; width: number; height: number } | null;
   workArea: { x: number; y: number };
   schema: SchemaSnapshot;

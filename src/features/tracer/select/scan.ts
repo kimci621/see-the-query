@@ -1,4 +1,4 @@
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { ident, sqlOf } from '../probe';
 import { rowKeyOf } from '../rowkey';
 import type { Row } from '../types';
@@ -57,7 +57,7 @@ export const scanStep: SelectStep = {
         tableId: table.id,
         ...(sourceName ? { sourceName } : {}),
         sourceRange: rangeOf(ctx.stmt, 'from'),
-        caption: captions.scan(sourceName ?? table.name, alias, rows.length),
+        caption: captionsForLocale(ctx.locale).scan(sourceName ?? table.name, alias, rows.length),
         output: { columns, rows },
       });
     }

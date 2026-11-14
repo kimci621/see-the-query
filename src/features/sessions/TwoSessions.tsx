@@ -2,20 +2,23 @@ import { type KeyboardEvent, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { useStepper } from '@/features/scenes/useStepper';
+import type { Locale } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings';
 import { buildTimeline, visibleSnapshot } from './timeline';
 import type { Scenario, ScenarioStep } from './types';
 
-function resultOf(step: ScenarioStep): string | null {
-  if (step.expectError) return `Ошибка ${step.expectError}`;
+function resultOf(step: ScenarioStep, locale: Locale): string | null {
+  if (step.expectError) return `${locale === 'en' ? 'Error' : 'Ошибка'} ${step.expectError}`;
   if (!step.expect?.rows) return null;
-  if (step.expect.rows.length === 0) return 'Нет строк';
+  if (step.expect.rows.length === 0) return locale === 'en' ? 'No rows' : 'Нет строк';
   return step.expect.rows
     .map((row) => row.map((value) => (value === null ? 'NULL' : String(value))).join(' | '))
     .join('; ');
 }
 
 export function TwoSessions({ scenario }: { scenario: Scenario }) {
+  const locale = useSettingsStore((s) => s.locale);
   const { index, next, prev } = useStepper(scenario.steps.length);
   const back = useRef<HTMLButtonElement>(null);
   const forward = useRef<HTMLButtonElement>(null);
@@ -51,20 +54,28 @@ export function TwoSessions({ scenario }: { scenario: Scenario }) {
           <p className="mt-1 text-xs text-muted-foreground">{scenario.intro}</p>
         </div>
         <span role="status" className="text-xs text-muted-foreground">
-          Шаг {index + 1} из {scenario.steps.length}
+          {locale === 'en'
+            ? `Step ${index + 1} of ${scenario.steps.length}`
+            : `Шаг ${index + 1} из ${scenario.steps.length}`}
           <span className="sr-only">: {scenario.steps[index].caption}</span>
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {(['a', 'b'] as const).map((session) => (
-          <section key={session} aria-label={`Сессия ${session.toUpperCase()}`} className="min-w-0">
-            <h4 className="mb-2 text-xs font-semibold">Сессия {session.toUpperCase()}</h4>
+          <section
+            key={session}
+            aria-label={`${locale === 'en' ? 'Session' : 'Сессия'} ${session.toUpperCase()}`}
+            className="min-w-0"
+          >
+            <h4 className="mb-2 text-xs font-semibold">
+              {locale === 'en' ? 'Session' : 'Сессия'} {session.toUpperCase()}
+            </h4>
             <ol className="space-y-2">
               {frames
                 .filter((frame) => frame.session === session)
                 .map((frame) => {
                   const step = scenario.steps[frame.index];
-                  const result = frame.state === 'done' ? resultOf(step) : null;
+                  const result = frame.state === 'done' ? resultOf(step, locale) : null;
                   return (
                     <li
                       key={frame.index}
@@ -93,12 +104,20 @@ export function TwoSessions({ scenario }: { scenario: Scenario }) {
                         )}
                       >
                         {frame.state === 'pending'
-                          ? 'Ещё не выполнено'
+                          ? locale === 'en'
+                            ? 'Not run yet'
+                            : 'Ещё не выполнено'
                           : frame.state === 'running'
-                            ? 'Ждёт'
+                            ? locale === 'en'
+                              ? 'Waiting'
+                              : 'Ждёт'
                             : step.expectError
-                              ? 'Завершилось ошибкой'
-                              : 'Выполнено'}
+                              ? locale === 'en'
+                                ? 'Failed'
+                                : 'Завершилось ошибкой'
+                              : locale === 'en'
+                                ? 'Done'
+                                : 'Выполнено'}
                       </p>
                       {result && (
                         <p
@@ -119,7 +138,9 @@ export function TwoSessions({ scenario }: { scenario: Scenario }) {
       </div>
       {notes.length > 0 && (
         <div className="mt-4 rounded-md bg-muted/40 px-3 py-2">
-          <h4 className="text-xs font-semibold">Что происходит</h4>
+          <h4 className="text-xs font-semibold">
+            {locale === 'en' ? 'What is happening' : 'Что происходит'}
+          </h4>
           <ul className="mt-1 space-y-1 text-xs">
             {notes.map((note) => (
               <li key={note}>{note}</li>
@@ -129,7 +150,7 @@ export function TwoSessions({ scenario }: { scenario: Scenario }) {
       )}
       <div className="mt-4 flex justify-end gap-2">
         <Button ref={back} size="sm" variant="outline" disabled={index === 0} onClick={() => go('prev')}>
-          Назад
+          {locale === 'en' ? 'Back' : 'Назад'}
         </Button>
         <Button
           ref={forward}
@@ -137,7 +158,7 @@ export function TwoSessions({ scenario }: { scenario: Scenario }) {
           disabled={index === scenario.steps.length - 1}
           onClick={() => go('next')}
         >
-          Дальше
+          {locale === 'en' ? 'Next' : 'Дальше'}
         </Button>
       </div>
     </section>

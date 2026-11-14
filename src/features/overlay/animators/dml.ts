@@ -38,11 +38,14 @@ function incomingTable(
   return { ...table, rows: table.rows.map((row) => ({ ...row, state: 'new' as const })) };
 }
 
-function branchMark(branch: StageOf<'dml'>['mergeBranches'][string]): Partial<GhostRow> {
+function branchMark(
+  branch: StageOf<'dml'>['mergeBranches'][string],
+  locale: Parameters<Animator>[3]['locale'],
+): Partial<GhostRow> {
   if (branch === 'matched_update') return { state: 'matched', badge: 'UPDATE' };
   if (branch === 'matched_delete') return { state: 'deleted', badge: 'DELETE' };
   if (branch === 'not_matched_insert') return { state: 'new', badge: 'INSERT' };
-  if (branch === 'skipped') return { state: 'unknown', badge: 'ПРОПУСК' };
+  if (branch === 'skipped') return { state: 'unknown', badge: locale === 'en' ? 'SKIPPED' : 'ПРОПУСК' };
   return {};
 }
 
@@ -143,9 +146,13 @@ function cascadePhases(
     if (!previous || !ghost) return;
     const name = cascade.tableId.split('.').at(-1) ?? cascade.tableId;
     const caption =
-      cascade.updated.length === 0
-        ? `Каскад удаляет строки ${name}: ${cascade.deleted.length}`
-        : `Каскад меняет ${name}: удалено ${cascade.deleted.length}, изменено ${cascade.updated.length}`;
+      ctx.locale === 'en'
+        ? cascade.updated.length === 0
+          ? `Cascade deletes rows in ${name}: ${cascade.deleted.length}`
+          : `Cascade changes ${name}: ${cascade.deleted.length} deleted, ${cascade.updated.length} updated`
+        : cascade.updated.length === 0
+          ? `Каскад удаляет строки ${name}: ${cascade.deleted.length}`
+          : `Каскад меняет ${name}: удалено ${cascade.deleted.length}, изменено ${cascade.updated.length}`;
     frame = {
       ...frame,
       decorations: [
@@ -199,7 +206,7 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
               .map((index) => [index, 'changed' as const]),
           )
         : undefined;
-      const branch = branchMark(stage.mergeBranches[row.key]);
+      const branch = branchMark(stage.mergeBranches[row.key], ctx.locale);
       const conflict = conflicts.get(row.key);
       return {
         ...row,
@@ -213,7 +220,12 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
                 ? { state: 'changed' as const }
                 : {}),
         ...branch,
-        ...(conflict?.action === 'nothing' ? { state: 'matched' as const, badge: 'CONFLICT: ПРОПУСК' } : {}),
+        ...(conflict?.action === 'nothing'
+          ? {
+              state: 'matched' as const,
+              badge: ctx.locale === 'en' ? 'CONFLICT: SKIPPED' : 'CONFLICT: ПРОПУСК',
+            }
+          : {}),
         ...(conflict?.action === 'update' ? { badge: 'CONFLICT: UPDATE' } : {}),
         ...(changedMarks && Object.keys(changedMarks).length
           ? { cellMarks: changedMarks }
@@ -263,7 +275,7 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
         {
           id: `${stageIndex}:update-before`,
           stageIndex,
-          caption: `${stage.caption}: старые значения`,
+          caption: `${stage.caption}: ${ctx.locale === 'en' ? 'previous values' : 'старые значения'}`,
           durationMs: 450,
           frame: movedIncoming
             ? withTable(withTable({ ...prev, decorations }, before), movedIncoming)
@@ -287,7 +299,7 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
             ),
           ),
         y: marked.y - rem(2 * (index + 1)),
-        text: `${sequence.column}: ${sequence.before ?? 'не использована'}${after ? ` → ${sequence.after ?? 'не использована'}` : ''}`,
+        text: `${sequence.column}: ${sequence.before ?? (ctx.locale === 'en' ? 'not used' : 'не использована')}${after ? ` → ${sequence.after ?? (ctx.locale === 'en' ? 'not used' : 'не использована')}` : ''}`,
       }));
     const initial = { ...marked, rows: marked.rows.filter((row) => !inserted.has(row.key)) };
     phases.unshift({
@@ -303,7 +315,7 @@ export const dmlAnimator: Animator<StageOf<'dml'>> = (prev, stage, stageIndex, c
     phases.unshift({
       id: `${stageIndex}:conflict-source`,
       stageIndex,
-      caption: `${stage.caption}: строка ищет конфликт`,
+      caption: `${stage.caption}: ${ctx.locale === 'en' ? 'row checks for a conflict' : 'строка ищет конфликт'}`,
       durationMs: 450,
       frame: sourceFrame,
     });

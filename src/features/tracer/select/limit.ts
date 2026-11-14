@@ -1,4 +1,4 @@
-import { captions, limitLabel } from '../captions';
+import { captionsForLocale, limitLabel } from '../captions';
 import { alignToReference, rangeOf, stageId, windowOf } from './context';
 import type { SelectStep } from './pipeline';
 
@@ -27,7 +27,11 @@ export const limitStep: SelectStep = {
       withTies,
       volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'limit', 'offset'),
-      caption: captions.limit(limitLabel(limit, offset, withTies), before, ctx.rows.length),
+      caption: captionsForLocale(ctx.locale).limit(
+        limitLabel(limit, offset, withTies),
+        before,
+        ctx.rows.length,
+      ),
       output: { columns: ctx.columns, rows: ctx.rows },
     });
   },

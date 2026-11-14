@@ -70,7 +70,7 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
           height: rem(10),
         },
       ],
-      `Создана схема ${name}`,
+      ctx.locale === 'en' ? `Created schema ${name}` : `Создана схема ${name}`,
     );
   }
   for (const id of diff.addedTables) {
@@ -91,7 +91,7 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
           },
         ],
         [],
-        `Создаём таблицу ${table.name}`,
+        ctx.locale === 'en' ? `Creating table ${table.name}` : `Создаём таблицу ${table.name}`,
       );
     }
   }
@@ -114,7 +114,7 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
         },
       ],
       [],
-      `Добавлена колонка ${change.column}`,
+      ctx.locale === 'en' ? `Added column ${change.column}` : `Добавлена колонка ${change.column}`,
     );
   }
   for (const change of diff.droppedColumns) {
@@ -136,7 +136,7 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
         },
       ],
       [],
-      `Удаляется колонка ${change.column}`,
+      ctx.locale === 'en' ? `Removing column ${change.column}` : `Удаляется колонка ${change.column}`,
     );
     push('drop-after', [ghost(next, ctx)]);
   }
@@ -221,7 +221,7 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
           text: change.name,
         },
       ],
-      `Добавлено ограничение ${change.name}`,
+      ctx.locale === 'en' ? `Added constraint ${change.name}` : `Добавлено ограничение ${change.name}`,
     );
   }
   for (const change of diff.addedIndexes.filter((item) => !diff.addedTables.includes(item.tableId))) {
@@ -242,7 +242,7 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
           text: change.name,
         },
       ],
-      `Создан индекс ${change.name}`,
+      ctx.locale === 'en' ? `Created index ${change.name}` : `Создан индекс ${change.name}`,
     );
   }
   for (const info of diff.after.tables) {
@@ -264,7 +264,13 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
             },
           ]
         : [],
-      info.comment ? 'Добавлен комментарий к таблице' : 'Комментарий к таблице удалён',
+      ctx.locale === 'en'
+        ? info.comment
+          ? 'Added table comment'
+          : 'Removed table comment'
+        : info.comment
+          ? 'Добавлен комментарий к таблице'
+          : 'Комментарий к таблице удалён',
     );
   }
 
@@ -297,11 +303,16 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
     push('drop-start', tables, arrows);
     for (const id of diff.droppedTables) {
       tables = tables.map((table) => (table.id === `t:${id}` ? { ...table, opacity: 0 } : table));
-      push('drop-table', tables, arrows, `Удаляется ${id}`);
+      push('drop-table', tables, arrows, ctx.locale === 'en' ? `Removing ${id}` : `Удаляется ${id}`);
     }
     if (arrows.length) {
       arrows = arrows.map((arrow) => (arrow.kind === 'arrow' ? { ...arrow, opacity: 0 } : arrow));
-      push('drop-fk', tables, arrows, 'Удаляются зависимые связи');
+      push(
+        'drop-fk',
+        tables,
+        arrows,
+        ctx.locale === 'en' ? 'Removing dependent relationships' : 'Удаляются зависимые связи',
+      );
     }
   }
   return phases.length ? phases : genericAnimator(prev, stage, stageIndex, ctx);

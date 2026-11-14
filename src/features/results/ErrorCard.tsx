@@ -19,7 +19,10 @@ export function ErrorCard({ error, sql, parse = false }: { error: DbError; sql: 
   const t = useMessages();
   const schema = useBoardStore((s) => s.schema);
   const text = useEditorStore((s) => s.text);
-  const explanation = useMemo(() => explainError(error, { sql, schema }), [error, sql, schema]);
+  const explanation = useMemo(
+    () => explainError(error, { sql, schema, locale }),
+    [error, sql, schema, locale],
+  );
   const { fix } = explanation;
   // кнопка есть, только когда правка применима к текущему тексту
   const fixed = fix ? applyFix(text, sql, error, fix) : null;

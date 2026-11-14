@@ -1,6 +1,7 @@
 import type { FuncCall, JoinExpr, Node, SelectStmt } from '@pgsql/types';
 import { findTable, type SchemaSnapshot, type TableInfo } from '@/features/db/introspect';
 import type { ParsedStatement, StatementKind } from '@/features/sql/types';
+import type { Locale } from '@/lib/i18n';
 
 // Функции, которые при повторном вызове дают другое значение или меняют состояние
 export const VOLATILE = new Set([
@@ -150,6 +151,24 @@ const KIND_LABELS: Record<StatementKind, string> = {
   other: 'этот оператор',
 };
 
+const FEATURE_LABELS_EN: Partial<Record<Feature, string>> = {
+  'no-from': 'SELECT without FROM',
+  'no-from-clauses': 'WHERE, ORDER BY or LIMIT without FROM',
+  volatile: 'volatile functions',
+  'volatile-other': 'volatile function in WHERE, DISTINCT, LIMIT or aggregate',
+  'volatile-order-limit': 'volatile function in ORDER BY with LIMIT or OFFSET',
+  subquery: 'subquery',
+  'function-from': 'function in FROM',
+  'other-from': 'complex FROM',
+  aggregate: 'aggregate functions',
+  window: 'window functions',
+};
+const KIND_LABELS_EN: Partial<Record<StatementKind, string>> = {
+  ddl: 'schema change',
+  tcl: 'transaction commands',
+  other: 'this statement',
+};
+
 // Обход AST: fn видит каждое поле каждого узла
 export function walk(node: unknown, fn: (key: string, value: unknown) => void): void {
   if (Array.isArray(node)) {
@@ -260,18 +279,28 @@ export function volatileSort(sel: SelectStmt): boolean {
 }
 
 // null = оператор трассируется полностью
-export function unsupportedReason(stmt: ParsedStatement, allowSrf = false): string | null {
+export function unsupportedReason(
+  stmt: ParsedStatement,
+  allowSrf = false,
+  locale: Locale = 'ru',
+): string | null {
+  const prefix = locale === 'en' ? 'Not animated yet' : 'Пока не анимируется';
   if (stmt.kind !== 'select' || !('SelectStmt' in stmt.ast))
-    return `Пока не анимируется: ${KIND_LABELS[stmt.kind]}`;
+    return `${prefix}: ${locale === 'en' ? (KIND_LABELS_EN[stmt.kind] ?? KIND_LABELS[stmt.kind]) : KIND_LABELS[stmt.kind]}`;
   const bad = [...selectFeatures(stmt.ast.SelectStmt)].filter(
     (f) => !SUPPORTED.has(f) && !(allowSrf && f === 'function-from'),
   );
-  if (bad.length) return `Пока не анимируется: ${bad.map((f) => FEATURE_LABELS[f]).join(', ')}`;
+  if (bad.length)
+    return `${prefix}: ${bad.map((f) => (locale === 'en' ? (FEATURE_LABELS_EN[f] ?? FEATURE_LABELS[f]) : FEATURE_LABELS[f])).join(', ')}`;
   let unsupported: string | null = null;
   walk(stmt.ast, (key, value) => {
     if (key !== 'SubLink') return;
     const type = (value as { subLinkType?: string }).subLinkType;
-    if (type === 'ARRAY_SUBLINK') unsupported = 'Пока не анимируется: ARRAY с подзапросом';
+    if (type === 'ARRAY_SUBLINK')
+      unsupported =
+        locale === 'en'
+          ? 'Not animated yet: ARRAY with a subquery'
+          : 'Пока не анимируется: ARRAY с подзапросом';
   });
   return unsupported;
 }

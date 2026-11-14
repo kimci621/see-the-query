@@ -44,10 +44,15 @@ export async function traceSpecial(
     if (node === 'TruncateStmt') return await traceTruncate(stmt, prober, opts);
     if (DDL.has(node)) return await traceDdl(stmt, db, prober, opts);
   } catch (error) {
-    if (error instanceof ProbeOverflow) return 'Пока не анимируется: таблица больше лимита строк';
+    if (error instanceof ProbeOverflow)
+      return opts.locale === 'en'
+        ? 'Not animated yet: table exceeds the row limit'
+        : 'Пока не анимируется: таблица больше лимита строк';
     if (error instanceof TraceFallback) return error.message;
     if (error instanceof DbException && !error.db.code.startsWith('VS'))
-      return `Проба не удалась: ${error.db.message}`;
+      return opts.locale === 'en'
+        ? `Probe failed: ${error.db.message}`
+        : `Проба не удалась: ${error.db.message}`;
     throw error;
   }
   return null;

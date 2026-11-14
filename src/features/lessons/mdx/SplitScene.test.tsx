@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { SplitSceneData } from '@/features/scenes/split';
+import { useSettingsStore } from '@/stores/settings';
 import { SplitPlayer } from './SplitScene';
 
 const original = {
@@ -39,6 +40,16 @@ const data: SplitSceneData = {
 };
 
 describe('сцена нормализации', () => {
+  afterEach(() => useSettingsStore.setState({ locale: 'ru' }));
+
+  it('показывает английские подписи, сохраняя значения таблицы', () => {
+    useSettingsStore.setState({ locale: 'en' });
+    render(<SplitPlayer data={data} keyColumn="id" />);
+    const scene = screen.getByRole('region', { name: 'Splitting a table' });
+    expect(scene).toHaveTextContent('Анна');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(scene).toHaveTextContent('Rows are linked by the key');
+  });
   it('объявляет шаги, показывает реальные связи и сохраняет фокус на краях', () => {
     render(<SplitPlayer data={data} keyColumn="id" />);
     const scene = screen.getByRole('region', { name: 'Разделение таблицы' });

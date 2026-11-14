@@ -1,5 +1,5 @@
 import type { FuncCall, SelectStmt, WindowDef } from '@pgsql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { sqlOf, TraceFallback } from '../probe';
 import { rangeOf, stageId } from '../select/context';
 import type { SelectStep } from '../select/pipeline';
@@ -138,7 +138,10 @@ export const windowStep: SelectStep = {
     const input = ctx.columns;
     const rows: Row[] = ctx.rows.map((row) => {
       const extra = values.get(row.key);
-      if (!extra) throw new TraceFallback('Окно не нашло строку пробы');
+      if (!extra)
+        throw new TraceFallback(
+          ctx.locale === 'en' ? 'Window did not find the probed row' : 'Окно не нашло строку пробы',
+        );
       return { ...row, values: [...row.values, ...extra] };
     });
     const output: Relation = { columns: [...input, ...computed], rows };
@@ -164,7 +167,7 @@ export const windowStep: SelectStep = {
       orderKeys,
       ...(frame ? { frame } : {}),
       sourceRange: rangeOf(ctx.stmt, 'select'),
-      caption: captions.window(calls.map(funcName), rows.length),
+      caption: captionsForLocale(ctx.locale).window(calls.map(funcName), rows.length),
       output,
     });
   },

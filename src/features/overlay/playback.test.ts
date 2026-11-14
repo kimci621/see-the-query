@@ -61,6 +61,39 @@ describe('buildPlayback', () => {
 describe('buildPlayback на трассе Ф5', () => {
   const sql = 'select title, price from book where price > 500 order by price desc limit 3';
 
+  it('подписи фаз на английском сохраняют результат Postgres', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, sql, { locale: 'en' });
+        const playback = buildPlayback(trace, { ...testCtx(), locale: 'en' });
+        expect(playback.phases.length).toBeGreaterThan(0);
+        expect(playback.phases.map((phase) => phase.caption).join(' ')).not.toMatch(/[А-Яа-яЁё]/);
+        const last = playback.phases.at(-1)?.frame.tables[0];
+        expect(last?.rows.map((row) => row.values)).toEqual(trace.result?.rows);
+      }),
+    ));
+
+  it.each([
+    ['JOIN', 'select b.title, a.name from book b left join author a on b.author_id = a.author_id'],
+    ['GROUP BY', 'select author_id, count(*) from book group by author_id'],
+    ['WINDOW', 'select title, row_number() over (order by book_id) from book'],
+    ['DML', 'update book set price = 123 where book_id = 1'],
+    ['DISTINCT', 'select distinct author_id from book'],
+    ['подзапрос', 'select title from book where author_id in (select author_id from author)'],
+    ['множества', 'select author_id from book union select author_id from author'],
+    ['DDL', 'create table example (id int)'],
+  ])('%s: фазы не содержат русских подписей', (_name, query) =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const trace = await traceSql(db, query, { locale: 'en' });
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        const playback = buildPlayback(trace, { ...testCtx(), schema: await introspect(db), locale: 'en' });
+        expect(playback.phases.length).toBeGreaterThan(0);
+        expect(playback.phases.map((phase) => phase.caption).join(' ')).not.toMatch(/[А-Яа-яЁё]/);
+      }),
+    ),
+  );
+
   it('последний кадр равен результату Postgres, ключ сортировки подсвечен', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {

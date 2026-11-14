@@ -1,4 +1,5 @@
 import type { DbClient } from '@/features/db/types';
+import type { Locale } from '@/lib/i18n';
 
 export interface SearchToken {
   id: string;
@@ -16,15 +17,28 @@ export interface LexemeSceneData {
 }
 
 // Вызывающий выполняет запросы внутри sandbox.preview; конфигурация и текст передаются параметрами.
-export async function loadLexemes(db: DbClient, config: string, text: string): Promise<LexemeSceneData> {
+export async function loadLexemes(
+  db: DbClient,
+  config: string,
+  text: string,
+  locale: Locale = 'ru',
+): Promise<LexemeSceneData> {
   // ponytail: для читаемой сцены ограничиваем текст и токены; длинным документам нужна постраничная навигация.
-  if (Array.from(text).length > 5000) throw new Error('Для сцены нужно не более 5000 символов.');
+  if (Array.from(text).length > 5000)
+    throw new Error(
+      locale === 'en'
+        ? 'The scene supports up to 5,000 characters.'
+        : 'Для сцены нужно не более 5000 символов.',
+    );
   const args = [config, text];
   const debug = await db.query(
     "select token, lexemes from ts_debug($1::regconfig, $2) where alias <> 'blank' limit 121",
     args,
   );
-  if (debug.rows.length > 120) throw new Error('Для сцены нужно не более 120 токенов.');
+  if (debug.rows.length > 120)
+    throw new Error(
+      locale === 'en' ? 'The scene supports up to 120 tokens.' : 'Для сцены нужно не более 120 токенов.',
+    );
   const tokens: SearchToken[] = debug.rows.map(([token, result], index) => {
     const lexemes = Array.isArray(result) ? result.map(String) : [];
     return {

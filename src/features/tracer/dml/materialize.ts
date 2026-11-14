@@ -1,6 +1,6 @@
 import type { DbClient } from '@/features/db/types';
 import { parseSql } from '@/features/sql/parser';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { sqlOf, TraceFallback } from '../probe';
 import type { TraceFn } from '../route';
 import type { Stage, TraceOptions } from '../types';
@@ -19,7 +19,11 @@ export async function sourceTrace(
   if (!body.selectStmt || !('SelectStmt' in body.selectStmt) || body.selectStmt.SelectStmt.valuesLists)
     return null;
   if (hasVolatile(body.selectStmt))
-    throw new TraceFallback('Пока не анимируется: случайные значения в источнике INSERT');
+    throw new TraceFallback(
+      opts.locale === 'en'
+        ? 'Not animated yet: random values in the INSERT source'
+        : 'Пока не анимируется: случайные значения в источнике INSERT',
+    );
 
   const parsed = parseSql(sqlOf(body.selectStmt));
   if (!parsed.ok) return null;
@@ -37,7 +41,7 @@ export async function sourceTrace(
     kind: 'materialize',
     name: 'SELECT',
     inner,
-    caption: captions.materialize('SELECT', inner.result.rows.length),
+    caption: captionsForLocale(opts.locale).materialize('SELECT', inner.result.rows.length),
     output: {
       columns,
       rows: inner.result.rows.map((values, index) => ({ key: `src:${index}`, lineage: {}, values })),

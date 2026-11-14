@@ -1,6 +1,7 @@
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { DbError, QueryResult } from '@/features/db/types';
 import type { StatementKind } from '@/features/sql/types';
+import type { Locale } from '@/lib/i18n';
 import type { PlanNode } from './explain';
 
 export type Lineage = Record<string, string | null>; // алиас → ctid ('(0,3)') или null
@@ -190,6 +191,7 @@ export interface Trace {
 }
 
 export interface TraceOptions {
+  locale?: Locale;
   includePlan?: boolean;
   signal?: AbortSignal;
   maxRows?: number;

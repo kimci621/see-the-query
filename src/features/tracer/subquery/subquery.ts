@@ -1,6 +1,6 @@
 import type { SelectStmt, SubLink } from '@pgsql/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { sqlOf, TraceFallback } from '../probe';
 import { rangeOf, stageId } from '../select/context';
 import type { SelectStep } from '../select/pipeline';
@@ -36,12 +36,25 @@ const isScalar = (link: SubLink) => link.subLinkType === 'EXPR_SUBLINK';
 const isCompare = (link: SubLink) => isIn(link) || isAny(link) || isAll(link);
 
 async function innerTrace(ctx: Parameters<SelectStep['run']>[0], link: SubLink) {
-  if (!ctx.trace) throw new TraceFallback('Пока не анимируется: подзапрос в этом контексте');
+  if (!ctx.trace)
+    throw new TraceFallback(
+      ctx.locale === 'en'
+        ? 'Not animated yet: subquery in this context'
+        : 'Пока не анимируется: подзапрос в этом контексте',
+    );
   if (!link.subselect || !('SelectStmt' in link.subselect))
-    throw new TraceFallback('Пока не анимируется: подзапрос без SELECT');
+    throw new TraceFallback(
+      ctx.locale === 'en'
+        ? 'Not animated yet: subquery without SELECT'
+        : 'Пока не анимируется: подзапрос без SELECT',
+    );
   const inner = await ctx.trace(childStmt(ctx.stmt, link.subselect.SelectStmt));
   if (inner.mode !== 'full')
-    throw new TraceFallback(`Подзапрос не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`);
+    throw new TraceFallback(
+      ctx.locale === 'en'
+        ? `Subquery is not animated: ${inner.fallbackReason ?? 'no reason provided'}`
+        : `Подзапрос не анимируется: ${inner.fallbackReason ?? 'причина не указана'}`,
+    );
   return inner;
 }
 
@@ -61,7 +74,9 @@ async function correlatedSamples(
     const innerTrace = await ctx.trace(childStmt(ctx.stmt, ast as SelectStmt));
     if (innerTrace.mode !== 'full')
       throw new TraceFallback(
-        `Коррелированный подзапрос не анимируется: ${innerTrace.fallbackReason ?? 'причина не указана'}`,
+        ctx.locale === 'en'
+          ? `Correlated subquery is not animated: ${innerTrace.fallbackReason ?? 'no reason provided'}`
+          : `Коррелированный подзапрос не анимируется: ${innerTrace.fallbackReason ?? 'причина не указана'}`,
       );
     samples.push({ outer: row.key, inner: innerTrace });
   }
@@ -84,7 +99,7 @@ export const selectSubqueryStep: SelectStep = {
         limit3: false,
         value,
         sourceRange: rangeOf(ctx.stmt, 'select'),
-        caption: captions.subqueryScalar(value),
+        caption: captionsForLocale(ctx.locale).subqueryScalar(value),
         output: { columns: ctx.columns, rows: ctx.rows },
       });
     }
@@ -122,8 +137,10 @@ export const whereSubqueryStep: SelectStep = {
           value,
           sourceRange: rangeOf(ctx.stmt, 'where'),
           caption: samples
-            ? `Коррелированный подзапрос: ${samples.length} строки`
-            : captions.subqueryScalar(value),
+            ? ctx.locale === 'en'
+              ? `Correlated subquery: ${samples.length} ${samples.length === 1 ? 'row' : 'rows'}`
+              : `Коррелированный подзапрос: ${samples.length} строки`
+            : captionsForLocale(ctx.locale).subqueryScalar(value),
           output: { columns: ctx.columns, rows: ctx.rows },
         });
         continue;
@@ -150,10 +167,10 @@ export const whereSubqueryStep: SelectStep = {
         verdicts,
         sourceRange: rangeOf(ctx.stmt, 'where'),
         caption: isExists(link)
-          ? captions.subqueryExists(yes)
+          ? captionsForLocale(ctx.locale).subqueryExists(yes)
           : isIn(link)
-            ? captions.subqueryIn(yes, unknown)
-            : captions.subqueryAnyAll(label, yes, unknown),
+            ? captionsForLocale(ctx.locale).subqueryIn(yes, unknown)
+            : captionsForLocale(ctx.locale).subqueryAnyAll(label, yes, unknown),
         output: { columns: ctx.columns, rows: ctx.rows },
       });
     }

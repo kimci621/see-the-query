@@ -109,6 +109,43 @@ beforeAll(async () => {
 const explain = (name: string) => explainError(errors.get(name) as DbError, { sql: CASES[name], schema });
 
 describe('explainError', () => {
+  it.each([
+    ['undefinedTable', /table/i],
+    ['undefinedColumn', /column/i],
+    ['unique', /unique|already/i],
+  ])('%s: английское объяснение сохраняет подсветку и исправление', (name, title) => {
+    const error = errors.get(name) as DbError;
+    const context = { sql: CASES[name], schema };
+    const russian = explainError(error, context);
+    const english = explainError(error, { ...context, locale: 'en' });
+    expect(english.title).toMatch(title);
+    expect(`${english.title} ${english.body} ${english.suggestion ?? ''}`).not.toMatch(/[А-Яа-яЁё]/);
+    expect(english.highlight).toEqual(russian.highlight);
+    expect(english.fix).toEqual(russian.fix);
+  });
+
+  it('для неизвестного кода сохраняет исходный текст Postgres', () => {
+    const error = { code: 'XX999', message: 'original database error', hint: 'original hint' };
+    expect(explainError(error, { sql: '', schema: null, locale: 'en' })).toMatchObject({
+      title: 'Postgres rejected the query',
+      body: error.message,
+      suggestion: error.hint,
+    });
+  });
+
+  it.each(Object.keys(CASES).filter((name) => name !== 'doubleQuoted'))(
+    '%s: объяснение полностью на английском без изменения действий',
+    (name) => {
+      const error = errors.get(name) as DbError;
+      const context = { sql: CASES[name], schema };
+      const russian = explainError(error, context);
+      const english = explainError(error, { ...context, locale: 'en' });
+      expect(`${english.title} ${english.body} ${english.suggestion ?? ''}`).not.toMatch(/[А-Яа-яЁё]/);
+      expect(english.highlight).toEqual(russian.highlight);
+      expect(english.fix).toEqual(russian.fix);
+    },
+  );
+
   it('покрывает 31 SQLSTATE настоящими ошибками', () => {
     expect([...new Set([...errors.values()].map((e) => e.code))].sort()).toEqual([
       '0A000',

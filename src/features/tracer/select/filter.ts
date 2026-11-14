@@ -1,5 +1,5 @@
 import type { Node } from '@pgsql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { sqlOf } from '../probe';
 import type { RowKey } from '../types';
 import { walk } from '../whitelist';
@@ -33,7 +33,7 @@ export const filterStep: SelectStep = {
       verdicts,
       predicateColumns: [...predicateColumns],
       sourceRange: rangeOf(ctx.stmt, 'where'),
-      caption: captions.filter(
+      caption: captionsForLocale(ctx.locale).filter(
         before,
         ctx.rows.length,
         Object.values(verdicts).filter((v) => v === null).length,

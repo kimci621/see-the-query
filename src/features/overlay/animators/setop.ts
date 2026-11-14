@@ -1,5 +1,6 @@
 import type { Relation } from '@/features/tracer/types';
 import { rowCanon } from '@/features/tracer/verify';
+import { rowsWord } from '@/lib/plural';
 import { counterNear, currentTable, mapRows, rebuildTable, stageRows } from '../frame';
 import { ghostHeight, ghostWidth, TABLE_GAP } from '../geometry';
 import type { Animator, Decoration, GhostTable, Phase, StageOf } from '../types';
@@ -25,17 +26,23 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
   if (!leftRel.columns.length || !rightRel.columns.length)
     return genericAnimator(prev, stage, stageIndex, ctx);
 
-  const left = branchTable(`${stageIndex}:left`, 'левая ветвь', leftRel, ctx.workArea.x, ctx.workArea.y);
+  const left = branchTable(
+    `${stageIndex}:left`,
+    ctx.locale === 'en' ? 'left branch' : 'левая ветвь',
+    leftRel,
+    ctx.workArea.x,
+    ctx.workArea.y,
+  );
   const right = branchTable(
     `${stageIndex}:right`,
-    'правая ветвь',
+    ctx.locale === 'en' ? 'right branch' : 'правая ветвь',
     rightRel,
     ctx.workArea.x,
     left.y + ghostHeight(left) + TABLE_GAP,
   );
   const result = branchTable(
     `${stageIndex}:result`,
-    'результат',
+    ctx.locale === 'en' ? 'result' : 'результат',
     stage.output,
     left.x + Math.max(ghostWidth(left), ghostWidth(right)) + TABLE_GAP * 2,
     left.y,
@@ -59,7 +66,7 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
   const branches: Phase = {
     id: `${stageIndex}:branches`,
     stageIndex,
-    caption: `${stage.op.toUpperCase()}: ветви считаются отдельно`,
+    caption: `${stage.op.toUpperCase()}: ${ctx.locale === 'en' ? 'branches are evaluated separately' : 'ветви считаются отдельно'}`,
     durationMs: 600,
     frame: { tables: [left, right], decorations: [] },
   };
@@ -70,7 +77,13 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
     durationMs: 700,
     frame: {
       tables: [result],
-      decorations: [counterNear(result, `${stageIndex}:counter`, `${stageRows(stage)} строк`)],
+      decorations: [
+        counterNear(
+          result,
+          `${stageIndex}:counter`,
+          ctx.locale === 'en' ? rowsWord(stageRows(stage), 'en') : `${stageRows(stage)} строк`,
+        ),
+      ],
     },
   };
 
@@ -80,7 +93,10 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
       {
         id: `${stageIndex}:stack`,
         stageIndex,
-        caption: 'UNION ALL: строки левой и правой ветви идут подряд, дубли остаются',
+        caption:
+          ctx.locale === 'en'
+            ? 'UNION ALL: rows from both branches are combined, keeping duplicates'
+            : 'UNION ALL: строки левой и правой ветви идут подряд, дубли остаются',
         durationMs: 700,
         frame: { tables: [withCounts, rightCounts], decorations: [] },
       },
@@ -98,7 +114,10 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
       {
         id: `${stageIndex}:dedupe`,
         stageIndex,
-        caption: 'UNION: одинаковые строки схлопываются в одну',
+        caption:
+          ctx.locale === 'en'
+            ? 'UNION: identical rows collapse into one'
+            : 'UNION: одинаковые строки схлопываются в одну',
         durationMs: 700,
         frame: { tables: [withCounts, rightCounts], decorations: [] },
       },
@@ -106,7 +125,13 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
         ...finish,
         frame: {
           tables: [collapsed],
-          decorations: [counterNear(collapsed, `${stageIndex}:counter`, `${stageRows(stage)} строк`)],
+          decorations: [
+            counterNear(
+              collapsed,
+              `${stageIndex}:counter`,
+              ctx.locale === 'en' ? rowsWord(stageRows(stage), 'en') : `${stageRows(stage)} строк`,
+            ),
+          ],
         },
       },
     ];
@@ -135,7 +160,10 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
       {
         id: `${stageIndex}:pairs`,
         stageIndex,
-        caption: 'INTERSECT: строки-близнецы нашлись в обеих ветвях',
+        caption:
+          ctx.locale === 'en'
+            ? 'INTERSECT: matching rows appear in both branches'
+            : 'INTERSECT: строки-близнецы нашлись в обеих ветвях',
         durationMs: 700,
         frame: { tables: [left, right], decorations: pairs },
       },
@@ -150,7 +178,10 @@ export const setopAnimator: Animator<StageOf<'setop'>> = (prev, stage, stageInde
     {
       id: `${stageIndex}:cut`,
       stageIndex,
-      caption: 'EXCEPT: из левой ветви вычитаются строки, найденные в правой',
+      caption:
+        ctx.locale === 'en'
+          ? 'EXCEPT: rows found on the right are removed from the left branch'
+          : 'EXCEPT: из левой ветви вычитаются строки, найденные в правой',
       durationMs: 700,
       frame: { tables: [cut, rightCounts], decorations: [] },
     },

@@ -1,4 +1,4 @@
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { alignToReference, rangeOf, sortKeyColumns, stageId } from './context';
 import type { SelectStep } from './pipeline';
 
@@ -24,7 +24,7 @@ export const sortStep: SelectStep = {
       keyColumns: sortKeyColumns(ctx, await ctx.outputs()),
       volatile: ctx.volatile || undefined,
       sourceRange: rangeOf(ctx.stmt, 'order'),
-      caption: captions.sort(ordered.sortKeys, ctx.rows.length),
+      caption: captionsForLocale(ctx.locale).sort(ordered.sortKeys, ctx.rows.length),
       output: { columns: ctx.columns, rows: ctx.rows },
     });
   },

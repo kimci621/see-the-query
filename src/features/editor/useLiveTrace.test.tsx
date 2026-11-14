@@ -8,6 +8,7 @@ import type { Trace } from '@/features/tracer/types';
 import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { SCHEMA } from './__fixtures__/schema';
 import { useLiveTrace } from './useLiveTrace';
 
@@ -62,11 +63,70 @@ describe('useLiveTrace', () => {
     useEditorStore.setState(useEditorStore.getInitialState(), true);
     useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
     useBoardStore.setState(useBoardStore.getInitialState(), true);
+    useSettingsStore.setState({ locale: 'ru' });
     traceStatement.mockReset();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    useSettingsStore.setState({ locale: 'ru' });
+  });
+
+  it('смена языка перестраивает превью и отбрасывает старую трассу', async () => {
+    let finishRussian: (trace: Trace) => void = () => {};
+    const russian = { mode: 'full', stages: [], result: RESULT, error: null, sql: 'ru' } as unknown as Trace;
+    const english = { ...russian, sql: 'en' };
+    traceStatement.mockImplementation((_stmt, _db, options: { locale?: string }) =>
+      options.locale === 'en'
+        ? Promise.resolve(english)
+        : new Promise<Trace>((resolve) => (finishRussian = resolve)),
+    );
+    const sandbox = fakeSandbox({});
+    useBoardStore.getState().setSchema(SCHEMA);
+    useEditorStore.getState().setText('select title from book');
+    renderHook(() => useLiveTrace(sandbox));
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(traceStatement).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ locale: 'ru' }),
+    );
+    const oldSignal = traceStatement.mock.calls[0][2].signal as AbortSignal;
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(useSceneStore.getState().trace?.sql).toBe('en');
+    await act(async () => finishRussian(russian));
+    expect(useSceneStore.getState().trace?.sql).toBe('en');
+    expect(sandbox.apply).not.toHaveBeenCalled();
+  });
+
+  it('смена языка не выполняет повторно применённый запрос', async () => {
+    const calls: string[] = [];
+    const sandbox = fakeSandbox({ calls });
+    const sql = 'update book set price = 1';
+    useEditorStore.getState().setText(sql);
+    useEditorStore.getState().markApplied(0, {
+      sql,
+      statementType: 'update',
+      mode: 'final-only',
+      fallbackReason: 'Запрос применён. Измени текст, и превью вернётся',
+      touched: { tableIds: [], columns: [] },
+      stages: [],
+      result: RESULT,
+      error: null,
+      notices: [],
+      timingMs: 1,
+    });
+    renderHook(() => useLiveTrace(sandbox));
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    await act(async () => vi.advanceTimersByTimeAsync(250));
+    expect(useSceneStore.getState().trace?.fallbackReason).toBe(
+      'Query applied. Edit the text to return to preview',
+    );
+    expect(calls).toEqual([]);
+    expect(sandbox.apply).not.toHaveBeenCalled();
   });
 
   it('со схемой превью строит трассу через traceStatement, подсветка из редактора', async () => {
@@ -87,9 +147,11 @@ describe('useLiveTrace', () => {
     expect(traceStatement).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'select title from book' }),
       expect.anything(),
-      {
+      expect.objectContaining({
         schema: SCHEMA,
-      },
+        locale: 'ru',
+        signal: expect.any(AbortSignal),
+      }),
     );
     const s = useSceneStore.getState().trace;
     expect(s?.mode).toBe('full');

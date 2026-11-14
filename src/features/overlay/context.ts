@@ -1,6 +1,7 @@
 import { foldColumns, ownColumns, WORK_AREA_GAP } from '@/features/board/layout';
 import type { SchemaSnapshot } from '@/features/db/introspect';
 import type { Trace } from '@/features/tracer/types';
+import type { Locale } from '@/lib/i18n';
 import type { AnimatorContext } from './types';
 
 export { WORK_AREA_GAP } from '@/features/board/layout';
@@ -22,10 +23,12 @@ export function makeAnimatorContext(
   api: FlowApi,
   schema: SchemaSnapshot,
   touched: Pick<Trace['touched'], 'columns' | 'expanded'> = { columns: [] },
+  locale: Locale = 'ru',
 ): AnimatorContext {
   const nodes = api.getNodes();
   const bounds = nodes.length ? api.getNodesBounds(nodes) : null;
   return {
+    locale,
     schema,
     // рабочая зона сцены: свободное место справа от всех таблиц доски
     workArea: bounds ? { x: bounds.x + bounds.width + WORK_AREA_GAP, y: bounds.y } : { x: 0, y: 0 },

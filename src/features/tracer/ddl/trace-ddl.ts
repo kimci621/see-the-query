@@ -1,7 +1,7 @@
 import { findTable, introspect } from '@/features/db/introspect';
 import type { DbClient } from '@/features/db/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { errorFocus, keyOf, resolveTarget, tryRun } from '../dml/shared';
 import { ident, type Prober, sqlOf } from '../probe';
 import type { Special } from '../route';
@@ -111,13 +111,13 @@ export async function traceDdl(
           ]),
         ],
       },
-      caption: captions.error(run.error.code, run.error.message),
+      caption: captionsForLocale(opts.locale).error(run.error.code, run.error.message),
       output: { columns: [], rows: [] },
       ...(violations.keys.length ? { conflictKeys: violations.keys } : {}),
     };
     return {
       mode: 'final-only',
-      fallbackReason: 'Запрос завершился ошибкой',
+      fallbackReason: opts.locale === 'en' ? 'The query failed' : 'Запрос завершился ошибкой',
       stages: [stage],
       result: null,
       error: run.error,
@@ -131,7 +131,7 @@ export async function traceDdl(
         id: '0:ddl',
         kind: 'ddl',
         diff,
-        caption: captions.ddl(),
+        caption: captionsForLocale(opts.locale).ddl(),
         output: { columns: [], rows: [] },
         sourceRange: { from: stmt.from, to: stmt.to },
       },

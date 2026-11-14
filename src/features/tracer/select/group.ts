@@ -1,6 +1,7 @@
 import type { FuncCall, GroupingSet, Node, SelectStmt } from '@pgsql/types';
 import { DbException } from '@/features/db/types';
-import { captions } from '../captions';
+import type { Locale } from '@/lib/i18n';
+import { captionsForLocale } from '../captions';
 import { ident, sqlOf } from '../probe';
 import { groupKey } from '../rowkey';
 import type { RowKey } from '../types';
@@ -185,7 +186,9 @@ export function groupCaption(
   groups: number,
   before: number,
   groupingLabel?: string | null,
+  locale?: Locale,
 ): string {
+  const captions = captionsForLocale(locale);
   if (groupingLabel) return captions.groupBy(groupingLabel, groups, before);
   return keys.length ? captions.group(keys, groups, before) : captions.aggregateNoGroup(before);
 }
@@ -259,7 +262,7 @@ export const groupStep: SelectStep = {
       ...(filters.length ? { filters } : {}),
       ...(running ? { running } : {}),
       sourceRange: rangeOf(ctx.stmt, keys.length ? 'group' : 'select'),
-      caption: groupCaption(keys, groups.length, before, parts.groupingLabel),
+      caption: groupCaption(keys, groups.length, before, parts.groupingLabel, ctx.locale),
       output: { columns: ctx.columns, rows: ctx.rows },
     });
   },

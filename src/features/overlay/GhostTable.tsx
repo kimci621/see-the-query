@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { formatCell } from '@/features/board/format';
 import { STUB_WIDTH } from '@/features/board/layout';
 import { plural } from '@/lib/plural';
+import { useSettingsStore } from '@/stores/settings';
 import {
   COL_WIDTH,
   COLHEAD_HEIGHT,
@@ -28,6 +29,16 @@ const STATE_OPACITY: Partial<Record<GhostRow['state'], number>> = {
   deleted: 0.45,
 };
 
+const ROW_LABELS_EN: Partial<Record<GhostRow['state'], string>> = {
+  kept: 'passed',
+  dropped: 'filtered out',
+  unknown: 'UNKNOWN',
+  cut: 'cut',
+  new: 'new',
+  changed: 'changed',
+  deleted: 'deleted',
+};
+
 const GhostRowView = memo(function GhostRowView({
   row,
   index,
@@ -45,6 +56,7 @@ const GhostRowView = memo(function GhostRowView({
   lefts: number[];
   visible: boolean;
 }) {
+  const locale = useSettingsStore((s) => s.locale);
   const icon = ROW_ICONS[row.state];
   return (
     <motion.div
@@ -101,7 +113,11 @@ const GhostRowView = memo(function GhostRowView({
         })}
       </AnimatePresence>
       {icon ? (
-        <span className="vs-row-icon" aria-label={icon.label} role="img">
+        <span
+          className="vs-row-icon"
+          aria-label={locale === 'en' ? (ROW_LABELS_EN[row.state] ?? icon.label) : icon.label}
+          role="img"
+        >
           {icon.icon}
         </span>
       ) : null}
@@ -112,6 +128,7 @@ const GhostRowView = memo(function GhostRowView({
 
 // Призрачная таблица: двигается целиком, строки двигаются внутри неё
 export const GhostTableView = memo(function GhostTableView({ table }: { table: GhostTable }) {
+  const locale = useSettingsStore((s) => s.locale);
   const [focusedCell, setFocusedCell] = useState<{ text: string; x: number; y: number } | null>(null);
   const keys = columnKeys(table.columns);
   const widths = table.columns.map((_, ci) => columnWidth(table, ci));
@@ -197,7 +214,12 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
               transform: `translateX(${stubs[i]}px)`,
             }}
           >
-            +{f.count} {plural(f.count, 'колонка', 'колонки', 'колонок')}
+            +{f.count}{' '}
+            {locale === 'en'
+              ? f.count === 1
+                ? 'column'
+                : 'columns'
+              : plural(f.count, 'колонка', 'колонки', 'колонок')}
           </div>
         ))}
       </div>
@@ -221,7 +243,9 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
           className="vs-ghost-hidden"
           style={{ top: rowTop(table.rows.length), height: ROW_H }}
         >
-          … ещё {table.hiddenRows} строк
+          {locale === 'en'
+            ? `… ${table.hiddenRows} more ${table.hiddenRows === 1 ? 'row' : 'rows'}`
+            : `… ещё ${table.hiddenRows} строк`}
         </div>
       ) : null}
     </motion.div>

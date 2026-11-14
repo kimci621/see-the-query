@@ -15,10 +15,12 @@ import { Slider } from '@/components/ui/slider';
 import { stageLabel } from '@/features/overlay/labels';
 import { lastPhaseOfStage, stageOfPhase } from '@/features/overlay/playback';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { usePlayer } from './usePlayer';
 
 export function Timeline() {
   usePlayer();
+  const locale = useSettingsStore((s) => s.locale);
   const trace = useSceneStore((s) => s.trace);
   const playback = useSceneStore((s) => s.playback);
   const phaseIndex = useSceneStore((s) => s.phaseIndex);
@@ -41,7 +43,9 @@ export function Timeline() {
   if (!trace) {
     return (
       <div data-testid="timeline" className="flex h-full items-center px-3 text-sm text-muted-foreground">
-        Напиши запрос, и здесь появятся шаги его выполнения
+        {locale === 'en'
+          ? 'Type a query to see its execution steps here'
+          : 'Напиши запрос, и здесь появятся шаги его выполнения'}
       </div>
     );
   }
@@ -52,8 +56,13 @@ export function Timeline() {
       <div data-testid="timeline" className="flex h-full items-center px-3 text-sm">
         <p data-testid="final-only-note" aria-live="polite">
           {trace.error
-            ? 'Запрос завершился ошибкой, см. «Результат»'
-            : (trace.fallbackReason ?? 'Пошаговый разбор для этой конструкции пока не умею')}
+            ? locale === 'en'
+              ? 'The query failed. See Result for details'
+              : 'Запрос завершился ошибкой, см. «Результат»'
+            : (trace.fallbackReason ??
+              (locale === 'en'
+                ? 'Step-by-step tracing is not available for this query yet'
+                : 'Пошаговый разбор для этой конструкции пока не умею'))}
         </p>
       </div>
     );
@@ -69,7 +78,7 @@ export function Timeline() {
         <ol
           ref={chipsRef}
           className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:thin]"
-          aria-label="Шаги выполнения запроса"
+          aria-label={locale === 'en' ? 'Query execution steps' : 'Шаги выполнения запроса'}
         >
           {trace.stages.map((stage, i) => (
             <li key={stage.id} className="shrink-0">
@@ -83,12 +92,14 @@ export function Timeline() {
                 // Значения volatile-функций посчитаны один раз и могут отличаться от панели результата (спека 5.6)
                 title={
                   stage.volatile
-                    ? 'Есть volatile-функция: значения на доске и в результате могут различаться'
+                    ? locale === 'en'
+                      ? 'A volatile function may produce different values on the board and in the result'
+                      : 'Есть volatile-функция: значения на доске и в результате могут различаться'
                     : undefined
                 }
                 onClick={() => playback && store().seek(lastPhaseOfStage(playback, i))}
               >
-                {stage.volatile ? `${stageLabel(stage)} ~` : stageLabel(stage)}
+                {stage.volatile ? `${stageLabel(stage, locale)} ~` : stageLabel(stage, locale)}
               </button>
             </li>
           ))}
@@ -97,7 +108,7 @@ export function Timeline() {
           data-testid="player-prev"
           size="icon"
           variant="ghost"
-          aria-label="Шаг назад"
+          aria-label={locale === 'en' ? 'Previous step' : 'Шаг назад'}
           onClick={() => store().step(-1)}
         >
           <SkipBack />
@@ -106,7 +117,7 @@ export function Timeline() {
           data-testid="player-toggle"
           size="icon"
           variant="ghost"
-          aria-label={playing ? 'Пауза' : 'Играть'}
+          aria-label={locale === 'en' ? (playing ? 'Pause' : 'Play') : playing ? 'Пауза' : 'Играть'}
           onClick={() => store().toggle()}
         >
           {playing ? <Pause /> : <Play />}
@@ -115,7 +126,7 @@ export function Timeline() {
           data-testid="player-next"
           size="icon"
           variant="ghost"
-          aria-label="Шаг вперёд"
+          aria-label={locale === 'en' ? 'Next step' : 'Шаг вперёд'}
           onClick={() => store().step(1)}
         >
           <SkipForward />
@@ -123,12 +134,16 @@ export function Timeline() {
         {/* Скорость и переключатели в меню: на 1024 кнопки съедали ширину ленты чипов (P8.57) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" aria-label="Настройки плеера">
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={locale === 'en' ? 'Player settings' : 'Настройки плеера'}
+            >
               <SlidersHorizontal />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Скорость</DropdownMenuLabel>
+            <DropdownMenuLabel>{locale === 'en' ? 'Speed' : 'Скорость'}</DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={String(speed)}
               onValueChange={(v) => store().setSpeed(Number(v) as 0.5 | 1 | 2)}
@@ -146,14 +161,14 @@ export function Timeline() {
               onCheckedChange={(v) => store().setAutoplay(v)}
               onSelect={(e) => e.preventDefault()}
             >
-              Автоплей
+              {locale === 'en' ? 'Autoplay' : 'Автоплей'}
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem
               checked={followCamera}
               onCheckedChange={(v) => store().setFollowCamera(v)}
               onSelect={(e) => e.preventDefault()}
             >
-              Камера следит
+              {locale === 'en' ? 'Follow camera' : 'Камера следит'}
             </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -166,7 +181,7 @@ export function Timeline() {
           step={1}
           value={[phaseIndex]}
           onValueChange={(v) => store().seek(v[0] ?? 0)}
-          aria-label="Позиция в сцене"
+          aria-label={locale === 'en' ? 'Scene position' : 'Позиция в сцене'}
         />
       ) : null}
       {/* Длинная подпись режется по ширине панели: полный текст в подсказке, читалка слышит его целиком */}

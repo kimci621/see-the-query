@@ -1,6 +1,6 @@
 import type { Node } from '@pgsql/types';
 import type { QueryResult } from '@/features/db/types';
-import { captions, limitLabel } from '../captions';
+import { captionsForLocale, limitLabel } from '../captions';
 import { ident, sqlOf } from '../probe';
 import type { Column, Stage } from '../types';
 import { rangeOf, type SelectCtx, sortKeyColumns, stageId } from './context';
@@ -43,7 +43,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       ...(sourceName ? { sourceName } : {}),
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'from'),
-      caption: captions.scan(sourceName ?? table.name, alias, n),
+      caption: captionsForLocale(ctx.locale).scan(sourceName ?? table.name, alias, n),
     });
   }
   for (const [k, j] of ctx.joins.entries()) {
@@ -61,7 +61,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       usingColumns: j.using ?? [],
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'from'),
-      caption: captions.joinCompressed(j.jointype.toUpperCase(), n),
+      caption: captionsForLocale(ctx.locale).joinCompressed(j.jointype.toUpperCase(), n),
     });
   }
   const scanCols = ctx.sourceColumns.flat();
@@ -77,7 +77,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       predicateColumns: [],
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'where'),
-      caption: captions.filter(before, n, 0),
+      caption: captionsForLocale(ctx.locale).filter(before, n, 0),
     });
   }
 
@@ -100,7 +100,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       ...(parts.groupingSets ? { groupingSets: parts.groupingSets } : {}),
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, parts.keys.length ? 'group' : 'select'),
-      caption: groupCaption(parts.keys, n, before, parts.groupingLabel),
+      caption: groupCaption(parts.keys, n, before, parts.groupingLabel, ctx.locale),
     });
   }
   if (sel.havingClause) {
@@ -115,7 +115,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       predicateColumns: [],
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'having'),
-      caption: captions.having(before, n, 0),
+      caption: captionsForLocale(ctx.locale).having(before, n, 0),
     });
   }
 
@@ -128,7 +128,11 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
     ...p,
     rowCount: n,
     sourceRange: rangeOf(ctx.stmt, 'select'),
-    caption: captions.project(out.columns.length - p.computed.length, input.length, p.computed.length),
+    caption: captionsForLocale(ctx.locale).project(
+      out.columns.length - p.computed.length,
+      input.length,
+      p.computed.length,
+    ),
   });
 
   const nodes = (sel.distinctClause ?? []) as Node[];
@@ -145,7 +149,9 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       stacks: [],
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'select'),
-      caption: on ? captions.distinctOn(on, before, n) : captions.distinct(before, n),
+      caption: on
+        ? captionsForLocale(ctx.locale).distinctOn(on, before, n)
+        : captionsForLocale(ctx.locale).distinct(before, n),
     });
   }
   const sortKeys = (sel.sortClause ?? []).map(sqlOf);
@@ -159,7 +165,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
       keyColumns: sortKeyColumns(ctx, out),
       rowCount: n,
       sourceRange: rangeOf(ctx.stmt, 'order'),
-      caption: captions.sort(sortKeys, n),
+      caption: captionsForLocale(ctx.locale).sort(sortKeys, n),
     });
   }
   if (!sel.limitCount && !sel.limitOffset) return ctx.prober.run(`${select}${order}`);
@@ -179,7 +185,7 @@ export async function runCompressed(ctx: SelectCtx): Promise<QueryResult> {
     withTies,
     rowCount: result.rows.length,
     sourceRange: rangeOf(ctx.stmt, 'limit', 'offset'),
-    caption: captions.limit(limitLabel(limit, offset, withTies), n, result.rows.length),
+    caption: captionsForLocale(ctx.locale).limit(limitLabel(limit, offset, withTies), n, result.rows.length),
   });
   return result;
 }

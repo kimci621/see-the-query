@@ -22,7 +22,10 @@ export const recursionAnimator: Animator<StageOf<'recursion'>> = (prev, stage, s
   let y = ctx.workArea.y;
   const shown = iterations.length > DETAIL_LAYERS + 2 ? DETAIL_LAYERS : iterations.length;
   for (let i = 0; i < shown; i++) {
-    const title = i === 0 ? `якорь: ${stage.name}` : `шаг ${i}: ${stage.name}`;
+    const title =
+      i === 0
+        ? `${ctx.locale === 'en' ? 'anchor' : 'якорь'}: ${stage.name}`
+        : `${ctx.locale === 'en' ? 'step' : 'шаг'} ${i}: ${stage.name}`;
     const table = layerTable(`${stageIndex}:layer${i}`, title, iterations[i], ctx.workArea.x, y);
     tables.push(table);
     if (i > 0) {
@@ -38,7 +41,8 @@ export const recursionAnimator: Animator<StageOf<'recursion'>> = (prev, stage, s
     y += ghostHeight(table) + TABLE_GAP;
   }
 
-  const perLayer = (i: number) => `${i === 0 ? 'якорь' : `шаг ${i}`}: ${rowsWord(iterations[i].rows.length)}`;
+  const perLayer = (i: number) =>
+    `${i === 0 ? (ctx.locale === 'en' ? 'anchor' : 'якорь') : `${ctx.locale === 'en' ? 'step' : 'шаг'} ${i}`}: ${rowsWord(iterations[i].rows.length, ctx.locale)}`;
   const phases: Phase[] = tables.map((_, i) => ({
     id: `${stageIndex}:layer${i}`,
     stageIndex,
@@ -55,18 +59,28 @@ export const recursionAnimator: Animator<StageOf<'recursion'>> = (prev, stage, s
     phases.push({
       id: `${stageIndex}:rest`,
       stageIndex,
-      caption: `${stage.caption}: ещё ${iterations.length - shown} ${plural(iterations.length - shown, 'шаг', 'шага', 'шагов')}`,
+      caption:
+        ctx.locale === 'en'
+          ? `${stage.caption}: ${iterations.length - shown} more steps`
+          : `${stage.caption}: ещё ${iterations.length - shown} ${plural(iterations.length - shown, 'шаг', 'шага', 'шагов')}`,
       durationMs: 600,
       frame: {
         tables: [...tables, { ...last, id: `${stageIndex}:rest`, title: '…', rows: [], opacity: 0.35 }],
         decorations: [
-          counterNear(last, `${stageIndex}:counter`, `${stageRows(stage)} строк`),
+          counterNear(
+            last,
+            `${stageIndex}:counter`,
+            ctx.locale === 'en' ? rowsWord(stageRows(stage), 'en') : `${stageRows(stage)} строк`,
+          ),
           {
             kind: 'counter',
             id: `${stageIndex}:layers`,
             x: ctx.workArea.x,
             y: last.y + ghostHeight(last) + TABLE_GAP,
-            text: `ещё ${iterations.length - shown} ${plural(iterations.length - shown, 'слой', 'слоя', 'слоёв')}`,
+            text:
+              ctx.locale === 'en'
+                ? `${iterations.length - shown} more layers`
+                : `ещё ${iterations.length - shown} ${plural(iterations.length - shown, 'слой', 'слоя', 'слоёв')}`,
           },
         ],
       },
@@ -81,7 +95,11 @@ export const recursionAnimator: Animator<StageOf<'recursion'>> = (prev, stage, s
         tables,
         decorations: [
           ...arrows,
-          counterNear(tables[0], `${stageIndex}:counter`, `${stageRows(stage)} строк`),
+          counterNear(
+            tables[0],
+            `${stageIndex}:counter`,
+            ctx.locale === 'en' ? rowsWord(stageRows(stage), 'en') : `${stageRows(stage)} строк`,
+          ),
         ],
       },
     });

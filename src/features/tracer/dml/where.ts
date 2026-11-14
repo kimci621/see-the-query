@@ -1,6 +1,6 @@
 import type { SelectStmt } from '@pgsql/types';
 import type { ParsedStatement } from '@/features/sql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { type Prober, TraceFallback } from '../probe';
 import { createSelectCtx } from '../select/context';
 import { filterStep } from '../select/filter';
@@ -23,9 +23,10 @@ export async function whereStages(
     fromClause: [{ RangeVar: body.relation }, ...(body.fromClause ?? body.usingClause ?? [])],
     ...(body.whereClause ? { whereClause: body.whereClause } : {}),
   } as SelectStmt;
-  const from = flattenFrom(sel, opts.schema);
+  const from = flattenFrom(sel, opts.schema, undefined, opts.locale);
   if (!from.ok) throw new TraceFallback(from.reason);
   const ctx = createSelectCtx({
+    locale: opts.locale,
     stmt,
     sel,
     prober,
@@ -48,7 +49,11 @@ export async function whereStages(
   const filter = ctx.stages.findLast((stage) => stage.kind === 'filter');
   if (filter?.kind === 'filter') {
     filter.target = true;
-    filter.caption = captions.dmlWhere(op, hit.length, ctx.stages[0].output.rows.length);
+    filter.caption = captionsForLocale(opts.locale).dmlWhere(
+      op,
+      hit.length,
+      ctx.stages[0].output.rows.length,
+    );
   }
   return { stages: ctx.stages, hit };
 }

@@ -26,7 +26,9 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
   const result = rebuildTable(cur, stage.output, undefined, stageRows(stage));
   // ROLLUP / CUBE / GROUPING SETS: у итоговых строк GROUPING не ноль, помечаем их
   const groupedResult = stage.grouping
-    ? mapRows(result, (r) => ((stage.grouping?.[r.key] ?? 0) > 0 ? { badge: 'всего' } : {}))
+    ? mapRows(result, (r) =>
+        (stage.grouping?.[r.key] ?? 0) > 0 ? { badge: ctx.locale === 'en' ? 'total' : 'всего' } : {},
+      )
     : result;
   // Без GROUP BY итог агрегатов виден прямо в подписи: count(*) = 4.
   // Колонки выхода тут ровно агрегаты по порядку, их тип нужен formatCell: min(date) без времени
@@ -72,7 +74,11 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
       color: i,
     });
     for (const m of members)
-      rows.push(nullCols.some((c) => m.values[c] === null) ? { ...m, badge: 'NULL не считается' } : m);
+      rows.push(
+        nullCols.some((c) => m.values[c] === null)
+          ? { ...m, badge: ctx.locale === 'en' ? 'NULL not counted' : 'NULL не считается' }
+          : m,
+      );
   });
   rows.push(...colored.rows.filter((r) => !groupOf.has(r.key)));
 
@@ -83,13 +89,24 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
     state: keyCols.includes(i) ? 'key' : aggCols.includes(i) ? 'highlight' : 'removed',
   }));
 
-  const head = stage.keys.length ? `GROUP BY ${keyList(stage.keys)}` : 'Агрегат без GROUP BY';
+  const head = stage.keys.length
+    ? `GROUP BY ${keyList(stage.keys)}`
+    : ctx.locale === 'en'
+      ? 'Aggregate without GROUP BY'
+      : 'Агрегат без GROUP BY';
   // Без GROUP BY группа одна: подписи про одну стопку, на пустом входе стопка пустая, а строка итога есть
-  const [colorText, stackText] = stage.keys.length
-    ? ['строки окрашиваются в цвет своей группы', 'группы съезжаются в стопки']
-    : !totalRows(cur)
-      ? ['строк нет', 'стопка пустая, итог всё равно одна строка']
-      : ['одна группа на все строки', 'строки собираются в одну стопку'];
+  const [colorText, stackText] =
+    ctx.locale === 'en'
+      ? stage.keys.length
+        ? ['rows are colored by group', 'groups gather into stacks']
+        : !totalRows(cur)
+          ? ['there are no rows', 'the stack is empty, but the result is still one row']
+          : ['one group contains all rows', 'rows gather into one stack']
+      : stage.keys.length
+        ? ['строки окрашиваются в цвет своей группы', 'группы съезжаются в стопки']
+        : !totalRows(cur)
+          ? ['строк нет', 'стопка пустая, итог всё равно одна строка']
+          : ['одна группа на все строки', 'строки собираются в одну стопку'];
 
   // Без GROUP BY значение набегает: фаза на строку стопки, счётчик рядом с таблицей, NULL в count(col) серый.
   // ponytail: не больше 20 фаз, на большой стопке шаг через несколько строк
@@ -132,7 +149,7 @@ export const groupAnimator: Animator<StageOf<'group'>> = (prev, stage, stageInde
     return {
       id: `${stageIndex}:filter${fi}`,
       stageIndex,
-      caption: `${filter.aggregate}: часть строк не идёт в счётчик`,
+      caption: `${filter.aggregate}: ${ctx.locale === 'en' ? 'some rows are not counted' : 'часть строк не идёт в счётчик'}`,
       durationMs: 600,
       frame: { tables: withTable(prev, marked).tables, decorations: brackets },
     };

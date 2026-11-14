@@ -62,23 +62,31 @@ export const filterAnimator: Animator<StageOf<'filter'>> = (prev, stage, stageIn
   };
 
   const verdictCaption =
-    unknown > 0
-      ? `${clause}: зелёные прошли, красные нет, серые дали UNKNOWN и тоже уходят`
-      : `${clause}: зелёные прошли условие, красные нет`;
+    ctx.locale === 'en'
+      ? unknown > 0
+        ? `${clause}: green rows pass, red rows do not, and gray UNKNOWN rows are removed too`
+        : `${clause}: green rows pass the condition, red rows do not`
+      : unknown > 0
+        ? `${clause}: зелёные прошли, красные нет, серые дали UNKNOWN и тоже уходят`
+        : `${clause}: зелёные прошли условие, красные нет`;
+  const checkCaption =
+    ctx.locale === 'en'
+      ? `${clause}: check the condition for each ${where ? 'row' : 'group'}`
+      : `${clause}: проверяем условие для каждой ${item}`;
 
   if (stage.target)
     return [
       {
         id: `${stageIndex}:check`,
         stageIndex,
-        caption: `${clause}: проверяем условие для каждой ${item}`,
+        caption: checkCaption,
         durationMs: 500,
         frame: check,
       },
       {
         id: `${stageIndex}:verdicts`,
         stageIndex,
-        caption: `${verdictCaption}; остальные строки остаются на месте`,
+        caption: `${verdictCaption}; ${ctx.locale === 'en' ? 'other rows stay in place' : 'остальные строки остаются на месте'}`,
         durationMs: 900,
         frame: verdicts,
       },
@@ -88,7 +96,7 @@ export const filterAnimator: Animator<StageOf<'filter'>> = (prev, stage, stageIn
     {
       id: `${stageIndex}:check`,
       stageIndex,
-      caption: `${clause}: проверяем условие для каждой ${item}`,
+      caption: checkCaption,
       durationMs: 500,
       frame: check,
     },

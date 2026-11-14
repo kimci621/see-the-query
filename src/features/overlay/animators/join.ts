@@ -1,4 +1,6 @@
 import type { RowKey } from '@/features/tracer/types';
+import type { Locale } from '@/lib/i18n';
+import { rowsWord } from '@/lib/plural';
 import { clearMarks, counterNear, mapColumns, mapRows, rebuildTable, stageRows, totalRows } from '../frame';
 import { ghostWidth, TABLE_GAP } from '../geometry';
 import { stageLabel } from '../labels';
@@ -19,8 +21,8 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
   const left = prev.tables.find((t) => t.id === leftId);
   const right = prev.tables.find((t) => t.id === rightId);
   if (!left || !right) return genericAnimator(prev, stage, stageIndex, ctx);
-  if (stage.joinType === 'cross') return crossPhases(prev, stage, stageIndex, left, right);
-  const label = stageLabel(stage);
+  if (stage.joinType === 'cross') return crossPhases(prev, stage, stageIndex, left, right, ctx.locale);
+  const label = stageLabel(stage, ctx.locale);
   const others = prev.tables.filter((t) => t.id !== leftId && t.id !== rightId);
   const frameOf = (l: GhostTable, r: GhostTable, decorations: Decoration[] = []): Frame => ({
     tables: [...others, l, r],
@@ -67,13 +69,22 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     durationMs: 700,
     frame: {
       tables: [...others, merged],
-      decorations: [counterNear(result, `${stageIndex}:counter`, `${stageRows(stage)} строк`)],
+      decorations: [
+        counterNear(
+          result,
+          `${stageIndex}:counter`,
+          ctx.locale === 'en' ? rowsWord(stageRows(stage), 'en') : `${stageRows(stage)} строк`,
+        ),
+      ],
     },
   };
   const approach: Phase = {
     id: `${stageIndex}:approach`,
     stageIndex,
-    caption: `${label}: таблицы съезжаются, ключи ${leftKey} и ${rightKey}`,
+    caption:
+      ctx.locale === 'en'
+        ? `${label}: tables move together, keys ${leftKey} and ${rightKey}`
+        : `${label}: таблицы съезжаются, ключи ${leftKey} и ${rightKey}`,
     durationMs: 700,
     frame: frameOf(l1, r1),
   };
@@ -99,16 +110,21 @@ export const joinAnimator: Animator<StageOf<'join'>> = (prev, stage, stageIndex,
     {
       id: `${stageIndex}:lines`,
       stageIndex,
-      caption: `${label}: совпавшие ключи соединены линиями`,
+      caption: `${label}: ${ctx.locale === 'en' ? 'matching keys are connected by lines' : 'совпавшие ключи соединены линиями'}`,
       durationMs: 800,
       frame: frameOf(mark(l1, 'normal'), mark(r1, 'normal'), lines),
     },
     {
       id: `${stageIndex}:unmatched`,
       stageIndex,
-      caption: kept
-        ? `${label}: строки без пары ${keepsLeft && keepsRight ? 'с обеих сторон' : keepsLeft ? 'слева' : 'справа'} остаются, их вторая половина будет NULL`
-        : `${label}: строки без пары уходят`,
+      caption:
+        ctx.locale === 'en'
+          ? kept
+            ? `${label}: unmatched rows ${keepsLeft && keepsRight ? 'on both sides' : keepsLeft ? 'on the left' : 'on the right'} remain, with NULL on the other side`
+            : `${label}: unmatched rows are removed`
+          : kept
+            ? `${label}: строки без пары ${keepsLeft && keepsRight ? 'с обеих сторон' : keepsLeft ? 'слева' : 'справа'} остаются, их вторая половина будет NULL`
+            : `${label}: строки без пары уходят`,
       durationMs: 600,
       frame: frameOf(
         mark(l1, keepsLeft ? 'null-filled' : 'dropped'),
@@ -130,6 +146,7 @@ function crossPhases(
   stageIndex: number,
   left: GhostTable,
   right: GhostTable,
+  locale?: Locale,
 ): Phase[] {
   const near = { ...clearMarks(right), x: left.x + ghostWidth(left) + joinGap(), y: left.y };
   const others = prev.tables.filter((t) => t.id !== left.id && t.id !== right.id);
@@ -162,7 +179,10 @@ function crossPhases(
     {
       id: `${stageIndex}:fan`,
       stageIndex,
-      caption: 'CROSS JOIN: каждая строка слева соединяется с каждой строкой справа',
+      caption:
+        locale === 'en'
+          ? 'CROSS JOIN: each row on the left joins every row on the right'
+          : 'CROSS JOIN: каждая строка слева соединяется с каждой строкой справа',
       durationMs: 800,
       frame: { tables: [...others, clearMarks(left), near], decorations: lines },
     },

@@ -14,7 +14,7 @@ export const errorAnimator: Animator<StageOf<'error'>> = (prev, stage, stageInde
   const column = stage.error.message.match(/column "(?:[^"]*\.)?([^".]+)" must appear/)?.[1];
   if (stage.error.code !== '42803' || !table || stage.focus.columns.join() !== `${table.id}.${column}`)
     return [];
-  const { title } = explainError(stage.error, { sql: '', schema: ctx.schema });
+  const { title } = explainError(stage.error, { sql: '', schema: ctx.schema, locale: ctx.locale });
   if (stage.group && currentTable(prev)) return inStacks(prev, stage, stageIndex, ctx, column ?? '', title);
   const rect = ctx.nodeRect(table.id);
   const focus = new Set(stage.focus.columns);
@@ -91,7 +91,10 @@ function inStacks(
     {
       id: `${stageIndex}:error`,
       stageIndex,
-      caption: `${title}: в одной группе разные значения ${column}, Postgres не знает, какое показать`,
+      caption:
+        ctx.locale === 'en'
+          ? `${title}: a group has different ${column} values, so Postgres does not know which to show`
+          : `${title}: в одной группе разные значения ${column}, Postgres не знает, какое показать`,
       durationMs: 900,
       frame: { tables: withTable(last.frame, marked).tables, decorations: last.frame.decorations },
     },

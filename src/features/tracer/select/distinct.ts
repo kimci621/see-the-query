@@ -1,5 +1,5 @@
 import type { Node } from '@pgsql/types';
-import { captions } from '../captions';
+import { captionsForLocale } from '../captions';
 import { ident, sqlOf } from '../probe';
 import type { RowKey } from '../types';
 import { rowCanon } from '../verify';
@@ -60,8 +60,8 @@ export const distinctStep: SelectStep = {
       stacks,
       sourceRange: rangeOf(ctx.stmt, 'select'),
       caption: on
-        ? captions.distinctOn(on, before, ctx.rows.length)
-        : captions.distinct(before, ctx.rows.length),
+        ? captionsForLocale(ctx.locale).distinctOn(on, before, ctx.rows.length)
+        : captionsForLocale(ctx.locale).distinct(before, ctx.rows.length),
       output: { columns: ctx.columns, rows: ctx.rows },
     });
   },

@@ -1,4 +1,5 @@
 import type { FkInfo, SchemaSnapshot } from '@/features/db/introspect';
+import type { Locale } from '@/lib/i18n';
 import { type Prober, TraceFallback } from '../probe';
 import type { Relation, RowKey } from '../types';
 import { snapshot, type Target, targetOf } from './shared';
@@ -49,6 +50,7 @@ export async function captureCascades(
   schema: SchemaSnapshot,
   prober: Prober,
   event: CascadeEvent,
+  locale: Locale = 'ru',
 ): Promise<CascadeSnapshot[]> {
   const captured: CascadeSnapshot[] = [];
   for (const fk of cascadeTargets(tableId, schema, event)) {
@@ -59,9 +61,13 @@ export async function captureCascades(
       !table.columns.some((column) => column.isPk)
     )
       throw new TraceFallback(
-        event === 'update'
-          ? 'Пока не анимируется: каскад UPDATE без первичного ключа'
-          : 'Пока не анимируется: каскад SET NULL/DEFAULT без первичного ключа',
+        locale === 'en'
+          ? event === 'update'
+            ? 'Not animated yet: UPDATE cascade without a primary key'
+            : 'Not animated yet: SET NULL/DEFAULT cascade without a primary key'
+          : event === 'update'
+            ? 'Пока не анимируется: каскад UPDATE без первичного ключа'
+            : 'Пока не анимируется: каскад SET NULL/DEFAULT без первичного ключа',
       );
     const target = targetOf(table);
     captured.push({ target, before: await snapshot(prober, target) });

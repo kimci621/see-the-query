@@ -1,5 +1,6 @@
 import { type RawVersion, readHeapPage, type XidFacts } from '@/features/db/pageinspect';
 import type { DbClient } from '@/features/db/types';
+import type { Locale } from '@/lib/i18n';
 
 export interface MvccStep {
   caption: string;
@@ -8,7 +9,7 @@ export interface MvccStep {
   visible: Array<{ id: string; val: string }>;
 }
 
-export async function runMvccScene(db: DbClient): Promise<MvccStep[]> {
+export async function runMvccScene(db: DbClient, locale: Locale = 'ru'): Promise<MvccStep[]> {
   const schema = `vs_mvcc_${crypto.randomUUID().replaceAll('-', '')}`;
   const main = `"${schema}"."items"`;
   const parent = `"${schema}"."parent"`;
@@ -45,20 +46,38 @@ export async function runMvccScene(db: DbClient): Promise<MvccStep[]> {
     created = true;
     await db.query(`create table ${main} (id int primary key, val text)`);
     await transaction(`insert into ${main} values (1, 'a'), (2, 'b'), (3, 'c')`, true);
-    await capture(main, 'Три вставленные строки', 'val');
+    await capture(main, locale === 'en' ? 'Three inserted rows' : 'Три вставленные строки', 'val');
     await transaction(`update ${main} set val = 'a2' where id = 1`, true);
-    await capture(main, 'UPDATE создал новую версию строки 1', 'val');
+    await capture(
+      main,
+      locale === 'en' ? 'UPDATE created a new version of row 1' : 'UPDATE создал новую версию строки 1',
+      'val',
+    );
     await transaction(`delete from ${main} where id = 2`, true);
-    await capture(main, 'DELETE скрыл строку 2', 'val');
+    await capture(main, locale === 'en' ? 'DELETE hid row 2' : 'DELETE скрыл строку 2', 'val');
     await transaction(`update ${main} set val = 'zz' where id = 3`, false);
-    await capture(main, 'ROLLBACK отменил изменение строки 3', 'val');
+    await capture(
+      main,
+      locale === 'en' ? 'ROLLBACK undid the change to row 3' : 'ROLLBACK отменил изменение строки 3',
+      'val',
+    );
     await db.query(`create table ${parent} (id int primary key, val text)`);
     await db.query(`create table ${child} (pid int references ${parent})`);
     await transaction(`insert into ${parent} values (1, 'x')`, true);
     await transaction(`insert into ${child} values (1)`, true, true);
-    await capture(parent, 'Проверка внешнего ключа оставила отметку блокировки', 'val');
+    await capture(
+      parent,
+      locale === 'en'
+        ? 'The foreign key check left a lock marker'
+        : 'Проверка внешнего ключа оставила отметку блокировки',
+      'val',
+    );
     await db.query(`vacuum ${main}`);
-    await capture(main, 'VACUUM освободил ненужные версии', 'val');
+    await capture(
+      main,
+      locale === 'en' ? 'VACUUM freed obsolete versions' : 'VACUUM освободил ненужные версии',
+      'val',
+    );
     return steps;
   } finally {
     if (inTransaction) await db.query('rollback');

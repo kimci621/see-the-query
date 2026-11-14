@@ -1,6 +1,7 @@
 import { type BTreeIndex, decodeKey, readBTreeIndex, searchPath } from '@/features/db/btree';
 import type { DbClient } from '@/features/db/types';
 import { explainPlan, type PlanNode } from '@/features/tracer/explain';
+import type { Locale } from '@/lib/i18n';
 
 export interface BTreeSceneData {
   index: BTreeIndex;
@@ -23,6 +24,7 @@ export async function loadBTreeScene(
   indexName: string,
   column: string,
   value: number,
+  locale: Locale = 'ru',
 ): Promise<BTreeSceneData> {
   if (
     !SIMPLE_NAME.test(table) ||
@@ -30,15 +32,28 @@ export async function loadBTreeScene(
     !/^[a-z_][a-z0-9_]*$/i.test(column) ||
     !Number.isSafeInteger(value)
   ) {
-    throw new Error('Укажи корректные имена таблицы, индекса и целый ключ.');
+    throw new Error(
+      locale === 'en'
+        ? 'Provide valid table and index names and an integer key.'
+        : 'Укажи корректные имена таблицы, индекса и целый ключ.',
+    );
   }
   const index = await readBTreeIndex(db, indexName);
   const tableId = table.includes('.') ? table.toLowerCase() : `public.${table.toLowerCase()}`;
   if (!index || index.tableId !== tableId || index.column !== column.toLowerCase()) {
-    throw new Error('Нужен уникальный B-tree по одной обязательной колонке bigint выбранной таблицы.');
+    throw new Error(
+      locale === 'en'
+        ? 'A unique B-tree on one required bigint column of the selected table is needed.'
+        : 'Нужен уникальный B-tree по одной обязательной колонке bigint выбранной таблицы.',
+    );
   }
   const path = searchPath(index, value);
-  if (!path) throw new Error('Сцена поддерживает индекс с одним корнем и уровнем листьев.');
+  if (!path)
+    throw new Error(
+      locale === 'en'
+        ? 'The scene supports an index with one root and one leaf level.'
+        : 'Сцена поддерживает индекс с одним корнем и уровнем листьев.',
+    );
   const qualifiedTable = index.tableId.split('.').map(ident).join('.');
   const qualifiedColumn = ident(index.column);
   const tableStats = await db.query(
@@ -80,7 +95,10 @@ export async function loadBTreeScene(
     await db.query('rollback to savepoint __vs_btree_seq');
     await db.query('release savepoint __vs_btree_seq');
   }
-  if (!seqPlan || !indexPlan) throw new Error('PostgreSQL не вернул планы запросов.');
+  if (!seqPlan || !indexPlan)
+    throw new Error(
+      locale === 'en' ? 'PostgreSQL did not return the query plans.' : 'PostgreSQL не вернул планы запросов.',
+    );
   return {
     index,
     initialLeaf: path.leafPage,
