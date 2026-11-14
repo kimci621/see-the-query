@@ -1,0 +1,104 @@
+---
+id: constraints
+title: NOT NULL, UNIQUE, CHECK and DEFAULT
+chapter: ddl
+number: "2.3"
+order: 4
+dataset: bookstore
+initialQuery: |
+  select name, email, bonus from customer order by customer_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-constraints.html
+    title: Constraints
+  - url: https://www.postgresql.org/docs/18/ddl-default.html
+    title: Default values
+course: ["11.13"]
+tags: [constraints, not null, unique, check, default]
+---
+
+<TlDr>Constraints check data when it is written. `DEFAULT` supplies a value when none was specified.</TlDr>
+
+## What's in the data
+
+There are six authors in `author`; each needs a name. There are six customers in `customer`, each with a required, unique email. Anna's address is `anna@example.com` and she has 120 bonus points. The `bonus` column does not allow negative numbers and defaults to zero when omitted.
+
+All examples run in preview and roll back. Saved data stays unchanged unless you click `Apply` in the editor.
+
+## A required value
+
+A **constraint** sets a rule for data. `NOT NULL` prevents a missing value from being written. Try adding an author without a name:
+
+```sql run expectError=23502
+insert into author (country) values ('Russia');
+```
+
+The board shows the attempted insert, and Postgres returns `23502`: the `name` column requires a value. To add an author, provide a name.
+
+## A unique value
+
+`UNIQUE` prevents the same value or combination of values from appearing in different rows. Try using Anna's address:
+
+```sql run expectError=23505
+insert into customer (name, email, created_at)
+values ('Irina', 'anna@example.com', now());
+```
+
+Error `23505` reports the duplicate. The board shows the attempt and Anna's existing row. The address needs to change; the query does not change Anna's row.
+
+<Callout kind="analogy">
+A unique email is like an assigned locker number: a second person cannot get the same number while it is taken. A missing `NULL` value behaves differently. By default, `UNIQUE` allows several such values if the column permits `NULL`.
+</Callout>
+
+## Checking a condition
+
+`CHECK` defines a condition for a row. In `customer`, bonus points must be at least zero:
+
+```sql run expectError=23514
+insert into customer (name, email, bonus, created_at)
+values ('Irina', 'ira@example.com', -1, now());
+```
+
+Postgres returns `23514`: the value `-1` violates the condition. The attempt is not added to the six customers.
+
+## A default value
+
+`DEFAULT` defines a value that Postgres supplies when a column is omitted or explicitly given `DEFAULT`:
+
+```sql run expect=rows:1
+insert into customer (name, email, created_at)
+values ('Irina', 'ira@example.com', now());
+```
+
+In the scene, the new row has `bonus` set to 0. This is a preview: afterwards the database still has six customers.
+
+## What's missing and why
+
+- The new author without a name is absent from the table: `NOT NULL` stopped the insert.
+- Irina with a duplicate email or negative bonus is absent: those inserts violate constraints.
+- Irina with a zero bonus was not saved either: the successful preview rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+`CHECK (bonus >= 0)` alone does not prohibit `NULL`. When `bonus` is `NULL`, the comparison gives an unknown result, which passes the check. In our table, a separate `NOT NULL` constraint prevents a missing bonus.
+
+```sql run expectError=23502
+insert into customer (name, email, bonus, created_at)
+values ('Irina', 'ira@example.com', null, now());
+```
+
+An explicit `NULL` is not replaced by `DEFAULT`. To get zero, omit `bonus` or specify `DEFAULT`.
+</Callout>
+
+## Check yourself
+
+1. What error does an insert without an author name return? Run the first example.
+2. What happens if you replace Anna's email with an unused address in the `UNIQUE` example?
+3. What bonus appears if you omit the `bonus` column? Check on the board.
+
+<Cheatsheet>
+- `NOT NULL` prohibits a missing value.
+- `UNIQUE` prevents duplicate values; `NULL` behavior can be configured separately.
+- `CHECK` tests a row condition but does not replace `NOT NULL`.
+- `DEFAULT` supplies a value when a column is omitted or explicitly given `DEFAULT`.
+</Cheatsheet>
