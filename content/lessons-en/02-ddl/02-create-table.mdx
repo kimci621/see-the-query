@@ -1,0 +1,174 @@
+---
+id: create-table
+title: CREATE TABLE, data types and temporary tables
+chapter: ddl
+number: "2.2"
+order: 2
+dataset: empty
+initialQuery: |
+  select 1;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-createtable.html
+    title: CREATE TABLE
+  - url: https://www.postgresql.org/docs/current/datatype.html
+    title: Data types
+  - url: https://www.postgresql.org/docs/current/datatype-numeric.html
+    title: Numeric types
+course: ["11.13"]
+tags: [create table, data types, numeric, text, temporary table, temp]
+---
+
+<TlDr>`CREATE TABLE` defines columns and their types. A temporary table belongs to the current session; the sandbox preview rolls back its creation.</TlDr>
+
+## What's in the data
+
+The lesson starts without user tables. We'll create `author` and `book`, add a row to each, and see how types work.
+
+Run the examples in order. The `Apply` button saves changes for the queries that follow. To start over, click `Reset` in the editor and confirm the lesson reset.
+
+## Create the author table
+
+Each column has a name and a **data type**. The type determines what values Postgres stores in the column and which operations can be used with them.
+
+```sql run apply expect=rows:0
+create table author (
+  author_id bigint primary key,
+  name text not null
+);
+```
+
+`author_id` stores a whole number in a large range, and `name` stores text. `PRIMARY KEY` distinguishes rows; `NOT NULL` requires a name. We'll cover constraints in the following lessons.
+
+To see the draft, copy the query into the editor and wait for the preview. A table with two columns appears on the board. The preview does not save changes. Click `Apply` under the example and the empty table stays on the board.
+
+Add author number 1:
+
+```sql apply expect=rows:1
+insert into author (author_id, name) values (1, 'Mikhail Sholokhov');
+```
+
+After applying it, `author` has one row. We supplied the number ourselves; automatic numbering comes in a later lesson.
+
+## The book table and its columns
+
+Now create a table for books. `author_id` will reference an existing author:
+
+```sql run apply expect=rows:0
+create table book (
+  book_id bigint primary key,
+  title text not null,
+  author_id bigint references author (author_id),
+  pages integer,
+  price numeric(10, 2),
+  published_on date
+);
+```
+
+After applying it, the board has two tables. `book` has 6 columns, and a line connects it to `author`. Some columns may be folded: use the `+N columns` button on the board to reveal them. The new table has no rows yet.
+
+The types serve different purposes:
+
+- `integer` and `bigint` store whole numbers. `bigint` has a wider range; `int` is short for `integer`.
+- `numeric(10, 2)` works for a price: up to 10 digits in total, with 2 after the decimal point. A value with more fractional digits is rounded to the declared scale when stored.
+- `text` stores text, `date` stores a date, and `timestamptz` stores an instant, taking the time zone into account on input and output.
+- `boolean` stores `true` or `false`. If the column allows `NULL`, the value can be absent.
+- `text[]` stores an array of text values; `jsonb` stores JSON data, such as an object with fields.
+
+<Callout kind="analogy">
+A type is like a field format on a form: a date and a number follow different rules. Postgres checks and converts input according to the type. The same text can behave differently under different types.
+</Callout>
+
+Add a book and give it a date:
+
+```sql apply expect=rows:1
+insert into book (book_id, title, author_id, pages, price, published_on)
+values (1, 'And Quiet Flows the Don', 1, 1504, 890.00, '1940-01-01');
+```
+
+After applying it, `book` has one row.
+
+```sql run expect=rows:1
+select title, pages, price from book;
+```
+
+The board keeps the three selected columns. The result is And Quiet Flows the Don, 1504 pages and a price of 890.00. The other columns remain in the table, but they are absent from this result.
+
+## Prices and calculations
+
+You can check an expression without a table. The `::` operator casts a value to the specified type:
+
+```sql run expect=rows:1
+select 890.00::numeric(10, 2) as price;
+```
+
+The result is one row with a price of 890.00. For money, `numeric` can store decimal values exactly within the declared precision; `float8` stores an approximation.
+
+## Other types in examples
+
+You don't need a separate table to inspect values:
+
+```sql run expect=rows:1
+select true as available, array['novel', 'classic']::text[] as tags,
+       '{"id":1}'::jsonb as details;
+```
+
+The result is one row: a Boolean value, an array of two tags and a JSON object. You can also store these in columns of suitable types.
+
+Here's an instant with an offset of `+03`:
+
+```sql run expect=rows:1
+select '2024-01-15 12:00:00+03'::timestamptz as added_at;
+```
+
+The result is one instant. The board shows it in UTC: `09:00:00Z`. PostgreSQL uses the connection's time zone for text output, but the instant itself stays the same.
+
+## A temporary table
+
+`CREATE TEMP TABLE` creates a temporary table available to the current session. It is normally dropped at the end of the session; its behavior at the end of a transaction can be configured separately.
+
+```sql run expect=rows:0
+create temp table session_tmp (x integer);
+```
+
+Click `Show on board`: the preview shows a draft of `session_tmp` with one column. The table is not saved after the preview because the sandbox rolls back the query. If you apply the command separately, the table is available in the current session until it is dropped or the session ends.
+
+## What's missing and why
+
+- The query on `book` does not show the author's name: it selected only `title`, `pages` and `price`. The name is in `author`.
+- The same result does not include `published_on` because we did not list it in `SELECT`.
+- A `session_tmp` created only in preview is absent from the database after rollback. That is a property of the preview, not of every temporary table.
+
+## Pitfalls
+
+<Callout kind="trap">
+Approximate `float8` and decimal `numeric` can produce different results:
+
+```sql run expect=rows:1
+select 0.1::float8 + 0.2::float8 as float_sum,
+       0.1::numeric + 0.2::numeric as numeric_sum;
+```
+
+Compare `float_sum` and `numeric_sum` in the row. `float8` can show `0.30000000000000004`; `numeric` returns `0.3`. The full number is visible in the `Result` panel; it may not fit in a cell on the board. For sums of money, `numeric` is a common choice, with precision and scale set in advance.
+
+Now check whether the temporary table remained after the preview:
+
+```sql run expectError=42P01
+select * from session_tmp;
+```
+
+Postgres returns error `42P01`: the table was not found. Its creation was not applied in this example. If you apply `CREATE TEMP TABLE`, this query can find the table in the same session.
+</Callout>
+
+## Check yourself
+
+1. How many columns are in the `book` table? Expand the folded columns on the board and count them.
+2. What does `select title, price from book;` return? Change the last query on `book` and check.
+3. Why was `session_tmp` not found after you clicked `Show on board`? Find the difference between previewing and applying in this lesson.
+
+<Cheatsheet>
+- `CREATE TABLE` defines a table and the type of each column.
+- `integer` and `bigint` store whole numbers; `numeric(10, 2)` stores a decimal number with the specified precision and scale.
+- `text`, `date`, `timestamptz`, `boolean`, `text[]` and `jsonb` suit different kinds of data.
+- `CREATE TEMP TABLE` creates a table for the current session. The sandbox preview rolls back; `Apply` saves the change.
+- `float8` is approximate. `numeric` is suitable for sums of money.
+</Cheatsheet>
