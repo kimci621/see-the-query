@@ -21,8 +21,12 @@ import {
   extractSqlBlocks,
 } from './blocks';
 
-const ROOT = process.cwd();
-const LESSONS = collectLessonsMeta(ROOT);
+// Отдельный корень нужен проверке раннера на временных уроках.
+const ROOT = process.env.VS_CONTENT_ROOT ?? process.cwd();
+const LESSONS = [
+  ...collectLessonsMeta(ROOT),
+  ...collectLessonsMeta(ROOT, 'en', { requireAll: process.env.VS_REQUIRE_EN_LESSONS === '1' }),
+];
 
 // Уроки, написанные по docs/content-style.md. Задача урока добавляет сюда свой id первым шагом
 const GUIDE_LESSONS: string[] = [
@@ -133,7 +137,7 @@ async function knownObjects(db: DbClient): Promise<Set<string>> {
   return new Set(result.rows.map((r) => String(r[0])));
 }
 
-it('урок materialized-view: раннер видит снимки и их колонки', () =>
+it('урок ru/materialized-view: раннер видит снимки и их колонки', () =>
   withDataset('bookstore', async (db) => {
     await db.query('create materialized view mv_test as select book_id, title from book');
     const known = await knownObjects(db);
@@ -144,8 +148,8 @@ it('урок materialized-view: раннер видит снимки и их к�
 
 describe('уроки по гайду', () => {
   for (const id of GUIDE_LESSONS) {
-    it(`урок ${id}: есть, структура по гайду`, () => {
-      const meta = LESSONS.find((l) => l.id === id);
+    it(`урок ru/${id}: есть, структура по гайду`, () => {
+      const meta = LESSONS.find((l) => l.id === id && l.locale === 'ru');
       if (!meta) throw new Error(`нет урока ${id}`);
       const source = readFileSync(path.join(ROOT, meta.path), 'utf8');
       expect(source, 'нет <TlDr>').toContain('<TlDr>');
@@ -156,69 +160,96 @@ describe('уроки по гайду', () => {
       ).toBe(true);
     });
   }
-});
-
-describe.each(LESSONS.map((meta) => [meta.id, meta] as const))('урок %s', (_id, meta) => {
-  const source = readFileSync(path.join(ROOT, meta.path), 'utf8');
-
-  it('frontmatter и путь по правилам', () => {
-    const chapter = CHAPTERS.find((c) => c.id === meta.chapter);
-    if (!chapter) throw new Error(`неизвестная глава ${meta.chapter}`);
-    expect(meta.path).toBe(
-      `/content/lessons/${pad(chapter.number)}-${chapter.id}/${pad(meta.order)}-${meta.id}.mdx`,
-    );
-    expect(
-      meta.number.startsWith(`${chapter.number}.`),
-      `номер ${meta.number} не из главы ${chapter.number}`,
-    ).toBe(true);
-    expect(
-      existsSync(path.join(ROOT, 'content/datasets', `${meta.dataset}.sql`)),
-      `нет датасета ${meta.dataset}`,
-    ).toBe(true);
-    expect(meta.docs.length, 'docs пуст').toBeGreaterThan(0);
-    for (const { url, title } of meta.docs) {
-      expect(url).toMatch(/^https:\/\//);
-      expect(title.trim(), `нет title у ${url}`).not.toBe('');
-    }
-  });
-
-  it('только известные MDX-компоненты', () => {
-    const text = withoutCode(source);
-    const tags = [...text.matchAll(/<([A-Z][A-Za-z]*)[\s/>]/g)].map((m) => m[1] ?? '');
-    expect(tags.filter((t) => !MDX_TAGS.has(t))).toEqual([]);
-    const kinds = [...text.matchAll(/<Callout kind="([^"]*)"/g)].map((m) => m[1] ?? '');
-    expect(kinds.filter((k) => !(CALLOUT_KINDS as string[]).includes(k))).toEqual([]);
-  });
-
-  it('компоненты Nesting содержат корректный путь', async () => {
-    await compile(
-      { path: meta.path, value: source },
-      { remarkPlugins: [remarkFrontmatter, remarkGfm, remarkNesting] },
-    );
-  });
-
-  it('примеры выполняются и сходятся с ожиданиями', async () => {
-    const blocks = extractSqlBlocks(source);
-    expect(blocks.length, 'в уроке нет sql-блоков').toBeGreaterThan(0);
-    const problems = await withDataset(meta.dataset, async (db) => {
-      const found = [
-        ...checkForeignSqlFences(source),
-        ...checkFinalOnlyNotes(source, blocks),
-        ...(await checkBlocks(blocks, db)),
-      ];
-      const known = await knownObjects(db);
-      found.push(...checkTermIds(withoutCode(source), known));
-      // Имена в frontmatter можно писать без схемы: доска нормализует их так же
-      const layout = meta.board?.layout;
-      const layoutTables = layout && layout !== 'auto' ? Object.keys(layout) : [];
-      for (const name of meta.board?.tables ?? []) {
-        if (!known.has(normalizeTableId(name))) found.push(`board.tables: нет таблицы ${name}`);
-      }
-      for (const name of layoutTables) {
-        if (!known.has(normalizeTableId(name))) found.push(`board.layout: нет таблицы ${name}`);
-      }
-      return found;
+  for (const meta of LESSONS.filter((lesson) => lesson.locale === 'en')) {
+    it(`урок en/${meta.id}: структура по гайду`, () => {
+      const source = readFileSync(path.join(ROOT, meta.path), 'utf8');
+      expect(source, 'нет <TlDr>').toContain('<TlDr>');
+      expect(source, 'нет <Cheatsheet>').toContain('<Cheatsheet>');
+      expect(
+        extractSqlBlocks(source).some((block) => block.meta.run),
+        'нет ни одного run-блока',
+      ).toBe(true);
     });
-    expect(problems).toEqual([]);
-  }, 120_000);
+  }
 });
+
+describe.each(LESSONS.map((meta) => [meta.locale, meta.id, meta] as const))(
+  'урок %s/%s:',
+  (_locale, _id, meta) => {
+    const source = readFileSync(path.join(ROOT, meta.path), 'utf8');
+
+    it('frontmatter и путь по правилам', () => {
+      const chapter = CHAPTERS.find((c) => c.id === meta.chapter);
+      if (!chapter) throw new Error(`неизвестная глава ${meta.chapter}`);
+      expect(meta.path).toBe(
+        `/content/${meta.locale === 'en' ? 'lessons-en' : 'lessons'}/${pad(chapter.number)}-${chapter.id}/${pad(meta.order)}-${meta.id}.mdx`,
+      );
+      expect(
+        meta.number.startsWith(`${chapter.number}.`),
+        `номер ${meta.number} не из главы ${chapter.number}`,
+      ).toBe(true);
+      expect(
+        existsSync(
+          path.join(
+            ROOT,
+            'content/datasets',
+            ...(meta.locale === 'en' && (meta.dataset === 'bookstore' || meta.dataset === 'big_bookstore')
+              ? ['en']
+              : []),
+            `${meta.dataset}.sql`,
+          ),
+        ),
+        `нет датасета ${meta.dataset}`,
+      ).toBe(true);
+      expect(meta.docs.length, 'docs пуст').toBeGreaterThan(0);
+      for (const { url, title } of meta.docs) {
+        expect(url).toMatch(/^https:\/\//);
+        expect(title.trim(), `нет title у ${url}`).not.toBe('');
+      }
+    });
+
+    it('только известные MDX-компоненты', () => {
+      const text = withoutCode(source);
+      const tags = [...text.matchAll(/<([A-Z][A-Za-z]*)[\s/>]/g)].map((m) => m[1] ?? '');
+      expect(tags.filter((t) => !MDX_TAGS.has(t))).toEqual([]);
+      const kinds = [...text.matchAll(/<Callout kind="([^"]*)"/g)].map((m) => m[1] ?? '');
+      expect(kinds.filter((k) => !(CALLOUT_KINDS as string[]).includes(k))).toEqual([]);
+    });
+
+    it('компоненты Nesting содержат корректный путь', async () => {
+      await compile(
+        { path: meta.path, value: source },
+        { remarkPlugins: [remarkFrontmatter, remarkGfm, remarkNesting] },
+      );
+    });
+
+    it('примеры выполняются и сходятся с ожиданиями', async () => {
+      const blocks = extractSqlBlocks(source);
+      expect(blocks.length, 'в уроке нет sql-блоков').toBeGreaterThan(0);
+      const problems = await withDataset(
+        meta.dataset,
+        async (db) => {
+          const found = [
+            ...checkForeignSqlFences(source),
+            ...checkFinalOnlyNotes(source, blocks),
+            ...(await checkBlocks(blocks, db, { trace: true, locale: meta.locale })),
+          ];
+          const known = await knownObjects(db);
+          found.push(...checkTermIds(withoutCode(source), known));
+          // Имена в frontmatter можно писать без схемы: доска нормализует их так же
+          const layout = meta.board?.layout;
+          const layoutTables = layout && layout !== 'auto' ? Object.keys(layout) : [];
+          for (const name of meta.board?.tables ?? []) {
+            if (!known.has(normalizeTableId(name))) found.push(`board.tables: нет таблицы ${name}`);
+          }
+          for (const name of layoutTables) {
+            if (!known.has(normalizeTableId(name))) found.push(`board.layout: нет таблицы ${name}`);
+          }
+          return found;
+        },
+        meta.locale,
+      );
+      expect(problems).toEqual([]);
+    }, 120_000);
+  },
+);

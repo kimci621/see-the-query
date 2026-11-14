@@ -75,6 +75,31 @@ describe('extractSqlBlocks', () => {
 });
 
 describe('checkBlocks', () => {
+  it('проверяет английский SQL на английских данных и передаёт язык трассировщику', async () => {
+    vi.mocked(traceStatement).mockClear();
+    const good = extractSqlBlocks(
+      mdx("~~~sql run expect=rows:1\nselect title from book where title = 'Simple Python';\n~~~\n"),
+    );
+    const broken = extractSqlBlocks(mdx('~~~sql run expect=rows:1\nselect missing_column from book;\n~~~\n'));
+    const noExpectation = extractSqlBlocks(mdx('~~~sql run\nselect 1;\n~~~\n'));
+    await withDataset(
+      'bookstore',
+      async (db) => {
+        expect(await checkBlocks(good, db, { trace: true, locale: 'en' })).toEqual([]);
+        expect(vi.mocked(traceStatement)).toHaveBeenCalledWith(
+          expect.anything(),
+          db,
+          expect.objectContaining({ locale: 'en' }),
+        );
+        expect((await checkBlocks(broken, db, { trace: false, locale: 'en' })).join(' ')).toContain('42703');
+        expect((await checkBlocks(noExpectation, db, { trace: false, locale: 'en' })).join(' ')).toContain(
+          'нет ожидания',
+        );
+      },
+      'en',
+    );
+  }, 60000);
+
   it('превью не оставляет следов, apply коммитит', async () => {
     const blocks = extractSqlBlocks(
       mdx(

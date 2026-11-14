@@ -32,7 +32,7 @@ function optionalStringArray(data: Raw, key: string, file: string): string[] | u
   return value;
 }
 
-// Ссылки на документацию: у каждой адрес и русская подпись, её видит ученик под уроком
+// Ссылки на документацию: у каждой адрес и подпись на языке урока
 function docLinks(data: Raw, file: string): LessonMeta['docs'] {
   const value = data.docs;
   if (value === undefined || value === null) return [];
@@ -86,10 +86,13 @@ export function parseLessonFile(source: string, relPath: string): LessonMeta {
   return meta;
 }
 
-export function collectLessonsMeta(root: string, locale: Locale = 'ru'): LessonMeta[] {
+export function collectLessonsMeta(
+  root: string,
+  locale: Locale = 'ru',
+  options: { requireAll?: boolean } = {},
+): LessonMeta[] {
   const dir = LESSONS_DIRS[locale];
-  if (!existsSync(path.join(root, dir))) return [];
-  const files = globSync(`${dir}/**/*.mdx`, { cwd: root }).sort();
+  const files = existsSync(path.join(root, dir)) ? globSync(`${dir}/**/*.mdx`, { cwd: root }).sort() : [];
   const metas = files.map((f) => parseLessonFile(readFileSync(path.join(root, f), 'utf8'), f));
   const seen = new Map<string, string>();
   for (const meta of metas) {
@@ -107,6 +110,10 @@ export function collectLessonsMeta(root: string, locale: Locale = 'ru'): LessonM
           throw new Error(`${meta.id}: поле ${key} различается в ${original.path} и ${meta.path}`);
         }
       }
+    }
+    if (options.requireAll) {
+      const missing = [...originals.keys()].filter((id) => !seen.has(id));
+      if (missing.length) throw new Error(`Нет английских уроков: ${missing.join(', ')}`);
     }
   }
   return metas;

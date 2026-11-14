@@ -146,6 +146,25 @@ describe('collectLessonsMeta', () => {
     expect(() => collectLessonsMeta(root, 'en')).toThrow(/inner-join.*dataset/i);
   });
 
+  it('в строгом режиме требует перевод каждого русского урока', () => {
+    const root = makeRoot({ 'content/lessons/06-joins/02-inner-join.mdx': VALID });
+    expect(collectLessonsMeta(root, 'en')).toEqual([]);
+    expect(() => collectLessonsMeta(root, 'en', { requireAll: true })).toThrow(/inner-join/i);
+    const en = path.join(root, 'content/lessons-en/06-joins/02-inner-join.mdx');
+    mkdirSync(path.dirname(en), { recursive: true });
+    writeFileSync(en, VALID);
+    expect(collectLessonsMeta(root, 'en', { requireAll: true })).toHaveLength(1);
+  });
+
+  it('отклоняет два английских файла с одним id', () => {
+    const root = makeRoot({
+      'content/lessons/06-joins/02-inner-join.mdx': VALID,
+      'content/lessons-en/06-joins/02-first.mdx': VALID,
+      'content/lessons-en/06-joins/03-second.mdx': VALID,
+    });
+    expect(() => collectLessonsMeta(root, 'en')).toThrow(/Дубль id «inner-join».*02-first.*03-second/);
+  });
+
   it('нет папки уроков → пустой список', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'vs-empty-'));
     expect(collectLessonsMeta(root)).toEqual([]);

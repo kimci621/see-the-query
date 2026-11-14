@@ -3,6 +3,7 @@ import { type DbClient, DbException, type QueryResult } from '@/features/db/type
 import { parseSqlMeta, type SqlMeta } from '@/features/lessons/mdx/sql-meta';
 import { initParser, parseSql } from '@/features/sql/parser';
 import { traceStatement } from '@/features/tracer/trace';
+import type { Locale } from '@/lib/i18n';
 import { inPreview } from '../helpers/db';
 
 export interface SqlBlockSource {
@@ -82,7 +83,7 @@ function rowsOf(results: QueryResult[]): number {
 export async function checkBlocks(
   blocks: SqlBlockSource[],
   db: DbClient,
-  opts: { trace: boolean } = { trace: true },
+  opts: { trace: boolean; locale?: Locale } = { trace: true },
 ): Promise<string[]> {
   const problems: string[] = [];
   let schema: SchemaSnapshot | null = null;
@@ -120,7 +121,9 @@ export async function checkBlocks(
         const snapshot = schema;
         try {
           const trace = stmt
-            ? await inPreview(db, () => traceStatement(stmt, db, { schema: snapshot }))
+            ? await inPreview(db, () =>
+                traceStatement(stmt, db, { schema: snapshot, locale: opts.locale ?? 'ru' }),
+              )
             : null;
           if (trace && trace.mode !== 'full') {
             problems.push(
