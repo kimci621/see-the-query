@@ -173,7 +173,7 @@
 
 **02-ddl**
 
-- [ ] 2.1 `create-schema`: `content/lessons-en/02-ddl/01-create-schema.mdx`
+- [x] 2.1 `create-schema`: `content/lessons-en/02-ddl/01-create-schema.mdx`
 - [ ] 2.2 `create-table`: `content/lessons-en/02-ddl/02-create-table.mdx`
 - [ ] 2.2a `generated-columns`: `content/lessons-en/02-ddl/03-generated-columns.mdx`
 - [ ] 2.3 `constraints`: `content/lessons-en/02-ddl/04-constraints.mdx`

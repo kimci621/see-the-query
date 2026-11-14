@@ -1,0 +1,146 @@
+---
+id: create-schema
+title: CREATE SCHEMA and search_path
+chapter: ddl
+number: "2.1"
+order: 1
+dataset: empty
+initialQuery: |
+  select current_schema();
+docs:
+  - url: https://www.postgresql.org/docs/current/ddl-schemas.html
+    title: Schemas
+  - url: https://www.postgresql.org/docs/current/sql-createschema.html
+    title: CREATE SCHEMA
+course: ["11.15"]
+tags: [schema, create schema, search_path, namespace]
+---
+
+<TlDr>A schema groups database objects. When a table name has no schema, PostgreSQL looks for it in the order given by `search_path`.</TlDr>
+
+## What's in the data
+
+The sandbox starts without user tables, so the board is empty. The `public` schema already exists. We'll create a `library` schema and a `book` table in each schema, then compare the query results.
+
+Run the examples in order. The `Apply` button saves a change in the sandbox; later queries depend on earlier ones. To start over, click `Reset` in the editor and confirm the lesson reset.
+
+## Create a schema
+
+`CREATE SCHEMA` adds a schema to the current database. Let's call it `library`:
+
+```sql run apply expect=rows:0
+create schema library;
+```
+
+Click `Apply` under the example. The empty schema has been created, but its frame will not appear on the base board yet: the board shows a schema together with its tables.
+
+To see the creation before applying it, first copy the query into the editor and wait for the preview. A `library` frame appears in the scene. The preview does not save the change. Then click `Apply` under the example.
+
+Now create a table inside `library`. The name before the dot is the schema; the name after it is the table:
+
+```sql run apply expect=rows:0
+create table library.book (
+  book_id integer primary key,
+  title text not null
+);
+```
+
+After you apply it, the `book` table appears inside the `library` frame. It has two columns and no rows yet. Add one row:
+
+```sql apply expect=rows:1
+insert into library.book values (1, 'And Quiet Flows the Don');
+```
+
+The table now has one book. By writing `library.book`, we chose a specific table regardless of the search path.
+
+## Use the qualified name
+
+```sql run expect=rows:1
+select * from library.book;
+```
+
+The board shows one row: number 1 and And Quiet Flows the Don. The schema is explicit, so PostgreSQL does not need to choose between tables with the same name in different schemas.
+
+<Callout kind="analogy">
+Think of schemas as departments in a library. Each department can have its own catalog named `book`. The name `library.book` identifies both the department and the catalog. Unlike folders on a computer, PostgreSQL schemas cannot be nested inside one another.
+</Callout>
+
+## Where search_path looks
+
+The **search path** (`search_path`) sets the order of schemas for names without a prefix. Look at the sandbox setting:
+
+{/* final-only: SHOW возвращает настройку, но пошаговая трасса для него пока не поддерживается */}
+```sql run expect=rows:1 trace=final-only
+show search_path;
+```
+
+The result is one row with the value `public`. That's the sandbox setting. A different database may have a different path. Schemas that do not exist or for which the user lacks `USAGE` are skipped. The system schema `pg_catalog` is also searched, even when it is not in the displayed list.
+
+Create another table with the same name in `public`:
+
+```sql run apply expect=rows:0
+create table public.book (
+  book_id integer primary key,
+  title text not null
+);
+```
+
+Add a different book to it:
+
+```sql apply expect=rows:1
+insert into public.book values (2, 'The Captain''s Daughter');
+```
+
+There are now two separate `book` tables in the database, each with one row. They can share a short name because they belong to different schemas.
+
+```sql run expect=rows:1
+select * from public.book;
+```
+
+This returns The Captain's Daughter. On the board, look for the `book` table in the `public` frame. The qualified name `library.book` returned And Quiet Flows the Don.
+
+## What's missing and why
+
+- And Quiet Flows the Don is missing from the `public.book` query because it is in the other table, `library.book`.
+- The Captain's Daughter is missing from the `library.book` query because it is in `public.book`.
+- Looking up `book` without a schema does not combine the two tables. PostgreSQL chooses the first match.
+
+## Pitfalls
+
+<Callout kind="trap">
+When no schema is specified, PostgreSQL takes the first matching table in the search path. The path currently names `public`:
+
+```sql run expect=rows:1
+select * from book;
+```
+
+The result is The Captain's Daughter from `public.book`. The table `library.book` exists, but `library` is not yet in the displayed path.
+
+Change the schema order for the current connection:
+
+```sql apply expect=rows:0
+set search_path = library, public;
+```
+
+Run the same query again:
+
+```sql run expect=rows:1
+select * from book;
+```
+
+Now it returns And Quiet Flows the Don: `library` comes before `public`. If you need a specific table regardless of the setting, use its qualified name, such as `public.book`.
+</Callout>
+
+## Check yourself
+
+1. How many rows does each table have after both inserts? Run the queries with qualified names and compare them.
+2. Which book does `select * from book` return after changing the path? Check it on the board.
+3. What does `select * from public.book` return when `library` comes first in the path? Change the query in the editor and check.
+
+<Cheatsheet>
+- `CREATE SCHEMA library` creates a schema in the current database.
+- `library.book` names both the schema and the table.
+- `SHOW search_path` displays the search setting for the current connection.
+- `SET search_path = library, public` puts `library` before `public`.
+- For an unqualified name, PostgreSQL finds the first matching table in the path.
+</Cheatsheet>
