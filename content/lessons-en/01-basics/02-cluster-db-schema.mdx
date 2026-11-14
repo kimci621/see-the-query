@@ -1,0 +1,140 @@
+---
+id: cluster-db-schema
+title: Cluster, database, schema, table
+chapter: basics
+number: "1.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: -200 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select title, price from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/manage-ag-overview.html
+    title: Overview of databases
+  - url: https://www.postgresql.org/docs/current/ddl-schemas.html
+    title: Schemas
+course: ["11.2", "11.15"]
+tags: [cluster, database, schema, public, search_path]
+---
+
+<TlDr>A cluster contains databases, a database contains schemas, and a schema contains tables. The schema name helps Postgres find the right table.</TlDr>
+
+## What's in the data
+
+This sandbox is connected to a database called `postgres`. Its `public` schema contains eight bookshop tables. The board shows two: <T id="public.book">book</T> has 11 books, and <T id="public.author">author</T> has 6 authors. The other tables are in the database too.
+
+The frame around the tables on the board is labeled `public`. That is the schema name, not another table.
+
+## From cluster to table
+
+A **PostgreSQL cluster** groups the databases managed by one server instance. A cluster can contain several databases. A connection works with one selected database; to access another, you normally open a separate connection.
+
+A database contains **schemas**. A schema groups objects by name: it can contain tables, functions and other objects. Schemas cannot be nested inside other schemas.
+
+Here is where <T id="public.book">book</T> sits in this sandbox:
+
+<Nesting path="postgres/public/book" />
+
+The board shows only the bottom part of this picture: the `public` frame and its tables. It does not draw the cluster or database as tables.
+
+Check the name of the database the sandbox is connected to:
+
+```sql run expect=rows:1
+select current_database();
+```
+
+One row, with the value `postgres`. The scene shows a result with one cell: the function gets the current database name rather than reading rows from <T id="public.book">book</T>.
+
+## What's in public
+
+A table's qualified name inside a database consists of its schema and table name, separated by a dot: `public.book`.
+
+```sql run expect=rows:1
+select title from public.book where book_id = 1;
+```
+
+On the board, the scanner passes over <T id="public.book">book</T>, and `WHERE` keeps one row. The result is And Quiet Flows the Don. We named the schema explicitly to reach the table inside it.
+
+You can also ask the database for the names of tables in the current schema. The `information_schema.tables` view provides that information:
+
+{/* final-only: information_schema.tables это представление, пошаговая трасса для него пока не поддерживается */}
+```sql run expect=rows:8 trace=final-only
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+order by 1;
+```
+
+The result has 8 names, including `author`, `book` and `review`, sorted by name. Look at the results panel here: the board does not yet show a step-by-step scene for this system view.
+
+## How Postgres finds a table without a schema name
+
+In the previous lesson, you wrote `book` without a schema name. Postgres found it using **`search_path`**, a list of schemas to search. It checks them in order and uses the first matching name.
+
+Look at the sandbox setting:
+
+{/* final-only: SHOW возвращает настройку, но пошаговая трасса для него пока не поддерживается */}
+```sql run expect=rows:1 trace=final-only
+show search_path;
+```
+
+The single row shows `public`. That is why an unqualified name in this sandbox finds `public.book`:
+
+```sql run expect=rows:1
+select title from book where book_id = 1;
+```
+
+Again, the result is And Quiet Flows the Don. The board focuses the same table as it did for `public.book`.
+
+<Callout kind="analogy">
+Imagine a collection desk with several sections. Each section can have a folder named `book`. Give the section and folder name together, and the right folder is easy to find. Give only the folder name, and the sections must be checked in a set order. `search_path` sets that order for schemas.
+</Callout>
+
+A different installation can have a different path. For example, PostgreSQL's default is often `"$user", public`: it first looks in a schema named after the current user, if that schema exists and is accessible, then in `public`. The system schema `pg_catalog` is also searched, even when it is not shown in the list.
+
+## What other schemas are there?
+
+Ask for the names of schemas available to the current user:
+
+{/* final-only: information_schema.schemata это представление, пошаговая трасса для него пока не поддерживается */}
+```sql run expect=rows:4 trace=final-only
+select schema_name from information_schema.schemata order by 1;
+```
+
+There are 4 rows here: `information_schema`, `pg_catalog`, `pg_toast` and `public`. The exact list depends on the database and the user's privileges. Postgres keeps information it needs in the system schemas; the bookshop tables are in `public`.
+
+## What's missing and why
+
+- Tables from other schemas are missing from the bookshop table list: the query kept only `table_schema = 'public'`.
+- `postgres` is missing from the schema list: it is the database name, one level up.
+- Books and authors do not appear in the schema list: `book` and `author` are tables inside `public`.
+
+## Pitfalls
+
+<Callout kind="trap">
+Two schemas in one database can contain tables with the same name. Imagine `shop.book` and `archive.book`, with a search path that lists `shop` before `archive`. This query would use `shop.book`:
+
+```sql noexec
+select * from book;
+```
+
+This is a thought experiment: the sandbox does not have `shop` or `archive` schemas yet. If you swap them in the search path, the same query finds `archive.book`. When you need a particular table, name the schema, as in `public.book`. Lesson 2.1 covers creating schemas and changing the path.
+</Callout>
+
+## Check yourself
+
+1. Which is higher in the hierarchy here: `postgres` or `public`? Find both in the diagram near the start of the lesson.
+2. How many tables in `public` did the `information_schema.tables` query return? Why are fewer shown on the board?
+3. What changes if you write `public.book` instead of `book`? Run both queries and compare their results.
+
+<Cheatsheet>
+- A cluster contains databases, a database contains schemas, and a schema contains tables and other objects.
+- `current_database()` gives the database name for the current connection. In this sandbox it is `postgres`.
+- `public.book` means schema `public`, table `book`.
+- `search_path` sets the search order for an unqualified name. `show search_path` displays the setting for the current session.
+- `information_schema` provides information about objects available to the current user.
+</Cheatsheet>
