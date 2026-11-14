@@ -177,7 +177,7 @@
 - [x] 2.2 `create-table`: `content/lessons-en/02-ddl/02-create-table.mdx`
 - [x] 2.2a `generated-columns`: `content/lessons-en/02-ddl/03-generated-columns.mdx`
 - [x] 2.3 `constraints`: `content/lessons-en/02-ddl/04-constraints.mdx`
-- [ ] 2.4 `fk-on-delete`: `content/lessons-en/02-ddl/05-fk-on-delete.mdx`
+- [x] 2.4 `fk-on-delete`: `content/lessons-en/02-ddl/05-fk-on-delete.mdx`
 - [ ] 2.5 `identity-sequences`: `content/lessons-en/02-ddl/06-identity-sequences.mdx`
 - [ ] 2.6 `alter-table`: `content/lessons-en/02-ddl/07-alter-table.mdx`
 - [ ] 2.7 `drop-truncate`: `content/lessons-en/02-ddl/08-drop-truncate.mdx`

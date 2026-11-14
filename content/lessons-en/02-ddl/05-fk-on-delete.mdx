@@ -1,0 +1,109 @@
+---
+id: fk-on-delete
+title: Primary and foreign keys, ON DELETE
+chapter: ddl
+number: "2.4"
+order: 5
+dataset: bookstore
+initialQuery: |
+  select * from orders where order_id = 1;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-constraints.html
+    title: Constraints and foreign keys
+course: ["11.13"]
+tags: [primary key, foreign key, on delete, cascade, set null]
+---
+
+<TlDr>A primary key distinguishes rows; a foreign key links tables. `ON DELETE` determines what happens to references when a row is deleted.</TlDr>
+
+## What's in the data
+
+There are eight orders in `orders`. Order 1 has two items in `order_item`. Their foreign key links them to the order and uses `ON DELETE CASCADE`. In `author`, books reference the author with number 1.
+
+We met primary and foreign keys in lesson 1.3. Here we'll see how references affect deletion. Preview rolls back; for the example you create below, apply the specified commands in order.
+
+## Keys and references
+
+A **primary key** (`PRIMARY KEY`) identifies a row with a unique, non-null key. A **foreign key** (`FOREIGN KEY`) checks that a supplied value references an existing key in another table. If the foreign key allows `NULL`, the reference can also be absent.
+
+<Callout kind="analogy">
+An order is like a folder containing its items. If you delete the folder and its contents, the items disappear too. But the link can be set up differently: keep the records and remove their reference to the deleted object.
+</Callout>
+
+## Deleting with CASCADE
+
+```sql run expect=rows:1
+delete from orders where order_id = 1;
+```
+
+On the board, one order is marked for deletion, followed by its two items. The foreign key in `order_item` does this through `ON DELETE CASCADE`. Preview saves nothing, so the order and its items remain in the database afterwards.
+
+## When a reference blocks deletion
+
+```sql run expectError=23503
+delete from author where author_id = 1;
+```
+
+Postgres returns `23503`: books reference that author. The default action, `NO ACTION`, checks that no broken references remain. If the constraint is deferred, the check can be postponed until the end of the transaction. `RESTRICT` does not allow that check to be deferred.
+
+## Keep rows and remove the reference
+
+Create two tables for your own example. Click `Apply` under each command:
+
+```sql run apply expect=rows:0
+create table lesson_parent (id integer primary key);
+```
+
+After applying it, the empty `lesson_parent` table appears on the board.
+
+```sql run apply expect=rows:0
+create table lesson_child (id integer primary key, parent_id integer references lesson_parent (id) on delete set null);
+```
+
+After applying it, the link from `lesson_child.parent_id` to the parent table is visible.
+
+```sql apply expect=rows:1
+insert into lesson_parent values (1);
+```
+
+```sql apply expect=rows:1
+insert into lesson_child values (1, 1);
+```
+
+Apply both inserts. One child row now references parent 1.
+
+```sql run expect=rows:1
+delete from lesson_parent where id = 1;
+```
+
+In preview, the parent is marked for deletion but the child row remains: `parent_id` becomes `NULL`. After the preview rolls back, the reference is back in place.
+
+## What's missing and why
+
+- Order 1 and its two items are marked for deletion in the scene: `CASCADE` removes the items.
+- Parent 1 is marked for deletion in the last scene. The child row remains without a reference thanks to `SET NULL`.
+
+## Pitfalls
+
+<Callout kind="trap">
+`CASCADE` can delete more rows than the `WHERE` clause names. Check related tables and their `ON DELETE` actions before applying:
+
+```sql run expect=rows:1
+delete from orders where order_id = 1;
+```
+
+Deleting one order also deletes two items. Preview does not save the deletion.
+</Callout>
+
+## Check yourself
+
+1. How many items disappear with order 1? Check the `DELETE` scene.
+2. Why is author 1 not deleted? Run the example and read the error.
+3. What remains in `lesson_child` after deleting the parent in preview?
+
+<Cheatsheet>
+- `PRIMARY KEY` defines a unique, non-null key for a row.
+- `FOREIGN KEY` checks a reference to another table.
+- `ON DELETE CASCADE` deletes dependent rows; `SET NULL` removes the reference.
+- `NO ACTION` checks referential integrity; `RESTRICT` does not allow the check to be deferred.
+</Cheatsheet>
