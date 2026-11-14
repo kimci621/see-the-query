@@ -1,0 +1,171 @@
+---
+id: table-anatomy
+title: Tables, rows, columns and cells
+chapter: basics
+number: "1.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: -200 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select * from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/ddl-basics.html
+    title: Table basics
+  - url: https://www.postgresql.org/docs/current/tutorial-sql.html
+    title: "Tutorial: the SQL language"
+course: ["11.1", "11.9"]
+tags: [table, row, column, cell, type, "null"]
+mvp: true
+---
+
+<TlDr>A table is a grid: a row describes an object, a column describes a property, and a cell holds a value of that column's type.</TlDr>
+
+## What's in the data
+
+There are two tables on the board: <T id="public.book">book</T> has 11 books, and <T id="public.author">author</T> has 6 authors. Two books matter in this lesson. The Island of Lost Ships has no price, and Simple Python has no author.
+
+## A table is a grid
+
+PostgreSQL stores data in **tables**. A table looks like the ones on the board: a header with its name, a set of columns and the rows underneath.
+
+```sql run expect=rows:11
+select * from book;
+```
+
+There are 11 rows. A ghost with all 9 columns rises above <T id="public.book">book</T>, and the table header on the board shows the same count: 11.
+
+<Callout kind="analogy">
+Think of an appointment book at a clinic. Each row is one visit. Its columns hold a patient's name, a room and a time. A cell is what someone wrote in one column for one visit. You would not put a name in the time column: each column has a purpose.
+</Callout>
+
+## Row
+
+A **row** describes one object: a book or an author. The table's columns are set in advance, but the number of rows can change. Add a book, and there are 12.
+
+Postgres does not give a row a name or a stable number. It does not promise the order of rows unless you ask for one. To identify a row, use a column whose value is different for every row. In <T id="public.book">book</T>, that column is <C id="public.book.book_id">book_id</C>. Lesson 1.3 covers keys in more detail.
+
+Let's find the book with `book_id = 7`:
+
+```sql run expect=rows:1
+select * from book where book_id = 7;
+```
+
+One row remains: The Island of Lost Ships. At the `WHERE` step, the scanner passes over all 11 rows in the ghost. Ten turn red and leave; one remains.
+
+## Column
+
+A **column** describes one property shared by every row in a table. <T id="public.book">book</T> has <C id="public.book.title">title</C>, <C id="public.book.price">price</C>, <C id="public.book.pages">pages</C> and six more columns.
+
+Choose three:
+
+```sql run expect=rows:11
+select title, price, pages from book;
+```
+
+There are still 11 rows, but only 3 columns. No rows disappeared; each keeps only the requested values. At the `SELECT` step, the other columns leave the ghost.
+
+## Cell
+
+A **cell** is the value at the intersection of a row and a column. One row and one column give you one cell:
+
+```sql run expect=rows:1
+select title from book where book_id = 7;
+```
+
+The result has one cell: The Island of Lost Ships. It is a single value from the table.
+
+## Each column has a type
+
+A **type** determines which values a column can hold and what you can do with them. On the board, the type appears below each column name.
+
+```sql run expect=rows:1
+select title, price, pages, published_at, tags from book where book_id = 1;
+```
+
+This is And Quiet Flows the Don. <C id="public.book.price">price</C> has type `numeric(10,2)`: a number with two digits after the decimal point, so the price is 890.00. <C id="public.book.pages">pages</C> is `integer`, the whole number 1504. <C id="public.book.published_at">published_at</C> is `date`, a date without a time: 1940-01-01. <C id="public.book.tags">tags</C> is `text[]`, an array of strings: `{classic,novel}`.
+
+You can compare a price with a number, but not a title:
+
+```sql run expectError=42883
+select title from book where title = 5;
+```
+
+An error card below the editor says “Function or operator does not exist”, with code `42883`. Expand “Postgres message” to see the original: `operator does not exist: text = integer`. There is no equality operator for text and an integer, so the whole query fails. Chapter 5 covers explicit type conversion.
+
+## A missing value is NULL
+
+When a value is missing, the cell contains **`NULL`**. It is a marker for a missing or unknown value, not zero or an empty string.
+
+```sql run expect=rows:1
+select title, price from book where price is null;
+```
+
+One row: The Island of Lost Ships. On the board, `NULL` has a gray badge with a dashed outline, so it is distinct from a number. To find `NULL`, use `IS NULL`. Lesson 4.5 explains why.
+
+Go through the steps yourself. Send the first to the board, then use “Next”:
+
+<Scene>
+<Step caption="The whole table: 11 rows">
+
+```sql run expect=rows:11
+select * from book;
+```
+
+</Step>
+<Step caption="One row: book_id = 7">
+
+```sql run expect=rows:1
+select title, price, pages from book where book_id = 7;
+```
+
+</Step>
+<Step caption="Books without a price">
+
+```sql run expect=rows:1
+select title from book where price is null;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+- ❌ Ten books are missing from the query for `book_id = 7`: each has a different `book_id`.
+- ❌ The other columns are missing from the one-cell query: we asked only for `title`.
+- ❌ The Island of Lost Ships is missing from the `price = 0` example below: it has no price, and `NULL` is not zero.
+
+## Pitfalls
+
+<Callout kind="trap">
+`NULL` is not zero. A beginner might look for books without a price using `price = 0`:
+
+```sql run expect=rows:0
+select title from book where price = 0;
+```
+
+No rows. Click the `WHERE` chip: “WHERE: 0 of 11 rows remain, 1 UNKNOWN”. That `UNKNOWN` is The Island of Lost Ships. Its price is not 0; the price is missing, so Postgres cannot say whether it equals zero.
+
+`NULL` is not an empty string either. An empty string is a known value: text with zero characters. The board shows it as `''`, not as a gray badge. To find books with no price, use `IS NULL`.
+</Callout>
+
+<Callout kind="tip">
+In the psql console, `\d book` shows column types. Here they are shown on the board. Check the types before writing a query to catch type mismatches earlier.
+</Callout>
+
+## Check yourself
+
+1. How many rows and columns will `select name, country from author;` return? Answer first, then run it.
+2. What is the `book_id` of Simple Python? Select its <C id="public.book.author_id">author_id</C> cell and look at the value.
+3. What is the type of an author's birth year? Find <C id="public.author.born_year">born_year</C> on the board.
+
+<Cheatsheet>
+- Table: a header, columns and rows. Row: one object. Column: one property. Cell: one value.
+- Columns are defined by the schema and shared by all rows. The number of rows can change, and their order is not guaranteed.
+- Each column has a type. Comparing text with a number gives error `42883`.
+- A missing value is `NULL`. It is not zero or `''`. Find it with `IS NULL`.
+- `select columns from table where condition`: the condition selects rows; the list after `select` selects columns.
+</Cheatsheet>
