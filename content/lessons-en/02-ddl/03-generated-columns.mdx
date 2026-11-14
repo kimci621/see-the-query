@@ -1,0 +1,96 @@
+---
+id: generated-columns
+title: Generated columns
+chapter: ddl
+number: "2.2a"
+order: 3
+dataset: empty
+initialQuery: |
+  select 1;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-generated-columns.html
+    title: Generated columns
+course: ["11.13"]
+tags: [generated, stored, virtual, generated columns]
+---
+
+<TlDr>A generated column is calculated from other columns in the row. Postgres updates its value; you cannot write a value to it directly.</TlDr>
+
+## What's in the data
+
+The lesson starts without tables. We'll create a table and add a row. Run the examples in order, clicking `Apply` where the lesson asks you to. `Reset` returns the lesson to its starting state.
+
+## A total from price and quantity
+
+Suppose a purchase total is the price multiplied by the quantity. Instead of supplying the total separately, put the formula in the table definition:
+
+<Callout kind="analogy">
+A generated column is like the total on a receipt: change the quantity and the total follows. The database holds the formula, so there is no need to supply the total again.
+</Callout>
+
+```sql run apply expect=rows:0
+create table t (
+  price numeric,
+  qty integer,
+  total numeric generated always as (price * qty) stored
+);
+```
+
+Click `Apply` to save the table. `STORED` means Postgres calculates `total` when the row is written and stores the result.
+
+Add a purchase: two books at 890 each.
+
+```sql run apply expect=rows:1
+insert into t (price, qty) values (890, 2);
+```
+
+Apply the insert. The `total` column on the board shows 1780, even though we did not provide it in the `INSERT`.
+
+```sql run expect=rows:1
+select price, qty, total from t;
+```
+
+Now change the quantity in preview:
+
+```sql run expect=rows:1
+update t set qty = 3;
+```
+
+In the scene, the total changes from 1780 to 2670. The preview rolls back, so the saved quantity remains two. To save the change, click `Apply`.
+
+## STORED and VIRTUAL
+
+PostgreSQL 18 has two kinds of generated columns. A `STORED` column is calculated when a row is inserted or updated, and its value is stored in the table. A `VIRTUAL` column is calculated when read and takes no storage for its value. If no kind is specified, PostgreSQL 18 chooses `VIRTUAL`. Earlier versions may have different rules.
+
+The expression can refer to columns in the current row, but not to other generated columns. Subqueries and volatile functions such as `random()` are not allowed in it.
+
+## What's missing and why
+
+- A row with quantity 3 is absent from the saved table if you only viewed the preview: the `UPDATE` rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+You cannot replace the formula's result with a number of your own:
+
+```sql run expectError=428C9
+insert into t (price, qty, total) values (1, 1, 5);
+```
+
+Postgres returns error `428C9`. Supply only the source columns or use the `DEFAULT` keyword for the generated column. The database still calculates its value.
+</Callout>
+
+An ordinary `DEFAULT` works differently: it supplies a value on insert when none was provided. A generated column is tied to a formula and recalculated when its source data changes.
+
+## Check yourself
+
+1. What is `total` for a price of 890 and a quantity of 2? Find it on the board.
+2. What happens to the total if you change the quantity to 3? Check with `UPDATE` in preview.
+3. Why can't you insert 5 into `total` directly?
+
+<Cheatsheet>
+- `GENERATED ALWAYS AS (expression)` defines a column's formula.
+- `STORED` stores the result; `VIRTUAL` calculates it on read.
+- In PostgreSQL 18, `VIRTUAL` is the default when no kind is specified.
+- You cannot write a value directly; `DEFAULT` is allowed in `INSERT` or `UPDATE`.
+</Cheatsheet>
