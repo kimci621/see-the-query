@@ -1,0 +1,129 @@
+---
+id: command-groups
+title: Groups of SQL commands
+chapter: basics
+number: "1.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title from book order by book_id limit 1;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-commands.html
+    title: SQL commands
+  - url: https://www.postgresql.org/docs/current/tutorial-transactions.html
+    title: Transactions
+course: ["11.11"]
+tags: [ddl, dml, dcl, tcl, dql, sql commands, transactions]
+---
+
+<TlDr>SQL commands can change structure and data, manage access, and control transactions. Their groups are called DDL, DML, DCL and TCL.</TlDr>
+
+## What's in the data
+
+The board shows <T id="public.book">book</T>, a table of 11 books. And Quiet Flows the Don has number 1. Simple Python and Learning Python have no author listed. We'll read this data for now. Commands that make changes appear below as examples without a run button.
+
+## Read the data first
+
+The starting query selects the title of the book with the lowest number:
+
+```sql run expect=rows:1
+select title from book order by book_id limit 1;
+```
+
+The result is one row: And Quiet Flows the Don. On the board, `SELECT` keeps the `title` column, sorting uses `book_id`, and `LIMIT` leaves one row. Reading the data does not change the table.
+
+Some people put `SELECT` in a separate group called **DQL** (Data Query Language). Others include it in DML. These are different ways to group commands; they do not change the query's result.
+
+## DDL: structure
+
+**DDL** (Data Definition Language) is used to create or change database objects. For example, this command creates a separate wish list table with two columns:
+
+```sql noexec
+create table wishlist (
+  id integer,
+  title text
+);
+```
+
+The new `wishlist` table has no rows yet. `ALTER TABLE` changes a table's definition, for example by adding a column. `DROP TABLE` removes the whole table. These examples are for reading only, so they do not change `book`.
+
+If a colleague asks for a table's DDL, they usually want the SQL that describes its structure: its name, columns, types and constraints.
+
+## DML: table contents
+
+**DML** (Data Manipulation Language) is used to work with rows. For example, after creating `wishlist`, you could add a book:
+
+```sql noexec
+insert into wishlist (id, title) values (1, 'New book');
+```
+
+`INSERT` adds rows, `UPDATE` changes values in existing rows, and `DELETE` removes rows. To change particular rows, you usually specify a `WHERE` condition. These commands do not redefine the structure of `wishlist`.
+
+<Callout kind="analogy">
+Think of a card catalog. DDL defines the drawers and the fields on each card. DML helps you add and edit the cards. Reading a card is like using `SELECT`.
+</Callout>
+
+## DCL: access
+
+**DCL** (Data Control Language) deals with privileges. `GRANT` gives a privilege and `REVOKE` takes it away. For example:
+
+```sql noexec
+grant select on book to reader;
+```
+
+Here `reader` is an example role name. The command gives that role permission to read `book`. Granting `SELECT` does not itself grant permission to delete rows. The dataset has no `reader` role, so this example cannot be run here.
+
+## TCL: transaction boundaries
+
+A **transaction** groups several actions into one operation. Its changes can be committed or rolled back together. Imagine moving two records between lists: if only half the work is done, the lists will be wrong.
+
+**TCL** (Transaction Control Language) sets the boundaries of that work. In this example, `BEGIN` starts a transaction and `COMMIT` saves the insert:
+
+```sql noexec
+begin;
+insert into wishlist (id, title) values (2, 'Another book');
+commit;
+```
+
+If you run `ROLLBACK` instead of `COMMIT`, the transaction's uncommitted changes are undone. A transaction can include different commands, including changes to structure and data. We do not run this TCL example in the sandbox: preview runs the query inside a transaction and rolls it back.
+
+## What's missing and why
+
+Let's return to the books without an author:
+
+```sql run expect=rows:2
+select title from book where author_id is null order by title;
+```
+
+On the board, `WHERE` keeps two rows and the other nine leave the result. The table still contains 11 books: the query did not delete anything.
+
+- And Quiet Flows the Don is missing from this result because its author number is present.
+- Simple Python was missing from the first result because `LIMIT 1` kept the book with the lowest number.
+
+## Pitfalls
+
+<Callout kind="trap">
+It's easy to mix up `DELETE` and `DROP TABLE`. The first removes rows; the second removes the table itself. A `DELETE` without `WHERE` has no filter:
+
+```sql noexec
+delete from wishlist;
+```
+
+If you created `wishlist` as shown above, this would delete every row and leave an empty table. Before deleting, check the condition and use `SELECT` to inspect the same rows first.
+</Callout>
+
+## Check yourself
+
+1. Which group includes creating a table? Which includes adding a row? Find both commands above.
+2. What will the first query return if you change `limit 1` to `limit 2`? Edit it in the editor and check the board.
+3. How does `COMMIT` differ from `ROLLBACK`? Find the answer in the transaction section.
+
+<Cheatsheet>
+- DDL: object structure. `CREATE`, `ALTER`, `DROP`.
+- DML: working with data. `INSERT`, `UPDATE`, `DELETE`; some people also include `SELECT`.
+- DQL: reading data, if `SELECT` is treated as a separate group.
+- DCL: privileges. `GRANT` gives them; `REVOKE` takes them away.
+- TCL: transactions. `BEGIN` starts one, `COMMIT` saves changes, `ROLLBACK` undoes them.
+</Cheatsheet>

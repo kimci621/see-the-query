@@ -169,7 +169,7 @@
 - [x] 1.1 `table-anatomy`: `content/lessons-en/01-basics/01-table-anatomy.mdx`
 - [x] 1.2 `cluster-db-schema`: `content/lessons-en/01-basics/02-cluster-db-schema.mdx`
 - [x] 1.3 `primary-foreign-key`: `content/lessons-en/01-basics/03-primary-foreign-key.mdx`
-- [ ] 1.4 `command-groups`: `content/lessons-en/01-basics/04-command-groups.mdx`
+- [x] 1.4 `command-groups`: `content/lessons-en/01-basics/04-command-groups.mdx`
 
 **02-ddl**
 
