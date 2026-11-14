@@ -1,0 +1,138 @@
+---
+id: primary-foreign-key
+title: Primary and foreign keys
+chapter: basics
+number: "1.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name, b.title
+  from author a join book b using (author_id)
+  order by b.book_id limit 3;
+docs:
+  - url: https://www.postgresql.org/docs/current/ddl-constraints.html
+    title: Table constraints
+course: ["11.10"]
+tags: [primary key, foreign key, pk, fk]
+---
+
+<TlDr>A primary key distinguishes one row from another. A foreign key checks a reference between rows.</TlDr>
+
+## What's in the data
+
+The board shows <T id="public.author">author</T> with 6 authors and <T id="public.book">book</T> with 11 books. Sholokhov has two books. Learning Python and Simple Python have no author listed. Boris Pasternak has no books in this dataset.
+
+The starting query already uses both tables. We'll look at how they join shortly. For now, notice the key icons and the line between the tables.
+
+## How to tell rows apart
+
+An author has a name, but two people can have the same name. That is why <T id="public.author">author</T> has a separate number, <C id="public.author.author_id">author.author_id</C>:
+
+```sql run expect=rows:6
+select author_id, name from author order by author_id;
+```
+
+There are 6 rows. Mikhail Sholokhov has number 1, Luciano Ramalho has 2, and Boris Pasternak has 6. A key icon appears next to `author_id` on the board.
+
+This is the **primary key** (`PRIMARY KEY`). Postgres requires its value to be unique for each row and not `NULL`. A key lets you identify a particular row even when authors share a name.
+
+A primary key can contain several columns. In that case, their combination must be unique. The key in <T id="public.author">author</T> has one column: `author_id`. <T id="public.book">book</T> has its own primary key, <C id="public.book.book_id">book.book_id</C>, which distinguishes books from one another.
+
+## How a book finds its author
+
+The book table has another column also called `author_id`. Select two books:
+
+```sql run expect=rows:2
+select book_id, title, author_id
+from book
+where book_id in (1, 3)
+order by book_id;
+```
+
+The result contains And Quiet Flows the Don and The Fate of a Man. The books have different `book_id` values, but both rows have `author_id = 1`. Here, 1 identifies an author, not a book.
+
+<C id="public.book.author_id">book.author_id</C> is a **foreign key** (`FOREIGN KEY`) that references <C id="public.author.author_id">author.author_id</C>. To see both columns, click the board, press Esc and use “Fit board”. Hover over the underlined `book.author_id` at the start of this paragraph: both columns light up. A line connects the tables.
+
+Check which author has that number:
+
+```sql run expect=rows:1
+select author_id, name from author where author_id = 1;
+```
+
+One row: Mikhail Sholokhov. You found 1 in two book rows, then found the author row with the same number.
+
+<Callout kind="analogy">
+Each coat-check ticket has its own number. Several items belonging to one visitor can carry that ticket number, so the attendant can return them to the right person. The author number works similarly, but a foreign key constraint checks the reference.
+</Callout>
+
+## Put the author's name next to a book
+
+The name is in `author`; the title is in `book`. `JOIN` combines rows with matching `author_id` values:
+
+```sql run expect=rows:3
+select a.name, b.title
+from author a join book b using (author_id)
+order by b.book_id
+limit 3;
+```
+
+In the first three rows, Sholokhov appears twice: next to And Quiet Flows the Don and The Fate of a Man. A book by Luciano Ramalho is between them. On the board, lines connect matching rows, and author 1 forms two pairs. Chapter 6 covers `JOIN` in detail.
+
+## Can a reference be empty?
+
+A foreign key does not always have to be filled in. If the column allows `NULL`, its value can be left out. That is how `author_id` works in <T id="public.book">book</T>:
+
+```sql run expect=rows:2
+select title from book where author_id is null order by title;
+```
+
+Two rows: Learning Python and Simple Python. At the `WHERE` step, the other 9 books leave the ghost. Here `NULL` means no author number was supplied; Postgres does not look for it among the numbers in `author`.
+
+## What's missing and why
+
+- Learning Python and Simple Python are missing from the `JOIN` result: neither has an author number to match.
+- Boris Pasternak is missing from the `JOIN` result: no book in this dataset has `author_id = 6`.
+- And Quiet Flows the Don is missing from the list of books without an author: its `author_id` is 1, not `NULL`.
+
+## Pitfalls
+
+<Callout kind="trap">
+An empty reference and a reference to a nonexistent number give different results. Try author 99, who is not in <T id="public.author">author</T>:
+
+```sql run expectError=23503
+insert into book (title, author_id) values ('New book', 99);
+```
+
+Postgres returns `23503`: the foreign key `book_author_id_fkey` could not find author 99. The scene shows an attempted insert and a red arrow to the author table. The row was not added to the base table: the query failed, and preview rolls back changes in any case.
+
+A foreign key may be empty if the column allows `NULL`. But a supplied value must match a referenced key. Here it references the author's primary key; in other tables, it can reference a suitable unique key instead.
+</Callout>
+
+What if you repeat an author's primary key? For this example, provide the number manually: `OVERRIDING SYSTEM VALUE` lets you supply a value for this identity column.
+
+```sql run expectError=23505
+insert into author (author_id, name)
+overriding system value
+values (1, 'Another author');
+```
+
+Error `23505`: number 1 is already taken. Even with a different name, a second author cannot have the same primary key. The board shows the attempted insert and the existing row it conflicts with.
+
+## Check yourself
+
+1. What are the two `book_id` values for Sholokhov's books in the second query? Why do they share an `author_id`?
+2. What does `select title from book where author_id is null order by title;` return? Check the titles on the board.
+3. Will an insert with `author_id = 99` work? Run the example in the pitfall and find the error code.
+
+<Cheatsheet>
+- `PRIMARY KEY` distinguishes rows: key values are unique and not `NULL`.
+- `book.book_id` identifies a book; `book.author_id` links it to an author.
+- A foreign key checks a supplied reference. If the column allows `NULL`, the reference can be left empty.
+- `JOIN` combines rows using a condition; `INNER JOIN` keeps only matching pairs.
+- No author has that number: error `23503`. A repeated primary key: `23505`.
+</Cheatsheet>
