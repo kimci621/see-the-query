@@ -8,6 +8,18 @@ async function writeSql(page: Page, sql: string) {
   await page.keyboard.insertText(sql);
 }
 
+test('переведённый первый урок открывается на обоих языках', async ({ page }) => {
+  await page.goto('/l/how-to-use?lang=en');
+  await expect(page.getByRole('heading', { name: 'How to use the board' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('.cm-content')).toHaveText('select title, price from book;');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await expect(page.getByRole('heading', { name: 'Как пользоваться доской' })).toBeVisible();
+  await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await expect(page.getByRole('heading', { name: 'How to use the board' })).toBeVisible();
+});
+
 test('язык в ссылке, переключатель и история сохраняют урок и параметры', async ({ page }) => {
   await page.goto('/l/select-basics?lang=en&source=test#part');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');

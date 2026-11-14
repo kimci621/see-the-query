@@ -14,8 +14,12 @@ import { useSettingsStore } from '@/stores/settings';
 // ждущий тело урока, падал (P8.61). LessonView кэширует lazy на урок: прогреваем кэш заранее,
 // дальше тело рисуется сразу, без Suspense
 beforeAll(async () => {
-  for (const id of ['how-to-use', 'select-basics']) {
-    const meta = getLesson(id);
+  for (const [id, locale] of [
+    ['how-to-use', 'ru'],
+    ['select-basics', 'ru'],
+    ['how-to-use', 'en'],
+  ] as const) {
+    const meta = getLesson(id, locale);
     if (!meta) throw new Error(`нет урока ${id}`);
     const { unmount } = render(
       <MemoryRouter>
@@ -96,9 +100,9 @@ describe('AppShell', () => {
     expect(router.state.location.pathname).toBe('/l/how-to-use');
   });
 
-  it('корневой адрес сохраняет английский язык и показывает отсутствие перевода', async () => {
+  it('корневой адрес сохраняет английский язык и открывает переведённый урок', async () => {
     const router = renderAt('/?lang=en');
-    expect(await screen.findByRole('heading', { name: 'Translation coming soon' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'How to use the board' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/l/how-to-use');
     expect(router.state.location.search).toBe('?lang=en');
     expect(document.documentElement.lang).toBe('en');
@@ -118,9 +122,16 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 
-  it('позволяет выйти из режима фокуса, если перевода ещё нет', async () => {
+  it('позволяет выйти из режима фокуса на английском уроке', async () => {
     useSettingsStore.setState({ focusMode: true });
     renderAt('/l/how-to-use?lang=en');
+    fireEvent.click(await screen.findByRole('button', { name: /Exit focus mode/ }));
+    expect(await screen.findByRole('heading', { name: 'How to use the board' })).toBeInTheDocument();
+  });
+
+  it('позволяет выйти из режима фокуса, если перевода ещё нет', async () => {
+    useSettingsStore.setState({ focusMode: true });
+    renderAt('/l/select-basics?lang=en');
     fireEvent.click(await screen.findByRole('button', { name: /Exit focus mode/ }));
     expect(await screen.findByRole('heading', { name: 'Translation coming soon' })).toBeInTheDocument();
   });
@@ -130,7 +141,7 @@ describe('AppShell', () => {
     await screen.findByRole('heading', { name: 'Как пользоваться доской' });
     act(() => useEditorStore.getState().setText('select 123;'));
     fireEvent.click(screen.getByRole('button', { name: 'Переключить язык на английский' }));
-    await screen.findByRole('heading', { name: 'Translation coming soon' });
+    await screen.findByRole('heading', { name: 'How to use the board' });
     fireEvent.click(screen.getByRole('button', { name: 'Switch language to Russian' }));
     await screen.findByRole('heading', { name: 'Как пользоваться доской' });
     expect(useEditorStore.getState().text).toBe('select 123;');

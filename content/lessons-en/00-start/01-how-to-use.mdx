@@ -1,0 +1,164 @@
+---
+id: how-to-use
+title: How to use the board
+chapter: start
+number: "0.1"
+order: 1
+dataset: bookstore
+initialQuery: |
+  select title, price from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/tutorial-sql.html
+    title: "Tutorial: the SQL language"
+  - url: https://www.postgresql.org/docs/current/tutorial-transactions.html
+    title: "Tutorial: transactions"
+  - url: https://www.postgresql.org/docs/current/tutorial.html
+    title: PostgreSQL tutorial
+board:
+  tables: [book, author]
+  layout:
+    author: { x: 330, y: -100 }
+    book: { x: 0, y: 280 }
+tags: [board, start, interface]
+mvp: true
+---
+
+<TlDr>Your query runs as you type, but only Apply saves changes to the data.</TlDr>
+
+## What's in the data
+
+The `bookstore` dataset has eight tables for a bookshop: books, authors, customers, orders and more. This lesson shows two on the board: <T id="public.book">book</T> has 11 books, and <T id="public.author">author</T> has 6 authors. The other tables are still in the database, so you can query them too.
+
+One book, The Island of Lost Ships, has no price. Watch for it: it will disappear from the result in the scene below.
+
+## The screen
+
+The lesson list is on the left, this text is in the middle, and the workspace is on the right. From top to bottom, the workspace has the board, the player, the editor and the results panel.
+
+Each table on the board has a header with its name and row count. Below it are the columns, their types and the data.
+
+You can move around the board:
+
+- Drag with the mouse to move the camera.
+- Use the mouse wheel to zoom.
+- Press `⌘0` (`Ctrl+0` on Windows) with the pointer over the board to fit everything in view. The fit button at the bottom left does the same thing.
+
+Table names in the text are interactive. Hover over <T id="public.author">author</T> to highlight its columns on the board. Click it to move the camera to the table.
+
+Now for the first query. Click “Show on board” below it:
+
+```sql run expect=rows:11
+select * from book;
+```
+
+A **ghost** appears above <T id="public.book">book</T>: a copy of the table used to show what the query does. The camera moves to the ghost and the board fades into the background. The result below has 11 rows, matching the count in the table header.
+
+## The editor runs queries for you
+
+There is no Run button. The editor runs your query about a quarter of a second after you stop typing. This is a **preview**. The badge below the editor reminds you: “Preview: data is unchanged”.
+
+Clear the editor and type this query yourself. You can also click “Show on board”:
+
+```sql run expect=rows:11
+select title, price from book;
+```
+
+There are still 11 rows, but only two columns remain. At the `SELECT` step, the other columns leave the ghost. The query's columns are highlighted in <T id="public.book">book</T> on the board. To keep the wide table compact, the other columns are folded into a “+4 columns” placeholder. Hover over it to see their names. After `select *`, the full table is visible again.
+
+## The player
+
+The strip between the board and editor is the player. Its `FROM`, `WHERE` and `SELECT` chips show the steps in logical order. You write `SELECT` first, but the query starts with `FROM`: first choose where to get rows, then which rows to keep, and finally which columns to show. Click a chip to jump to that step. The nearby controls move back or forward, play the scene and change the speed to 0.5x, 1x or 2x. The line below the chips explains the current step.
+
+Try the scene. Send the first step to the board, then use “Next” to move through it:
+
+<Scene>
+<Step caption="All books">
+
+```sql run expect=rows:11
+select book_id, title, price from book;
+```
+
+</Step>
+<Step caption="Books with a price">
+
+```sql run expect=rows:10
+select book_id, title, price from book where price is not null;
+```
+
+</Step>
+<Step caption="More than 1000">
+
+```sql run expect=rows:3
+select book_id, title, price from book where price > 1000;
+```
+
+</Step>
+</Scene>
+
+There were 11 rows, then 10, then 3. On the second query, click the `WHERE` chip. The line below it says “WHERE: 10 of 11 rows remain”. The Island of Lost Ships is gone because it has no price.
+
+On the third query, the same line includes “1 UNKNOWN”. That is The Island of Lost Ships again: without a price, Postgres cannot say whether it is greater than 1000. `WHERE` removes those rows too. We'll look at `NULL` in more detail later.
+
+## Preview leaves the data unchanged
+
+The preview runs the query for real, but inside a **transaction** that the app immediately rolls back. A transaction groups changes so they are saved together or not at all. Try setting one book's price to zero:
+
+```sql run expect=rows:1
+update book set price = 0 where book_id = 1 returning title, price;
+```
+
+The result shows And Quiet Flows the Don with a price of 0.00 and “UPDATE: 1”. The player shows the rows matched by `WHERE` and the price cell flipping. The badge still says “Preview: data is unchanged”.
+
+## Apply changes the data
+
+To save a change, use “Apply” below the editor or press `⌘⏎`. Examples that change data have an “Apply” button in place of “Show on board”:
+
+```sql apply expect=rows:1
+insert into author (name, country, born_year) values ('Leo Tolstoy', 'Russia', 1828) returning name;
+```
+
+A “Saved to the database” message appears at the bottom right. The camera moves to <T id="public.author">author</T>, the table updates to include Tolstoy, and its header shows 7. Check with a query:
+
+```sql run expect=rows:7
+select * from author;
+```
+
+There are 7 rows now, up from 6. If you edit the insert and apply it again, there will be two entries for Tolstoy: author names do not have to be unique.
+
+Two buttons below the editor help you undo changes. “Undo” removes the last applied change. `⌘Z` does the same outside the editor; inside it, the shortcut undoes typing. “Reset” asks “Reset this lesson?” and restores the original data after you confirm.
+
+## What's missing and why
+
+- ❌ The Island of Lost Ships is missing from books over 1000: its price is unknown.
+- ❌ And Quiet Flows the Don does not have a price of 0: preview rolled back the `UPDATE`, leaving its price at 890.
+- ❌ Leo Tolstoy is missing from book results: the insert added an author, but no books for him.
+
+## Pitfalls
+
+<Callout kind="trap">
+“UPDATE: 1” in a preview does not mean the row was changed. Check the price of And Quiet Flows the Don after the zero-price example:
+
+```sql run expect=rows:1
+select title, price from book where book_id = 1;
+```
+
+The price is 890.00. Preview showed what *would* happen and rolled it back. If you change data in preview and leave the lesson, those changes will not be there when you return. Use “Apply” to save them.
+</Callout>
+
+<Callout kind="note">
+If a query takes too long, the sandbox restarts and shows a notification. Simplify the query and try again.
+</Callout>
+
+## Check yourself
+
+1. How many books will `select title from book where price < 500;` return? Answer first, then run it.
+2. Apply the Tolstoy insert three times, then choose “Reset”. How many rows will be in `author`?
+3. How many rows are in <T id="public.author">author</T> now? Check the table header on the board, then use a query to confirm.
+
+<Cheatsheet>
+- Drag to move the camera. Use the wheel to zoom. Press `⌘0` over the board to fit everything in view.
+- Preview runs a query after you pause typing, then rolls back its changes.
+- Player chips show query steps. Click a chip to jump to that step.
+- “Apply” (`⌘⏎`) saves changes. “Undo” (`⌘Z` outside the editor) removes the last applied change.
+- “Reset” restores the lesson's original data.
+</Cheatsheet>

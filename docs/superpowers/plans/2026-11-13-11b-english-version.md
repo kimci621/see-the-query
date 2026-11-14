@@ -162,7 +162,7 @@
 
 **00-start**
 
-- [ ] 0.1 `how-to-use`: `content/lessons-en/00-start/01-how-to-use.mdx`
+- [x] 0.1 `how-to-use`: `content/lessons-en/00-start/01-how-to-use.mdx`
 
 **01-basics**
 
