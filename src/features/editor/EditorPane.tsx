@@ -11,6 +11,7 @@ import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { applyCurrent, focusDmlTarget } from './applyCurrent';
 import { EditorToolbar } from './EditorToolbar';
 import './editor.css';
@@ -24,7 +25,8 @@ const SqlEditor = lazy(() => import('./SqlEditor').then((m) => ({ default: m.Sql
 
 export function EditorPane() {
   const { lessonId } = useParams();
-  const meta = lessonId ? getLesson(lessonId) : undefined;
+  const locale = useSettingsStore((s) => s.locale);
+  const meta = lessonId ? getLesson(lessonId, locale) : undefined;
   const text = useEditorStore((s) => s.text);
   const cursor = useEditorStore((s) => s.cursor);
   const activeClause = useEditorStore((s) => s.activeClause);
@@ -96,19 +98,23 @@ export function EditorPane() {
   // Запрос кнопки прошлого урока больше не считается запуском пользователя
   useEffect(() => {
     useSceneStore.getState().setLessonQuery(null);
-    const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.lastQuery : undefined;
+    const saved = lessonId
+      ? useLessonStore.getState().byId[lessonId]?.workspaces[locale]?.lastQuery
+      : undefined;
     const initial = saved ?? meta?.initialQuery ?? '';
     useSceneStore.getState().setStartQuery(initial);
     const editor = useEditorStore.getState();
+    editor.clearApplied();
     if (editor.text !== initial) {
       editor.setText(initial);
       editor.setCursor(initial.length);
     }
-  }, [lessonId, meta]);
+  }, [lessonId, meta, locale]);
 
   // Стартовый кадр урока: таблицы стартового текста (спека 3.4), свёртка как у будущего трейса,
   // чтобы первый трейс не менял ширину нод. Ждёт схему и парсер; новая схема после «Применить»
   // кадр не повторяет. Нет таблиц или текст не разбирается - кадр на всю доску
+  // biome-ignore lint/correctness/useExhaustiveDependencies: при смене языка нужен новый стартовый кадр
   useEffect(() => {
     if (!lessonId || !hasSchema || !parserReady) return;
     const { text, cursor } = useEditorStore.getState();
@@ -119,27 +125,37 @@ export function EditorPane() {
     board.setQueryColumns(touched.columns);
     board.expandTables(touched.expanded);
     board.frameStart(touched.tableIds);
-  }, [lessonId, hasSchema, parserReady]);
+  }, [lessonId, hasSchema, parserReady, locale]);
 
   // Последний запрос урока: сохраняем через секунду после того, как ученик перестал печатать.
   // Текст, равный initialQuery, не храним (и стираем прежний): иначе новый initialQuery урока до ученика не дойдёт
   useEffect(() => {
     if (!lessonId) return;
     const timer = setTimeout(
-      () => useLessonStore.getState().setLastQuery(lessonId, text === meta?.initialQuery ? undefined : text),
+      () =>
+        useLessonStore
+          .getState()
+          .setLastQuery(lessonId, text === (meta?.initialQuery ?? '') ? undefined : text, locale),
       1000,
     );
     return () => clearTimeout(timer);
-  }, [text, lessonId, meta]);
+  }, [text, lessonId, meta, locale]);
 
-  // При закрытии редактора сохраняем ввод, не дожидаясь таймера.
+  // При закрытии редактора или страницы сохраняем ввод, не дожидаясь таймера.
   useEffect(() => {
     if (!lessonId) return;
-    return () => {
+    const save = () => {
       const current = useEditorStore.getState().text;
-      useLessonStore.getState().setLastQuery(lessonId, current === meta?.initialQuery ? undefined : current);
+      useLessonStore
+        .getState()
+        .setLastQuery(lessonId, current === (meta?.initialQuery ?? '') ? undefined : current, locale);
     };
-  }, [lessonId, meta?.initialQuery]);
+    window.addEventListener('pagehide', save);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      save();
+    };
+  }, [lessonId, meta?.initialQuery, locale]);
 
   // единый путь применения для кнопки, ⌘⏎ из keymap CodeMirror и ⌘⏎ вне редактора
   const apply = () => {

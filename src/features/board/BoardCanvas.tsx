@@ -198,7 +198,7 @@ function BoardFlow() {
     };
   }, [schema, visible, meta, rootFont, locale]);
 
-  useCamera(lessonId, nodes, boardRef, over);
+  useCamera(lessonId, nodes, boardRef, over, locale);
 
   // ←/→ внутри таблицы: по шапкам колонок. Плеер берёт стрелки только на самой доске (useBoardHotkeys)
   useEffect(() => {
@@ -239,7 +239,8 @@ function BoardFlow() {
         maxZoom={2}
         onMoveEnd={(event, viewport) => {
           // event = null у программных движений (fitView), их не запоминаем
-          if (event && lessonId) useLessonStore.getState().setViewport(lessonId, viewport);
+          if (event && lessonId && useSettingsStore.getState().locale === locale)
+            useLessonStore.getState().setViewport(lessonId, viewport, locale);
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
@@ -276,6 +277,7 @@ function useCamera(
   nodes: BoardNode[],
   boardRef: RefObject<HTMLDivElement | null>,
   over: RefObject<boolean>,
+  locale: 'ru' | 'en',
 ) {
   const flow = useReactFlow<BoardNode>();
   const store = useStoreApi();
@@ -311,9 +313,12 @@ function useCamera(
   // biome-ignore lint/correctness/useExhaustiveDependencies: startRequest служит только триггером
   useEffect(() => {
     if (nodeKey === '') return;
-    const opened = startedFor.current !== lessonId;
-    startedFor.current = lessonId;
-    const saved = lessonId ? useLessonStore.getState().byId[lessonId]?.viewport : undefined;
+    const key = lessonId ? `${locale}:${lessonId}` : null;
+    const opened = startedFor.current !== key;
+    startedFor.current = key;
+    const saved = lessonId
+      ? useLessonStore.getState().byId[lessonId]?.workspaces[locale]?.viewport
+      : undefined;
     if (saved) {
       if (opened) void flow.setViewport(saved);
       startFold.current = opened || startFold.current?.keep ? { fold: foldKey(), keep: true } : null;
@@ -323,7 +328,7 @@ function useCamera(
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
     fitFrame(flow, store, ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
-  }, [nodeKey, lessonId, startRequest, flow, store]);
+  }, [nodeKey, lessonId, startRequest, flow, store, locale]);
 
   useEffect(() => {
     if (fitRequest === 0) return;

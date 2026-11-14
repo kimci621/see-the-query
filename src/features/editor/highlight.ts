@@ -12,7 +12,11 @@ const clauseField = StateField.define<DecorationSet>({
     let next = value.map(tr.changes);
     for (const e of tr.effects) {
       if (e.is(setActiveClauseRange)) {
-        next = e.value ? Decoration.set([mark.range(e.value.from, e.value.to)]) : Decoration.none;
+        const range = e.value;
+        next =
+          range && range.from >= 0 && range.from < range.to && range.to <= tr.newDoc.length
+            ? Decoration.set([mark.range(range.from, range.to)])
+            : Decoration.none;
       }
     }
     return next;

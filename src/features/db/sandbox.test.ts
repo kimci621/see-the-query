@@ -53,6 +53,71 @@ async function bookstore(journal: string[] = []) {
 }
 
 describe('sandbox: загрузка урока', () => {
+  it('ставит смену языка в очередь и читает журнал перед самой загрузкой', async () => {
+    let release = () => {};
+    let started = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const sandbox = createSandbox(async (dataDir) => {
+      const client = await mortalClient(dataDir);
+      return {
+        ...client,
+        exec: async (sql, opts) => {
+          if (sql.includes('Russian author')) {
+            started();
+            await blocked;
+          }
+          return client.exec(sql, opts);
+        },
+      };
+    });
+    await sandbox.loadLesson('bookstore', [], 'ru');
+    const previous = sandbox.apply("insert into author (name) values ('Russian author')");
+    await running;
+    let englishJournal: string[] = [];
+    const load = sandbox.loadLesson('bookstore', () => englishJournal, 'en');
+    const next = sandbox.apply("insert into author (name) values ('English author')");
+    englishJournal = ["insert into author (name) values ('Saved author')"];
+    release();
+    await Promise.all([previous, load, next]);
+    expect(
+      (await sandbox.client().query("select name from author where name like '%author' order by name")).rows,
+    ).toEqual([['English author'], ['Saved author']]);
+    expect((await sandbox.client().query('select title from book where book_id = 10')).rows).toEqual([
+      ['Simple Python'],
+    ]);
+  }, 40000);
+
+  it('хранит отдельные снимки по языкам и восстанавливает язык после undo и reset', async () => {
+    const { sandbox, factory } = await bookstore();
+    await sandbox.loadLesson('bookstore', [], 'en');
+    expect((await sandbox.client().query('select title from book where book_id = 10')).rows).toEqual([
+      ['Simple Python'],
+    ]);
+    await sandbox.apply("insert into author (name) values ('New author')");
+    await expect(sandbox.preview((db) => db.query('select __crash__'))).rejects.toThrow();
+    expect(sandbox.journal()).toEqual(["insert into author (name) values ('New author')"]);
+    expect((await sandbox.client().query('select title from book where book_id = 10')).rows).toEqual([
+      ['Simple Python'],
+    ]);
+    await sandbox.undo();
+    expect((await sandbox.client().query('select title from book where book_id = 10')).rows).toEqual([
+      ['Simple Python'],
+    ]);
+    await sandbox.reset();
+    await sandbox.loadLesson('bookstore', [], 'ru');
+    expect((await sandbox.client().query('select title from book where book_id = 10')).rows).toEqual([
+      ['Простой Python'],
+    ]);
+    expect(factory).toHaveBeenCalledTimes(6);
+    expect(factory.mock.calls[1][0]).toBeUndefined();
+    expect(factory.mock.calls[5][0]).toBeInstanceOf(Blob);
+  }, 40000);
+
   it(
     'собирает снапшот один раз и переиспользует его',
     async () => {

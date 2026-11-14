@@ -8,6 +8,7 @@ import { useBoardStore } from '@/stores/board';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
+import { useSettingsStore } from '@/stores/settings';
 import { EditorPane } from './EditorPane';
 
 // CodeMirror в этом тесте не нужен: проверяем эффекты связи, редактор подменён
@@ -19,8 +20,10 @@ vi.mock('@/features/db/SandboxProvider', () => ({
 }));
 // Объект стабильный, как в настоящем реестре: иначе эффект открытия урока срабатывал бы на каждый рендер
 const WITH_INITIAL = { id: 'with-initial', initialQuery: 'select * from book;' };
+const WITH_INITIAL_EN = { id: 'with-initial', initialQuery: 'select title from book;' };
 vi.mock('@/features/lessons/registry', () => ({
-  getLesson: (id: string) => (id === 'with-initial' ? WITH_INITIAL : undefined),
+  getLesson: (id: string, locale = 'ru') =>
+    id === 'with-initial' ? (locale === 'en' ? WITH_INITIAL_EN : WITH_INITIAL) : undefined,
 }));
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
@@ -31,6 +34,7 @@ beforeEach(async () => {
   sandboxState.sandbox = null;
   route.lessonId = null;
   useLessonStore.setState({ byId: {} });
+  useSettingsStore.setState({ locale: 'ru' });
   useEditorStore.setState(useEditorStore.getInitialState(), true);
   useSceneStore.setState({ ...useSceneStore.getInitialState(), generation: 0 }, true);
   useBoardStore.setState(useBoardStore.getInitialState(), true);
@@ -206,6 +210,29 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
     expect(useEditorStore.getState().text).toBe('select 1;');
   });
 
+  it('при смене языка сразу сохраняет SQL и восстанавливает запрос каждой версии', () => {
+    route.lessonId = 'with-initial';
+    render(<EditorPane />);
+    act(() => useEditorStore.getState().setText("select 'русский';"));
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    expect(useEditorStore.getState().text).toBe('select title from book;');
+    act(() => useEditorStore.getState().setText("select 'english';"));
+    act(() => useSettingsStore.setState({ locale: 'ru' }));
+    expect(useEditorStore.getState().text).toBe("select 'русский';");
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    expect(useEditorStore.getState().text).toBe("select 'english';");
+  });
+
+  it('при одинаковом SQL сбрасывает пометку применения другой версии', () => {
+    route.lessonId = 'with-initial';
+    useLessonStore.getState().setLastQuery('with-initial', 'select * from book;', 'en');
+    render(<EditorPane />);
+    act(() => useEditorStore.getState().markApplied(0, {} as never));
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    expect(useEditorStore.getState().text).toBe('select * from book;');
+    expect(useEditorStore.getState().applied).toEqual({});
+  });
+
   it('lastQuery не хранит текст, равный initialQuery, и стирает прежний', () => {
     vi.useFakeTimers();
     try {
@@ -217,12 +244,12 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBeUndefined();
+      expect(useLessonStore.getState().byId['with-initial']?.workspaces.ru?.lastQuery).toBeUndefined();
       act(() => useEditorStore.getState().setText('select 2;'));
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBe('select 2;');
+      expect(useLessonStore.getState().byId['with-initial']?.workspaces.ru?.lastQuery).toBe('select 2;');
     } finally {
       vi.useRealTimers();
     }
@@ -236,7 +263,7 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBeUndefined();
+      expect(useLessonStore.getState().byId['with-initial']?.workspaces.ru?.lastQuery).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -249,10 +276,18 @@ describe('EditorPane: связь курсор-клауз-доска', () => {
       const { unmount } = render(<EditorPane />);
       act(() => useEditorStore.getState().setText('select 123;'));
       unmount();
-      expect(useLessonStore.getState().byId['with-initial']?.lastQuery).toBe('select 123;');
+      expect(useLessonStore.getState().byId['with-initial']?.workspaces.ru?.lastQuery).toBe('select 123;');
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('сохраняет свежий SQL при перезагрузке страницы до таймера', () => {
+    route.lessonId = 'with-initial';
+    render(<EditorPane />);
+    act(() => useEditorStore.getState().setText('select 456;'));
+    fireEvent(window, new Event('pagehide'));
+    expect(useLessonStore.getState().byId['with-initial']?.workspaces.ru?.lastQuery).toBe('select 456;');
   });
 
   it('открытие урока ставит стартовый кадр на таблицы стартового текста', async () => {

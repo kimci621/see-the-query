@@ -29,8 +29,9 @@ export function AppShell() {
   const t = useMessages();
   const meta = lessonId ? getLesson(lessonId, locale) : undefined;
   const translationPending = locale === 'en' && !meta && !!lessonId && !!getLesson(lessonId);
+  const workspaceMeta = meta ?? (translationPending && lessonId ? getLesson(lessonId) : undefined);
   const { sandbox } = useSandbox();
-  useLessonSandbox(sandbox, meta?.id, meta?.dataset);
+  useLessonSandbox(sandbox, workspaceMeta?.id, workspaceMeta?.dataset);
   const mainLayout = useSettingsStore((s) => s.mainLayout);
   const setMainLayout = useSettingsStore((s) => s.setMainLayout);
   const focusMode = useSettingsStore((s) => s.focusMode);
@@ -55,8 +56,8 @@ export function AppShell() {
 
   // Посещение считает оболочка: в режиме фокуса теории (LessonView) нет, а урок открыт
   useEffect(() => {
-    if (meta) useLessonStore.getState().markVisited(meta.id);
-  }, [meta]);
+    if (workspaceMeta) useLessonStore.getState().markVisited(workspaceMeta.id);
+  }, [workspaceMeta]);
 
   // Вкладка называется по уроку: так её различают в истории и при переключении окон
   useEffect(() => {
@@ -136,18 +137,7 @@ export function AppShell() {
         )}
         <ResizablePanel id="workspace" defaultSize={`${mainLayout[2]}%`} minSize="25%">
           <PanelErrorBoundary name={t('Доска')} locale={locale}>
-            {translationPending ? (
-              <div role="status" className="p-6 text-sm text-muted-foreground">
-                <p>The workspace will be available when this lesson is translated.</p>
-                {focusMode && (
-                  <Button variant="outline" size="sm" onClick={toggleFocusMode}>
-                    {t('Выйти из режима фокуса')}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <BoardPane />
-            )}
+            <BoardPane />
           </PanelErrorBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>

@@ -36,7 +36,7 @@ describe('LessonSidebar', () => {
 
   it('статусы уроков подписаны текстом, а не только иконкой', () => {
     useLessonStore.setState({
-      byId: { 'how-to-use': { visited: true, completed: true, journal: [], ranExample: true } },
+      byId: { 'how-to-use': { visited: true, completed: true, workspaces: {}, ranExample: true } },
     });
     renderSidebar();
     const link = screen.getByRole('link', { name: /Как пользоваться доской/ });
@@ -45,7 +45,7 @@ describe('LessonSidebar', () => {
 
   it('прогресс по программе', () => {
     useLessonStore.setState({
-      byId: { 'how-to-use': { visited: true, completed: true, journal: [], ranExample: true } },
+      byId: { 'how-to-use': { visited: true, completed: true, workspaces: {}, ranExample: true } },
     });
     renderSidebar();
     expect(screen.getByText(`Пройдено 1 из ${LESSONS.length}`)).toBeInTheDocument();

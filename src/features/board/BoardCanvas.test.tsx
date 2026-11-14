@@ -96,6 +96,7 @@ describe('BoardCanvas', () => {
     useBoardStore.setState(useBoardStore.getInitialState(), true);
     useBoardStore.getState().setSchema(SCHEMA);
     useLessonStore.setState({ byId: {} });
+    useSettingsStore.setState({ locale: 'ru' });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -330,6 +331,20 @@ describe('BoardCanvas', () => {
     expect(flow().fitView).not.toHaveBeenCalled();
     await act(async () => undefined);
     expect(flow().getViewport()).toEqual(saved);
+  });
+
+  it('восстанавливает отдельную камеру каждого языка при переключении', async () => {
+    const ru = { x: 12, y: 34, zoom: 1.5 };
+    const en = { x: -20, y: 8, zoom: 0.8 };
+    useLessonStore.getState().setViewport('unknown', ru, 'ru');
+    useLessonStore.getState().setViewport('unknown', en, 'en');
+    renderBoard();
+    await act(async () => undefined);
+    expect(flow().getViewport()).toEqual(ru);
+    await act(async () => useSettingsStore.setState({ locale: 'en' }));
+    expect(flow().getViewport()).toEqual(en);
+    await act(async () => useSettingsStore.setState({ locale: 'ru' }));
+    expect(flow().getViewport()).toEqual(ru);
   });
 
   it('requestFrame летит к таблицам запроса и при том же наборе, без них вписывает доску', () => {

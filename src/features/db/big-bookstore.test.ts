@@ -1,7 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { withDataset } from '../../../tests/helpers/db';
+import { isCompressed } from '@/features/board/compressed';
+import { datasetDump, inPreview, withDataset } from '../../../tests/helpers/db';
+import { traceSql } from '../../../tests/helpers/trace';
+import { introspect } from './introspect';
 
 describe('датасет big_bookstore', () => {
+  it('английская версия работает в сжатом режиме и повторно открывается из снимка', async () => {
+    const dump = await datasetDump('big_bookstore', 'en');
+    expect(await datasetDump('big_bookstore', 'en')).toBe(dump);
+    await withDataset(
+      'big_bookstore',
+      async (db) => {
+        expect((await db.query("select count(*)::int from book where title like '%cats%'")).rows).toEqual([
+          [16666],
+        ]);
+        expect((await db.query('select count(*)::int from orders')).rows).toEqual([[100000]]);
+        const schema = await introspect(db, { sampleRows: 5 });
+        const books = schema.tables.find((table) => table.id === 'public.book');
+        expect(books && isCompressed(books)).toBe(true);
+        const trace = await inPreview(db, () =>
+          traceSql(db, 'select title from book limit 2', { locale: 'en' }),
+        );
+        expect(trace.mode, trace.fallbackReason).toBe('full');
+        expect(trace.stages.some((stage) => stage.compressed)).toBe(true);
+      },
+      'en',
+    );
+    await withDataset(
+      'big_bookstore',
+      async (db) => {
+        expect((await db.query('select count(*)::int from book')).rows).toEqual([[100000]]);
+      },
+      'en',
+    );
+  }, 90000);
+
   it('содержит объёмы и данные для уроков об индексах', async () => {
     await withDataset('big_bookstore', async (db) => {
       const sizes = await db.query(

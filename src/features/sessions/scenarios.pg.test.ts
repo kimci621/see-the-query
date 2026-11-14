@@ -7,10 +7,12 @@ const dsn = process.env.VS_PG_DSN;
 
 describe.skipIf(!dsn)('сценарии двух сессий на PostgreSQL', () => {
   for (const scenario of SCENARIOS) {
-    it(`${scenario.id}: шаги совпадают с реальным поведением`, async () => {
-      const reports = await runScenarioOnPostgres(scenario, dsn as string);
-      expect(reports.filter((report) => !report.ok)).toEqual([]);
-    }, 30_000);
+    for (const locale of ['ru', 'en'] as const) {
+      it(`${locale}/${scenario.id}: шаги совпадают с реальным поведением`, async () => {
+        const reports = await runScenarioOnPostgres(scenario, dsn as string, locale);
+        expect(reports.filter((report) => !report.ok)).toEqual([]);
+      }, 30_000);
+    }
   }
 
   it('обнаруживает неверный ожидаемый результат', async () => {

@@ -1,3 +1,4 @@
+import type { Locale } from '@/lib/i18n';
 import { type DatasetId, loadDatasetSql } from './datasets';
 import { introspect } from './introspect';
 import { type DbClient, DbException, type QueryResult, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from './types';
@@ -6,7 +7,12 @@ export interface Sandbox {
   readonly status: 'booting' | 'ready' | 'restarting' | 'failed';
   readonly datasetId: DatasetId | null;
   client(): DbClient; // текущий живой клиент
-  loadLesson(datasetId: DatasetId, journal: readonly string[]): Promise<void>;
+  loadLesson(
+    datasetId: DatasetId,
+    journal: readonly string[] | (() => readonly string[]),
+    locale?: Locale,
+  ): Promise<void>;
+  whenIdle(): Promise<void>;
   // BEGIN; fn(client); ROLLBACK: всегда, даже при ошибке. Зависание ловит сторож клиента (VS001).
   // signal: превью устаревшего поколения, которое ещё не начало выполняться, отменяется (AbortError)
   preview<T>(fn: (db: DbClient) => Promise<T>, signal?: AbortSignal): Promise<T>;
@@ -71,11 +77,12 @@ async function applyOne(db: DbClient, sql: string): Promise<QueryResult[]> {
 }
 
 export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): Sandbox {
-  const snapshots = new Map<DatasetId, Blob>();
-  const baseTables = new Map<DatasetId, string[]>();
+  const snapshots = new Map<string, Blob>();
+  const baseTables = new Map<string, string[]>();
   const listeners = new Set<(e: SandboxEvent) => void>();
   let status: Sandbox['status'] = 'booting';
   let datasetId: DatasetId | null = null;
+  let locale: Locale = 'ru';
   let journal: string[] = [];
   let db: DbClient | null = null;
   let lock: Promise<unknown> = Promise.resolve();
@@ -102,21 +109,22 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
 
   // Новый клиент: снапшот датасета (из кэша или собранный сейчас) + повтор журнала.
   // Запись журнала, которая больше не выполняется, и всё после неё отбрасываются.
-  async function rebuild(id: DatasetId, entries: readonly string[]): Promise<void> {
+  async function rebuild(id: DatasetId, entries: readonly string[], nextLocale: Locale): Promise<void> {
+    const key = `${nextLocale}:${id}`;
     const old = db;
     db = null;
     await old?.close();
     const fresh = async (): Promise<DbClient> => {
-      const cached = snapshots.get(id);
+      const cached = snapshots.get(key);
       const client = await factory(cached);
       if (cached) return client;
       try {
-        await client.exec(await loadDatasetSql(id), { initialization: true });
+        await client.exec(await loadDatasetSql(id, nextLocale), { initialization: true });
         baseTables.set(
-          id,
+          key,
           (await introspect(client, { sampleRows: 0 })).tables.map((t) => t.id),
         );
-        snapshots.set(id, await client.dump());
+        snapshots.set(key, await client.dump());
         return client;
       } catch (e) {
         await client.close();
@@ -140,6 +148,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     }
     db = next;
     datasetId = id;
+    locale = nextLocale;
     journal = kept;
   }
 
@@ -149,7 +158,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     setStatus('restarting');
     const before = journal;
     try {
-      await rebuild(datasetId, journal);
+      await rebuild(datasetId, journal, locale);
     } catch (err) {
       setStatus('failed');
       throw err;
@@ -174,7 +183,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
 
   async function changeTo(entries: readonly string[]): Promise<void> {
     if (!datasetId) throw new Error('Урок не загружен');
-    await rebuild(datasetId, entries);
+    await rebuild(datasetId, entries, locale);
     emit({ type: 'changed' });
   }
 
@@ -187,18 +196,23 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     },
     client: live,
     journal: () => journal,
-    datasetTables: () => (datasetId ? (baseTables.get(datasetId) ?? []) : []),
+    datasetTables: () => (datasetId ? (baseTables.get(`${locale}:${datasetId}`) ?? []) : []),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
 
-    loadLesson: (id, entries) =>
+    whenIdle: () => exclusive(async () => {}),
+
+    loadLesson: (id, requestedEntries, nextLocale = 'ru') =>
       exclusive(async () => {
+        // Журнал читается после предыдущей команды, даже если переключение уже поставлено в очередь.
+        const entries = typeof requestedEntries === 'function' ? requestedEntries() : requestedEntries;
         // тот же датасет и тот же журнал: база уже в нужном состоянии
         if (
           db &&
           id === datasetId &&
+          locale === nextLocale &&
           entries.length === journal.length &&
           entries.every((s, i) => s === journal[i])
         )
@@ -206,7 +220,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
         emit({ type: 'rebuilding' });
         setStatus('booting');
         try {
-          await rebuild(id, entries);
+          await rebuild(id, entries, nextLocale);
         } catch (e) {
           setStatus('failed');
           throw e;

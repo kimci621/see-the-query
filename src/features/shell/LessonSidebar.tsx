@@ -125,6 +125,11 @@ export function LessonSidebar({
             <LanguageToggle />
             <ThemeToggle />
           </div>
+          <p id="language-workspace-note" className="px-2 text-xs text-muted-foreground">
+            {locale === 'en'
+              ? 'Each language has its own SQL and sandbox.'
+              : 'У каждого языка свой SQL и своя песочница.'}
+          </p>
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>

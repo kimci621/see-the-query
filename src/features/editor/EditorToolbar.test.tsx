@@ -8,6 +8,7 @@ import type { Trace } from '@/features/tracer/types';
 import { useEditorStore } from '@/stores/editor';
 import { useSceneStore } from '@/stores/scene';
 import { useSettingsStore } from '@/stores/settings';
+import { applyCurrent } from './applyCurrent';
 import { EditorToolbar } from './EditorToolbar';
 import { notifyApplied } from './notifyDbError';
 
@@ -192,6 +193,70 @@ describe('EditorToolbar', () => {
     const applyAll = screen.getByTestId('apply-all-button');
     await user.click(applyAll);
     expect(applied).toEqual(['select 1', 'select 2']);
+  });
+
+  it('не переносит результат долгой команды в другую языковую версию', async () => {
+    const sql = "insert into author(name) values ('x')";
+    useEditorStore.getState().insertQuery(sql);
+    let finish = (_result: QueryResult[]) => {};
+    const sandbox = fakeSandbox([]);
+    sandbox.apply = vi.fn(
+      () =>
+        new Promise<QueryResult[]>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = applyCurrent(sandbox);
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    act(() => useSettingsStore.setState({ locale: 'ru' }));
+    await act(async () => {
+      finish([{ command: 'INSERT', rowCount: 1, rows: [], fields: [] }]);
+      await pending;
+    });
+    expect(useEditorStore.getState().applied).toEqual({});
+    expect(useSceneStore.getState().trace).toBeNull();
+  });
+
+  it('разрешает запустить команду другого языка, пока прежняя выполняется', async () => {
+    const sql = "insert into author(name) values ('x')";
+    useEditorStore.getState().insertQuery(sql);
+    const resolvers: Array<(result: QueryResult[]) => void> = [];
+    const sandbox = fakeSandbox([]);
+    sandbox.apply = vi.fn(
+      () =>
+        new Promise<QueryResult[]>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const ru = applyCurrent(sandbox);
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    const en = applyCurrent(sandbox);
+    const calls = vi.mocked(sandbox.apply).mock.calls.length;
+    await act(async () => {
+      for (const resolve of resolvers) resolve([{ command: 'INSERT', rowCount: 1, rows: [], fields: [] }]);
+      await Promise.all([ru, en]);
+    });
+    expect(calls).toBe(2);
+  });
+
+  it('не продолжает пакет команд после переключения языка', async () => {
+    useEditorStore
+      .getState()
+      .insertQuery("insert into author(name) values ('a'); insert into author(name) values ('b')");
+    let finish = (_result: QueryResult[]) => {};
+    const sandbox = fakeSandbox([]);
+    sandbox.apply = vi.fn(
+      () =>
+        new Promise<QueryResult[]>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<EditorToolbar sandbox={sandbox} onApplyCurrent={() => undefined} />);
+    await userEvent.click(screen.getByTestId('apply-all-button'));
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    await act(async () => finish([{ command: 'INSERT', rowCount: 1, rows: [], fields: [] }]));
+    expect(sandbox.apply).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().applied).toEqual({});
   });
 
   it('«Применить всё» выполняет транзакцию целиком и не повторяет её без правки', async () => {

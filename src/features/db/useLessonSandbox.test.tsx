@@ -8,19 +8,23 @@ import { RESTART_MESSAGES, useLessonSandbox } from './useLessonSandbox';
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), error: vi.fn() } }));
 
+const journalValue = (journal: Parameters<Sandbox['loadLesson']>[1]) =>
+  typeof journal === 'function' ? journal() : journal;
+
 // Песочница-заглушка: журнал и события под контролем теста
 function fakeSandbox() {
   let listener: (e: SandboxEvent) => void = () => {};
   let finish: () => void = () => {};
   let journal: string[] = [];
   const sandbox = {
-    loadLesson: vi.fn((_id: string, j: readonly string[]) => {
-      journal = [...j];
+    loadLesson: vi.fn((_id: string, j: Parameters<Sandbox['loadLesson']>[1]) => {
+      journal = [...journalValue(j)];
       return new Promise<void>((resolve) => {
         finish = resolve;
       });
     }),
     journal: () => journal,
+    whenIdle: () => Promise.resolve(),
     subscribe: (l: (e: SandboxEvent) => void) => {
       listener = l;
       return () => {
@@ -46,11 +50,135 @@ beforeEach(() => {
 });
 
 describe('useLessonSandbox', () => {
+  it('сохраняет применение, завершившееся после смены языка', async () => {
+    let current = ['русский запрос'];
+    const listeners = new Set<(event: SandboxEvent) => void>();
+    let finishFence = () => {};
+    const sandbox = {
+      journal: () => current,
+      subscribe: (listener: (event: SandboxEvent) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      loadLesson: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockImplementation(() => new Promise(() => {})),
+      whenIdle: () =>
+        new Promise<void>((resolve) => {
+          finishFence = resolve;
+        }),
+    } as unknown as Sandbox;
+    await act(async () => {
+      renderHook(() => useLessonSandbox(sandbox, 'lesson', 'bookstore'));
+    });
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    current = ['русский запрос', 'запрос завершился после переключения'];
+    act(() => {
+      for (const listener of listeners) listener({ type: 'changed' });
+    });
+    expect(useLessonStore.getState().byId.lesson.workspaces.ru?.journal).toEqual(current);
+    await act(async () => finishFence());
+  });
+
+  it('при быстром возврате загружает журнал после завершения предыдущей команды', async () => {
+    let current = ['первый запрос'];
+    let finishFence = () => {};
+    const listeners = new Set<(event: SandboxEvent) => void>();
+    const sandbox = {
+      journal: () => current,
+      subscribe: (listener: (event: SandboxEvent) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      loadLesson: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockImplementation(() => new Promise(() => {})),
+      whenIdle: () =>
+        new Promise<void>((resolve) => {
+          finishFence = resolve;
+        }),
+    } as unknown as Sandbox;
+    await act(async () => {
+      renderHook(() => useLessonSandbox(sandbox, 'lesson', 'bookstore'));
+    });
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    act(() => useSettingsStore.setState({ locale: 'ru' }));
+    current = ['первый запрос', 'завершённая команда'];
+    act(() => {
+      for (const listener of listeners) listener({ type: 'changed' });
+    });
+    await act(async () => finishFence());
+    const last = vi.mocked(sandbox.loadLesson).mock.calls.at(-1);
+    expect(last?.[0]).toBe('bookstore');
+    expect(last?.[2]).toBe('ru');
+    expect(last && journalValue(last[1])).toEqual(current);
+  });
+
+  it('быстрое ru → en → ru не записывает запоздавшие журналы в чужую область', async () => {
+    const store = useLessonStore.getState();
+    store.setJournal('lesson', ['русский запрос'], 'ru');
+    store.setJournal('lesson', ['english query'], 'en');
+    let current: string[] = [];
+    const listeners = new Set<(event: SandboxEvent) => void>();
+    const pending: Array<() => void> = [];
+    const sandbox = {
+      journal: () => current,
+      whenIdle: () => Promise.resolve(),
+      subscribe: (listener: (event: SandboxEvent) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      loadLesson: vi.fn(
+        (_id: string, journal: Parameters<Sandbox['loadLesson']>[1]) =>
+          new Promise<void>((resolve) => {
+            pending.push(() => {
+              current = [...journalValue(journal)];
+              for (const listener of listeners) listener({ type: 'changed' });
+              resolve();
+            });
+          }),
+      ),
+    } as unknown as Sandbox;
+    renderHook(() => useLessonSandbox(sandbox, 'lesson', 'bookstore'));
+    act(() => useSettingsStore.setState({ locale: 'en' }));
+    act(() => useSettingsStore.setState({ locale: 'ru' }));
+    expect(sandbox.loadLesson).toHaveBeenCalledTimes(3);
+    for (const complete of pending) await act(async () => complete());
+    expect(useLessonStore.getState().byId.lesson.workspaces).toMatchObject({
+      ru: { journal: ['русский запрос'] },
+      en: { journal: ['english query'] },
+    });
+  });
+
+  it('ошибка загрузки английской области не затирает сохранённые журналы', async () => {
+    const store = useLessonStore.getState();
+    store.setJournal('lesson', ['русский запрос'], 'ru');
+    store.setJournal('lesson', ['english query'], 'en');
+    useSettingsStore.setState({ locale: 'en' });
+    const sandbox = {
+      loadLesson: vi.fn().mockRejectedValue(new Error('load failed')),
+      journal: () => ['чужой журнал'],
+      subscribe: () => () => {},
+    } as unknown as Sandbox;
+    await act(async () => {
+      renderHook(() => useLessonSandbox(sandbox, 'lesson', 'bookstore'));
+    });
+    expect(useLessonStore.getState().byId.lesson.workspaces).toMatchObject({
+      ru: { journal: ['русский запрос'] },
+      en: { journal: ['english query'] },
+    });
+  });
+
   it('поднимает датасет с журналом из localStorage', () => {
     useLessonStore.getState().setJournal('dml-insert', ['delete from review']);
     const f = fakeSandbox();
     renderHook(() => useLessonSandbox(f.sandbox, 'dml-insert', 'bookstore'));
-    expect(f.sandbox.loadLesson).toHaveBeenCalledWith('bookstore', ['delete from review']);
+    const call = vi.mocked(f.sandbox.loadLesson).mock.calls[0];
+    expect(call[0]).toBe('bookstore');
+    expect(call[2]).toBe('ru');
+    expect(journalValue(call[1])).toEqual(['delete from review']);
   });
 
   it('после загрузки пишет журнал в localStorage на каждое изменение', async () => {
@@ -64,7 +192,7 @@ describe('useLessonSandbox', () => {
     f.setJournal(['delete from review']);
     f.emit({ type: 'changed' });
     const saved = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}');
-    expect(saved.state.byId['dml-insert'].journal).toEqual(['delete from review']);
+    expect(saved.state.byId['dml-insert'].workspaces.ru.journal).toEqual(['delete from review']);
   });
 
   it('после перезапуска показывает тост с причиной', () => {

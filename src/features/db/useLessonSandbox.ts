@@ -18,27 +18,40 @@ export function useLessonSandbox(
   lessonId: string | undefined,
   datasetId: DatasetId | undefined,
 ) {
+  const locale = useSettingsStore((s) => s.locale);
   useEffect(() => {
     if (!sandbox || !lessonId || !datasetId) return;
     // пока наш loadLesson не завершился, события относятся к прошлому уроку
     let loaded = false;
-    const saveJournal = () => useLessonStore.getState().setJournal(lessonId, [...sandbox.journal()]);
+    let active = true;
+    const saveJournal = () => useLessonStore.getState().setJournal(lessonId, [...sandbox.journal()], locale);
     const off = sandbox.subscribe((e) => {
       if (e.type === 'restarted')
         toast.warning(message(useSettingsStore.getState().locale, RESTART_MESSAGES[e.reason]));
       if (e.type === 'changed' && loaded) saveJournal();
     });
-    const saved = useLessonStore.getState().byId[lessonId]?.journal ?? [];
-    sandbox.loadLesson(datasetId, saved).then(
+    const saved = () => useLessonStore.getState().byId[lessonId]?.workspaces[locale]?.journal ?? [];
+    void sandbox.loadLesson(datasetId, saved, locale).then(
       () => {
+        if (!active) return;
         loaded = true;
         saveJournal(); // журнал мог обрезаться, если запись больше не выполняется
       },
-      () =>
-        toast.error(
-          message(useSettingsStore.getState().locale, 'Не удалось поднять Postgres. Обнови страницу.'),
-        ),
+      () => {
+        if (active)
+          toast.error(
+            message(useSettingsStore.getState().locale, 'Не удалось поднять Postgres. Обнови страницу.'),
+          );
+      },
     );
-    return off;
-  }, [sandbox, lessonId, datasetId]);
+    return () => {
+      active = false;
+      if (!loaded) {
+        off();
+        return;
+      }
+      saveJournal();
+      void sandbox.whenIdle().then(off);
+    };
+  }, [sandbox, lessonId, datasetId, locale]);
 }

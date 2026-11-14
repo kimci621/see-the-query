@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import pg, { type Client as PgClient } from 'pg';
 import { loadDatasetSql } from '@/features/db/datasets';
+import type { Locale } from '@/lib/i18n';
 import type { Scenario, ScenarioStep } from './types';
 
 export interface StepReport {
@@ -51,7 +52,11 @@ async function timed<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
   }
 }
 
-export async function runScenarioOnPostgres(scenario: Scenario, dsn: string): Promise<StepReport[]> {
+export async function runScenarioOnPostgres(
+  scenario: Scenario,
+  dsn: string,
+  locale: Locale = 'ru',
+): Promise<StepReport[]> {
   const clients = {
     a: new pg.Client({ connectionString: dsn, connectionTimeoutMillis: 5000 }),
     b: new pg.Client({ connectionString: dsn, connectionTimeoutMillis: 5000 }),
@@ -76,7 +81,7 @@ export async function runScenarioOnPostgres(scenario: Scenario, dsn: string): Pr
       pids[session] = result.rows[0].pid as number;
       await clients[session].query("set statement_timeout = '7s'");
     }
-    await clients.ctrl.query(await loadDatasetSql('bookstore'));
+    await clients.ctrl.query(await loadDatasetSql('bookstore', locale));
     if (scenario.setup) await clients.ctrl.query(scenario.setup);
 
     for (const [index, step] of scenario.steps.entries()) {

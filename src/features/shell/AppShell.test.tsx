@@ -102,7 +102,7 @@ describe('AppShell', () => {
     expect(router.state.location.pathname).toBe('/l/how-to-use');
     expect(router.state.location.search).toBe('?lang=en');
     expect(document.documentElement.lang).toBe('en');
-    expect(screen.queryByRole('textbox', { name: /SQL/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Editor' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Lessons' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Search/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Start/ })).toBeInTheDocument();

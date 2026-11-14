@@ -1,12 +1,17 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Locale } from '@/lib/i18n';
+
+export interface LessonWorkspace {
+  lastQuery?: string;
+  journal: string[];
+  viewport?: { x: number; y: number; zoom: number };
+}
 
 export interface LessonProgress {
   visited: boolean;
   completed: boolean;
-  lastQuery?: string;
-  journal: string[];
-  viewport?: { x: number; y: number; zoom: number };
+  workspaces: Partial<Record<Locale, LessonWorkspace>>;
   ranExample: boolean;
   // Метка конца урока была на экране. Хранится, а не живёт в эффекте урока: режим фокуса и перезагрузка
   // размонтируют теорию, и дочитанный урок не стал бы «пройден» после запуска примера. Старые записи без поля
@@ -18,15 +23,15 @@ export interface LessonStore {
   markVisited(id: string): void;
   markRanExample(id: string): void;
   markReadToEnd(id: string): void;
-  setLastQuery(id: string, q: string | undefined): void;
-  setJournal(id: string, j: string[]): void;
-  setViewport(id: string, v: LessonProgress['viewport']): void;
+  setLastQuery(id: string, q: string | undefined, locale?: Locale): void;
+  setJournal(id: string, j: string[], locale?: Locale): void;
+  setViewport(id: string, v: LessonWorkspace['viewport'], locale?: Locale): void;
 }
 
 const emptyProgress = (): LessonProgress => ({
   visited: false,
   completed: false,
-  journal: [],
+  workspaces: {},
   ranExample: false,
 });
 
@@ -47,6 +52,17 @@ export const useLessonStore = create<LessonStore>()(
           if (next.readToEnd && next.ranExample) next.completed = true;
           return { byId: { ...s.byId, [id]: next } };
         });
+      const patchWorkspace = (id: string, locale: Locale, change: Partial<LessonWorkspace>) =>
+        set((s) => {
+          const current = s.byId[id] ?? emptyProgress();
+          const workspace = { journal: [], ...current.workspaces[locale], ...change };
+          return {
+            byId: {
+              ...s.byId,
+              [id]: { ...current, workspaces: { ...current.workspaces, [locale]: workspace } },
+            },
+          };
+        });
       return {
         byId: {},
         markVisited: (id) => patch(id, { visited: true }),
@@ -55,11 +71,32 @@ export const useLessonStore = create<LessonStore>()(
         markReadToEnd: (id) => {
           if (!get().byId[id]?.readToEnd) patch(id, { readToEnd: true });
         },
-        setLastQuery: (id, lastQuery) => patch(id, { lastQuery }),
-        setJournal: (id, journal) => patch(id, { journal }),
-        setViewport: (id, viewport) => patch(id, { viewport }),
+        setLastQuery: (id, lastQuery, locale = 'ru') => patchWorkspace(id, locale, { lastQuery }),
+        setJournal: (id, journal, locale = 'ru') => patchWorkspace(id, locale, { journal }),
+        setViewport: (id, viewport, locale = 'ru') => patchWorkspace(id, locale, { viewport }),
       };
     },
-    { name: 'vs-lessons', version: 1, partialize: (s) => ({ byId: s.byId }) },
+    {
+      name: 'vs-lessons',
+      version: 2,
+      partialize: (s) => ({ byId: s.byId }),
+      migrate: (persisted, version) => {
+        if (version > 2) throw new Error('Сохранения созданы более новой версией приложения');
+        const state = persisted as { byId: Record<string, LessonProgress & Partial<LessonWorkspace>> };
+        const byId = Object.fromEntries(
+          Object.entries(state.byId ?? {}).map(([id, progress]) => {
+            const { journal = [], lastQuery, viewport, workspaces, ...shared } = progress;
+            const ru = {
+              journal,
+              ...(lastQuery === undefined ? {} : { lastQuery }),
+              ...(viewport === undefined ? {} : { viewport }),
+              ...workspaces?.ru,
+            };
+            return [id, { ...shared, workspaces: { ...workspaces, ru } }];
+          }),
+        );
+        return { ...state, byId };
+      },
+    },
   ),
 );

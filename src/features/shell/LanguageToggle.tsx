@@ -16,6 +16,7 @@ export function LanguageToggle() {
       variant="ghost"
       size="sm"
       aria-label={label}
+      aria-describedby="language-workspace-note"
       title={label}
       onClick={() => {
         const params = new URLSearchParams(location.search);

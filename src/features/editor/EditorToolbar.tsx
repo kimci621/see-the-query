@@ -113,22 +113,34 @@ export function EditorToolbar({
 
   const applyAll = () =>
     void run(async () => {
-      if (sandbox && statements.some((statement) => statement.kind === 'tcl')) {
-        await applyCurrent(sandbox, true);
-        return;
+      let switched = false;
+      const off = useSettingsStore.subscribe((state, previous) => {
+        if (state.locale !== previous.locale) switched = true;
+      });
+      try {
+        if (sandbox && statements.some((statement) => statement.kind === 'tcl')) {
+          await applyCurrent(sandbox, true);
+          return;
+        }
+        const results: QueryResult[] = [];
+        for (const s of statements) {
+          if (switched) return;
+          const started = performance.now();
+          const own = (await sandbox?.apply(s.text)) ?? [];
+          if (switched) return;
+          results.push(...own);
+          // как у «Применить»: применённый оператор превью не повторяет
+          if (s.kind !== 'select' && useEditorStore.getState().text === text)
+            useEditorStore
+              .getState()
+              .markApplied(s.index, appliedTrace(s, own, Math.round(performance.now() - started)));
+        }
+        notifyApplied(results);
+      } catch (error) {
+        if (!switched) throw error;
+      } finally {
+        off();
       }
-      const results: QueryResult[] = [];
-      for (const s of statements) {
-        const started = performance.now();
-        const own = (await sandbox?.apply(s.text)) ?? [];
-        results.push(...own);
-        // как у «Применить»: применённый оператор превью не повторяет
-        if (s.kind !== 'select' && useEditorStore.getState().text === text)
-          useEditorStore
-            .getState()
-            .markApplied(s.index, appliedTrace(s, own, Math.round(performance.now() - started)));
-      }
-      notifyApplied(results);
     });
 
   return (

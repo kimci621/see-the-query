@@ -4,6 +4,81 @@ import { type DatasetId, loadDatasetSql } from './datasets';
 
 const one = async (db: import('./types').DbClient, sql: string) => (await db.query(sql)).rows;
 
+describe('версии датасетов', () => {
+  it('сохраняют схему, связи и числовые данные при переводе bookstore', async () => {
+    const read = (locale: 'ru' | 'en') =>
+      withDataset(
+        'bookstore',
+        async (db) => ({
+          columns: await one(
+            db,
+            `select table_name, column_name, data_type, is_nullable from information_schema.columns
+        where table_schema = 'public' order by table_name, ordinal_position`,
+          ),
+          constraints: await one(
+            db,
+            `select conrelid::regclass::text, contype::text, pg_get_constraintdef(oid)
+        from pg_constraint where connamespace = 'public'::regnamespace order by 1, 2, 3`,
+          ),
+          authors: await one(
+            db,
+            'select author_id, country is null, born_year from author order by author_id',
+          ),
+          categories: await one(db, 'select category_id, parent_id from book_category order by category_id'),
+          books: await one(
+            db,
+            'select book_id, author_id, category_id, price, pages, published_at from book order by book_id',
+          ),
+          customers: await one(
+            db,
+            'select customer_id, city is null, bonus, settings, created_at from customer order by customer_id',
+          ),
+          purchases: await one(db, 'select * from orders order by order_id'),
+          orders: await one(db, 'select * from order_item order by order_id, book_id'),
+          employees: await one(
+            db,
+            'select employee_id, manager_id, salary, hired_at from employee order by employee_id',
+          ),
+          reviews: await one(
+            db,
+            'select review_id, book_id, customer_id, rating, created_at from review order by review_id',
+          ),
+          special: await one(db, 'select title, author_id, category_id from book where book_id = 10'),
+        }),
+        locale,
+      );
+    const ru = await read('ru');
+    const en = await read('en');
+    expect(ru.special).toEqual([['Простой Python', null, null]]);
+    expect(en.special).toEqual([['Simple Python', null, null]]);
+    expect({ ...en, special: undefined }).toEqual({ ...ru, special: undefined });
+  }, 40000);
+
+  it('events использует основу выбранного языка, empty остаётся пустым', async () => {
+    for (const locale of ['ru', 'en'] as const) {
+      await withDataset(
+        'events',
+        async (db) => {
+          expect(await one(db, 'select count(*)::int from event')).toEqual([[21]]);
+          expect(await one(db, 'select title from book where book_id = 10')).toEqual([
+            [locale === 'ru' ? 'Простой Python' : 'Simple Python'],
+          ]);
+        },
+        locale,
+      );
+      await withDataset(
+        'empty',
+        async (db) => {
+          expect(await one(db, "select count(*)::int from pg_tables where schemaname = 'public'")).toEqual([
+            [0],
+          ]);
+        },
+        locale,
+      );
+    }
+  }, 40000);
+});
+
 describe('датасет bookstore', () => {
   it('загрузчик находит SQL, неизвестный датасет даёт понятную ошибку', async () => {
     expect(await loadDatasetSql('bookstore')).toContain('create table book');
