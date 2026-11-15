@@ -1,0 +1,213 @@
+---
+id: aggregate-functions
+title: count, sum, avg, min, max
+chapter: aggregation
+number: "7.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.book, public.customer, public.order_item]
+  layout:
+    book: { x: 0, y: 0 }
+    customer: { x: 0, y: 480 }
+    order_item: { x: 760, y: 480 }
+initialQuery: |
+  select count(*) from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-aggregate.html
+    title: Aggregate functions
+  - url: https://www.postgresql.org/docs/current/tutorial-agg.html
+    title: "Tutorial: aggregate functions"
+course: ["11.51"]
+tags: [count, sum, avg, min, max, aggregate, aggregate function]
+mvp: true
+---
+
+<TlDr>Aggregate functions compute a result from multiple rows: count, sum, average, minimum or maximum. The value-based functions covered here ignore NULL; `count(*)` counts rows.</TlDr>
+
+## What's in the data
+
+The board has three tables. <T id="public.book">book</T> has 11 books, 10 with a price: The Island of Lost Ships has NULL in <C id="public.book.price">price</C>. <T id="public.customer">customer</T> has 6 customers; Maria Ivanova has no city. <T id="public.order_item">order_item</T> has 15 order items; <C id="public.order_item.qty">qty</C> is usually 1, sometimes 2 or 3.
+
+## Many rows, one result
+
+An expression like `price * 0.9` is computed for each book. An **aggregate function** computes one result from a set of rows:
+
+```sql run expect=rows:1
+select count(*) from book;
+```
+
+One row containing 11. On the board, book rows are gathered and counted before the result becomes one row. The player labels the step `COUNT`.
+
+In these examples, an aggregate query without `GROUP BY` or `HAVING` returns one row even when its input has no rows. A later `LIMIT` or `OFFSET` can still change the output row count. See the empty-input example below.
+
+<Callout kind="analogy">
+A cashier closes a shift and sorts a drawer of receipts: how many receipts, total revenue, average, smallest and largest amount. Each answer concerns the whole drawer. If an amount is missing from one receipt, it cannot contribute to the sum, but the receipt itself can still be counted.
+</Callout>
+
+## count(*) and count(column)
+
+Lesson 4.5 compared `count(*)` and `count(price)` for books: 11 and 10. Look at customers:
+
+```sql run expect=rows:1
+select count(*) as all_rows,
+       count(city) as with_city
+from customer;
+```
+
+Six and five. **`count(*)`** counts rows regardless of their cells. **`count(column)`** counts non-NULL values. Maria has no city, so `count(city)` skips her.
+
+The board marks Maria's NULL as not counted. The player shows `COUNT +1`: the first aggregate and one more.
+
+A row containing NULL is still a row. Use `count(*)` to count rows and `count(column)` to count filled values.
+
+## sum, avg, min and max
+
+Add the copies in order items and compare them with the number of item rows:
+
+```sql run expect=rows:1
+select sum(qty) as copies, count(*) as items
+from order_item;
+```
+
+Nineteen copies in 15 items. **`sum`** adds values; `count` counts rows. The four extra copies come from three items with quantity 2 or 3.
+
+The cheapest and most expensive book:
+
+```sql run expect=rows:1
+select min(price), max(price) from book;
+```
+
+350.00 and 3200.00. **`min`** and **`max`** ignore NULL, so The Island of Lost Ships has neither extreme price. They work with other types too: `min(title)` finds the first title under the applicable ordering, and `max(published_at)` the latest date.
+
+Now the average, alongside its inputs:
+
+```sql run expect=rows:1
+select sum(price), count(price), avg(price)
+from book;
+```
+
+11380.00, 10 and 1138.0000000000000000. **`avg`** divides the sum by the number of non-NULL prices: 11380 by 10, not 11. Treating the missing price as zero would give about 1034.55 instead, but it is excluded from the average.
+
+The trailing zeros are valid. For numeric input, `avg` returns numeric. Round it for a report:
+
+```sql run expect=rows:1
+select round(avg(price), 2) as avg_price
+from book;
+```
+
+1138.00. `round` is an ordinary function here: it receives the completed average and rounds one value.
+
+## Empty input: NULL or zero
+
+What happens when no rows reach the aggregate? Use a condition that matches no books:
+
+```sql run expect=rows:1
+select sum(price), count(price)
+from book
+where price > 5000;
+```
+
+One row, not zero: `sum` is NULL and `count` is 0. On the board, `WHERE` leaves no books, but aggregation still produces one row. The shown `avg`, `min` and `max` also return NULL on empty input; `count` returns zero. For `sum`, there were no values to add.
+
+If a report needs zero, use `COALESCE` from lesson 4.5:
+
+```sql run expect=rows:1
+select coalesce(sum(price), 0) as total
+from book
+where price > 5000;
+```
+
+Zero instead of NULL.
+
+## An aggregate and an ordinary column
+
+Try showing the highest price beside a book title:
+
+```sql run expectError=42803
+select title, max(price) from book;
+```
+
+Error `42803`: `title` is not grouped. The aggregate gives one result from 11 rows, but there are 11 titles. Postgres does not choose one for you.
+
+In this aggregate query without `GROUP BY`, an ungrouped table column cannot be selected alongside the aggregate. Aggregate expressions and expressions over their results, such as `round(avg(price), 2)`, are allowed. Lesson 7.2 covers `GROUP BY`, which produces a result per group.
+
+## Three counts in one scene
+
+Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="Count all books: 11">
+
+```sql run expect=rows:1
+select count(*) from book;
+```
+
+</Step>
+<Step caption="Count books with a price: 10; NULL is skipped">
+
+```sql run expect=rows:1
+select count(price) from book;
+```
+
+</Step>
+<Step caption="Minimum and maximum price: 350 and 3200">
+
+```sql run expect=rows:1
+select min(price), max(price) from book;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+- ❌ Individual table rows in these results: each ungrouped aggregate query produces one summary row.
+- ❌ The Island of Lost Ships in `count(price)`, `sum(price)`, `avg(price)` and `min(price)`: it has no price, and these functions ignore NULL inputs.
+- ❌ Maria Ivanova in `count(city)`: she has no city.
+- ❌ Zero in `sum(price)` with `price > 5000`: `sum` returns NULL on empty input.
+
+## Pitfalls
+
+<Callout kind="trap">
+An aggregate at this query level cannot be used in `WHERE`:
+
+```sql run expectError=42803
+select title, price
+from book
+where price = max(price);
+```
+
+Error `42803`: `WHERE` determines the rows that go into the aggregate, so the aggregate is not available there at the same query level. An independent subquery can calculate it separately.
+
+Sorting from lesson 4.6 also finds a most expensive book. Use `nulls last` so the book without a price does not come first:
+
+```sql run expect=rows:1
+select title, price
+from book
+order by price desc nulls last
+limit 1;
+```
+
+Learning Python at 3200.00.
+</Callout>
+
+<Callout kind="tip">
+Count missing values as `count(*) - count(column)`. Compare that difference with the row count: if most values are missing, `avg` uses only a small part of the table.
+</Callout>
+
+## Check yourself
+
+1. How many books lack a price according to `select count(*) - count(price) from book`? Predict, then check.
+2. What does `select max(pages), min(pages) from book where price is null` return? Why do the numbers match?
+3. How many copies are in order 1? Add `where order_id = 1` to the `sum(qty)` query.
+
+<Cheatsheet>
+- The ungrouped aggregate queries here produce one row, even for empty input.
+- `count(*)` counts rows; `count(column)` counts non-NULL values.
+- `sum`, `avg`, `min` and `max` ignore NULL inputs. Other aggregates can behave differently: `array_agg`, for example, includes NULL elements.
+- `min` and `max` work with numbers, text and dates.
+- For these functions on empty input, `count` returns 0 and `sum`, `avg`, `min` and `max` return NULL. Use `coalesce(sum(x), 0)` when needed.
+- Round an average with `round(avg(x), 2)`.
+- An ungrouped table column beside an aggregate gives `42803`; an aggregate cannot appear in `WHERE` at the same query level.
+</Cheatsheet>

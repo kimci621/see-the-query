@@ -235,7 +235,7 @@
 
 **07-aggregation**
 
-- [ ] 7.1 `aggregate-functions`: `content/lessons-en/07-aggregation/01-aggregate-functions.mdx`
+- [x] 7.1 `aggregate-functions`: `content/lessons-en/07-aggregation/01-aggregate-functions.mdx`
 - [ ] 7.2 `group-by`: `content/lessons-en/07-aggregation/02-group-by.mdx`
 - [ ] 7.3 `having`: `content/lessons-en/07-aggregation/03-having.mdx`
 - [ ] 7.4 `filter-aggregates`: `content/lessons-en/07-aggregation/04-filter-aggregates.mdx`
