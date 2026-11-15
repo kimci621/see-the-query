@@ -1,0 +1,176 @@
+---
+id: case-when
+title: CASE WHEN
+chapter: select
+number: "4.9"
+order: 9
+dataset: bookstore
+board:
+  tables: [public.book, public.review]
+  layout:
+    book: { x: 0, y: 0 }
+    review: { x: 360, y: 0 }
+initialQuery: |
+  select title, case when price < 500 then 'cheap' else 'expensive' end as bucket from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-conditional.html#FUNCTIONS-CASE
+    title: CASE expressions
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-EXPRESS-EVAL
+    title: Expression evaluation rules
+tags: [case, "case when", branching, "condition in select"]
+mvp: false
+---
+
+<TlDr>`CASE WHEN` is like an `if` in SQL: it returns the value for the first condition that is `TRUE`.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books with prices from 350 to 3200. The Island of Lost Ships has no price: NULL. <T id="public.review">review</T> has 10 reviews with ratings from 2 to 5.
+
+In a `SELECT` list, `CASE` computes a value for each result row; it does not create extra rows.
+
+## Conditions and branches
+
+Put books into three price buckets:
+
+```sql run expect=rows:11
+select title, price,
+       case when price < 500 then 'cheap'
+            when price < 1000 then 'midrange'
+            else 'expensive' end as bucket
+from book
+order by bucket, title;
+```
+
+Eleven rows. Three books priced 350 or 420 are `cheap`; four priced from 560 to 890 are `midrange`; four are `expensive`: 1990, 2400, 3200 and The Island of Lost Ships with NULL.
+
+NULL did not make either condition `TRUE`, so `ELSE` was chosen. `NULL < 500` returns NULL, not `TRUE`.
+
+On the board, the chosen branch flashes for each row, then the `bucket` column appears.
+
+## Conditions are checked in order
+
+The order of branches changes the result. If the first condition is too broad, the second one will never be chosen:
+
+```sql run expect=rows:2
+select case when price > 300 then 'expensive'
+            when price > 1000 then 'very expensive' end as bucket,
+       count(*)
+from book
+group by bucket
+order by bucket;
+```
+
+Two rows: `expensive` for 10 books and NULL for The Island, whose missing price satisfies neither condition. The `very expensive` branch never wins even though some prices exceed 1000: `> 300` catches them first.
+
+Swap the branches and both categories appear.
+
+<Callout kind="trap">
+`CASE` chooses the first branch whose condition is `TRUE`. Put narrower conditions before broader ones when the categories overlap. There are limits to short-circuiting: for example, a constant `1/0` can fail during planning even in an unreachable branch.
+</Callout>
+
+## CASE without ELSE
+
+`ELSE` is optional. When no condition is true and there is no `ELSE`, the result is NULL:
+
+```sql run expect=rows:2
+select title,
+       case when price > 1000 then 'expensive' end as bucket
+from book
+where book_id in (1, 2)
+order by book_id;
+```
+
+Two rows. And Quiet Flows the Don costs 890, so its condition is false and `bucket` is NULL. Fluent Python costs 2400, so its bucket is `expensive`.
+
+Add `ELSE` if you need another value instead of NULL.
+
+## CASE in ORDER BY
+
+`CASE` can also be used in `ORDER BY`. Put books with prices first and the book without a price last:
+
+```sql run expect=rows:11
+select title, price from book
+order by case when price is null then 1 else 0 end,
+         price desc nulls last;
+```
+
+Eleven rows. Ten books with prices come first in descending price order; The Island of Lost Ships is last. On the board, rows move according to a calculated sort key.
+
+## CASE and aggregates
+
+`CASE` often appears inside `SUM` or `COUNT`. Count books costing at least 1000:
+
+```sql run expect=rows:1
+select sum(case when price >= 1000 then 1 else 0 end) as expensive
+from book;
+```
+
+One row: 3. `CASE` gives each matching book 1 and the others 0; `SUM` adds them. Lesson 7.4 introduces `FILTER`, another way to express a conditional count.
+
+Group books into price ranges:
+
+```sql run expect=rows:4
+select case when price is null then 'no price'
+            when price < 500 then 'under 500'
+            when price < 1000 then '500-999'
+            else '1000+' end as bucket,
+       count(*) as books
+from book
+group by bucket
+order by bucket;
+```
+
+Four groups: `1000+` has three books, `500-999` four, `under 500` three and `no price` one. `GROUP BY` groups by the `CASE` result rather than the original price.
+
+## Branches need compatible types
+
+All `CASE` results must be convertible to one type. An explicitly typed text value and a numeric value are incompatible here:
+
+```sql run expectError=42804
+select case when price < 500 then 'cheap'::text else price end
+from book;
+```
+
+Code `42804`: `CASE types numeric and text cannot be matched`. If the result should be text, cast the number explicitly, or choose another result type.
+
+<Callout kind="tip">
+When many conditions test the same attribute, consider a lookup table with ranges. A `CASE` with ten branches is harder to read and easier to break by changing their order.
+</Callout>
+
+## What's missing and why
+
+- ❌ The Island of Lost Ships in `cheap` or `midrange`: its NULL price makes both comparisons unknown.
+- ❌ `very expensive` in the example with the broad first condition: `> 300` wins first.
+- ❌ A non-NULL `bucket` for And Quiet Flows the Don in the example without `ELSE`: `price > 1000` is false.
+
+## Pitfalls
+
+<Callout kind="trap">
+`CASE` does not replace `WHERE`. To keep only expensive books, filter rows:
+
+```sql run expect=rows:3
+select title, price from book where price >= 1000 order by price;
+```
+
+Three rows: 1990, 2400 and 3200. NULL does not pass. A `CASE` in the select list would keep all 11 rows and give them different column values.
+</Callout>
+
+<Callout kind="trap">
+Branch order matters. Try thresholds 1000 and 500 in both orders and compare the group counts. This makes the first matching condition visible.
+</Callout>
+
+## Check yourself
+
+1. How many books fall into `expensive` if the `1000` threshold in the first example changes to `2000`?
+2. What does `case when price is null then 'no' end` return for book 1? Check on the board.
+3. Swap the `> 300` and `> 1000` branches. Does `very expensive` appear, and how many books does it contain?
+
+<Cheatsheet>
+- `CASE WHEN condition THEN value ... ELSE value END`.
+- The first `TRUE` condition selects the result.
+- A NULL condition is not true; if no branch matches, `ELSE` or NULL is returned.
+- `CASE` works in `SELECT`, `ORDER BY`, `GROUP BY` and inside aggregates.
+- Result types must be convertible to one type.
+- Use `WHERE` to filter rows.
+</Cheatsheet>
