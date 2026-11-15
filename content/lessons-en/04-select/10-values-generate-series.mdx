@@ -1,0 +1,179 @@
+---
+id: values-generate-series
+title: "FROM without tables: VALUES and generate_series"
+chapter: select
+number: "4.10"
+order: 10
+dataset: bookstore
+board:
+  tables: [public.book]
+  layout:
+    book: { x: 0, y: 0 }
+initialQuery: |
+  select n, n * n as square from generate_series(1, 5) as n;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-values.html
+    title: VALUES as a row source
+  - url: https://www.postgresql.org/docs/current/functions-srf.html
+    title: Set-returning functions
+tags: [values, generate_series, from, "generated rows"]
+mvp: false
+---
+
+<TlDr>`FROM` does not have to refer to a stored table: `VALUES` creates rows from expressions, and `generate_series` produces a sequence.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books, but most of this lesson does not use them. You can construct rows in a query without `CREATE TABLE` or `INSERT`.
+
+That is useful for checking formulas, generating a calendar or preparing test data.
+
+## VALUES: a table from literals
+
+One source is a list of values. Give it a name and column names:
+
+```sql run expect=rows:2
+select * from (values (1, 'a'), (2, 'b')) as t(n, s)
+order by n;
+```
+
+Two rows. Each parenthesized list after `VALUES` is a row; `as t(n, s)` names the table and its columns. Without column aliases, Postgres names them `column1` and `column2`.
+
+Ordinary conditions work on `VALUES`:
+
+```sql run expect=rows:2
+select n, s from (values (1, 'a'), (2, 'b'), (3, 'c')) as t(n, s)
+where n > 1;
+```
+
+Two rows: `2 b` and `3 c`. A small two-column table appears on the board, followed by the usual `WHERE` scan.
+
+You can sort `VALUES` or join it to a stored table. Label category codes:
+
+```sql run expect=rows:4
+select t.code, t.title, count(b.book_id) as books
+from (values (3, 'Science fiction'), (4, 'Classics'), (6, 'Python'), (5, 'Photography')) as t(code, title)
+left join book b on b.category_id = t.code
+group by t.code, t.title
+order by t.code;
+```
+
+Four rows. Category 5, Photography, has no books, so `count(b.book_id)` is 0: `LEFT JOIN` kept the category row, and `count` skipped NULL.
+
+<Callout kind="tip">
+`VALUES` is handy for a small lookup inside a query: status codes, holidays or key-label pairs. A separate table may be easier to maintain when there are hundreds of rows.
+</Callout>
+
+## generate_series: numbers in order
+
+With integer arguments and the default step, `generate_series(start, stop)` returns integers including both endpoints:
+
+```sql run expect=rows:5
+select generate_series(1, 5);
+```
+
+Five rows, from 1 to 5. The query has no `FROM`, but the set-returning function produces five rows. The board shows a one-column generated table.
+
+You can also put the function in `FROM` and give it an alias:
+
+```sql run expect=rows:4
+select n, n * n as square
+from generate_series(1, 4) as n;
+```
+
+Four rows, with squares 1, 4, 9 and 16. Here `n` names both the table reference and its single output column. Use it like any other column.
+
+## WHERE and generate_series
+
+Conditions work as usual:
+
+```sql run expect=rows:2
+select n from generate_series(1, 5) as n
+where n % 2 = 0;
+```
+
+Two rows: 2 and 4. On the board, the scanner checks five generated rows and keeps the even ones.
+
+You can also calculate a sum:
+
+```sql run expect=rows:1
+select sum(n) as total from generate_series(1, 100) as n;
+```
+
+One row: 5050. The intermediate source had 100 rows; the aggregate reduced them to one.
+
+## Two sources and CROSS JOIN
+
+Join two series to make a grid:
+
+```sql run expect=rows:6
+select n, m
+from generate_series(1, 3) as n
+cross join generate_series(1, 2) as m
+order by n, m;
+```
+
+Six rows: every combination of the 3 numbers and the 2 numbers. The board shows the `3 × 2 = 6` grid.
+
+A comma in `FROM` has the same effect for these two sources:
+
+```sql run expect=rows:6
+select n, m
+from generate_series(1, 3) as n, generate_series(1, 2) as m;
+```
+
+Six rows. Here `CROSS JOIN` and the comma are equivalent.
+
+<Callout kind="trap">
+`generate_series` in `SELECT` behaves differently from a source in `FROM`. In `FROM`, it supplies rows to the query. In the select list, it can expand the result:
+
+```sql run expect=rows:3
+select 1 as one, generate_series(1, 3) as n;
+```
+
+Three rows, even though `1` is a single value. Each result row gets one number from the function.
+</Callout>
+
+## What's missing and why
+
+- ❌ A count above zero for category 5, Photography: it has no books, and `LEFT JOIN` supplies NULL for the book columns.
+- ❌ Numbers above 5 in `generate_series(1, 5)`: the upper endpoint is included, but the series stops there.
+- ❌ A single row from `select 1, generate_series(1, 3)`: the function returns three values.
+
+## Pitfalls
+
+<Callout kind="trap">
+Default column names from `VALUES` do not describe their contents:
+
+```sql run expect=rows:2
+select * from (values (1, 'a'), (2, 'b')) as t;
+```
+
+Two rows, with columns named `column1` and `column2`. Give them meaningful names with `as t(n, s)`.
+</Callout>
+
+<Callout kind="trap">
+The timestamp forms of `generate_series` need a step. Date arguments can be converted to one of those forms:
+
+```sql run expect=rows:3
+select d::date
+from generate_series('2024-01-01'::date, '2024-01-03'::date, '1 day') as d;
+```
+
+Three rows: January 1, 2 and 3. This call needs the third argument to specify the interval.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `generate_series(2, 6)` return? Count, then check.
+2. What does `select n from generate_series(1, 10) as n where n % 3 = 0` return?
+3. Join `generate_series(1, 2)` and `values ('a'), ('b')`. How many rows do you get?
+
+<Cheatsheet>
+- `(values (...), (...)) as t(a, b)` creates a table from expressions.
+- Without column aliases, PostgreSQL names `VALUES` columns `column1`, `column2` and so on.
+- `generate_series(a, b)` with integer arguments and its default step returns integers from `a` through `b`.
+- Timestamp series need an interval step.
+- `generate_series` in `FROM` supplies rows; in `SELECT` it can expand the result.
+- Two sources in `FROM` without a join condition form a cross join.
+</Cheatsheet>
