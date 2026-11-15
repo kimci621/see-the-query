@@ -1,0 +1,212 @@
+---
+id: filter-aggregates
+title: FILTER, string_agg, array_agg, json_agg
+chapter: aggregation
+number: "7.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.review, public.book, public.book_category]
+  layout:
+    review: { x: 0, y: 0 }
+    book: { x: 380, y: 380 }
+    book_category: { x: 780, y: 380 }
+initialQuery: |
+  select count(*) filter (where rating >= 5) as great, count(*) from review;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-aggregate.html
+    title: Aggregate functions, FILTER and ORDER BY
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY and HAVING
+  - url: https://www.postgresql.org/docs/current/functions-array.html
+    title: Array functions
+  - url: https://www.postgresql.org/docs/current/functions-json.html
+    title: JSON functions
+course: ["11.52"]
+tags: [filter, string_agg, array_agg, json_agg, aggregate, "order by in aggregates", "string concatenation"]
+mvp: false
+---
+
+<TlDr>`FILTER` restricts the rows seen by one aggregate. `string_agg`, `array_agg` and `json_agg` collect a group's values into one result.</TlDr>
+
+## The data
+
+<T id="public.review">review</T> has 10 reviews for 7 books. Their <C id="public.review.rating">rating</C> ranges from 1 to 5: four 5s, four 4s, one 3 and one 2.
+
+<T id="public.book">book</T> has 11 books. Ten have a category; Simple Python has `NULL` in <C id="public.book.category_id">category_id</C>. <T id="public.book_category">book_category</T> has 6 categories, but only three have books: Python, Classics and Science fiction.
+
+## FILTER: one aggregate sees fewer rows
+
+How many reviews have a rating of 5, and how many reviews are there in total?
+
+```sql run expect=rows:1
+select count(*) filter (where rating >= 5) as great,
+       count(*) as all_reviews
+from review;
+```
+
+One row, two numbers: 4 and 10. The first `count` takes only reviews rated 5. The second has no `FILTER` and counts all 10.
+
+Write **`FILTER`** immediately after the aggregate call. Its condition works like a `WHERE` condition: only rows for which it is `TRUE` reach that aggregate. `FALSE` and `NULL` do not pass.
+
+`FILTER` does not remove rows from the whole query. It restricts the input of one aggregate; the other count still sees all the reviews.
+
+## FILTER versus CASE
+
+Conditional counts can also use `CASE` inside an aggregate:
+
+```sql run expect=rows:1
+select count(case when rating >= 5 then 1 end) as with_case,
+       count(*) filter (where rating >= 5) as with_filter
+from review;
+```
+
+Both numbers are 4. For lower ratings, `CASE` returns `NULL`, which `count` skips. `FILTER` puts the condition next to the aggregate, making the intent easier to read.
+
+Do not confuse it with `WHERE`. A query-level `WHERE` filters input for all aggregates. `FILTER` applies to one aggregate; its neighbors still see the full input.
+
+## FILTER with GROUP BY
+
+Within a group, `FILTER` selects a subset of that group's rows. Look at reviews by book:
+
+```sql run expect=rows:7
+select book_id,
+       count(*) filter (where rating >= 4) as good,
+       count(*) as all_reviews
+from review
+group by book_id
+order by book_id;
+```
+
+There are 7 rows, one per book with reviews. Book 9 has `good` 0 and `all_reviews` 1: its only rating is 3. Book 10 has 1 out of 2: its 2 does not pass, but its 4 does. Both ratings for books 1 and 2 are high, so their counts match. The two counts use different subsets of the same group.
+
+## string_agg: values in one string
+
+Now collect values instead of counting rows. **`string_agg`** joins them into one string with a delimiter. Collect book titles by category:
+
+```sql run expect=rows:3
+select c.name, string_agg(b.title, ', ') as titles
+from book_category c
+join book b using (category_id)
+group by c.name
+order by c.name;
+```
+
+There are three rows: Python has two titles, Classics four, and Science fiction four. That is 10 books in total.
+
+The order of titles inside each string is unspecified. It depends on the order in which the aggregate receives values and can change with the query plan. For a stable list, add `ORDER BY` inside the call:
+
+```sql run expect=rows:3
+select c.name, string_agg(b.title, ', ' order by b.title) as titles
+from book_category c
+join book b using (category_id)
+group by c.name
+order by c.name;
+```
+
+There are still 3 rows, but titles within each string are ordered by title. In Python, Fluent Python comes before Learning Python. The `ORDER BY` inside the aggregate sorts its input values; the outer `ORDER BY` at the end sorts result rows.
+
+Change the inner direction to `desc` to reverse the order within each string. There are still 3 result rows.
+
+## array_agg: values in an array
+
+**`array_agg`** collects values into an array:
+
+```sql run expect=rows:4
+select category_id, array_agg(title order by title) as titles
+from book
+group by category_id
+order by category_id;
+```
+
+There are 4 rows: three categories and a `NULL` group with Simple Python. Each `titles` cell contains an array. Category 3 has four elements, category 4 also has four, category 6 has two, and the `NULL` group has one.
+
+You can work with the result using array functions: `unnest` expands it into rows, `array_length` gives a dimension's length, and an index selects an element. Chapter 5 covers arrays; here the aggregate returns one array instead of several rows.
+
+## json_agg: an array of objects
+
+JSON can be useful to an API. **`json_build_object`** builds an object from key-value pairs; **`json_agg`** collects the objects into an array:
+
+```sql run expect=rows:3
+select c.name,
+       json_agg(json_build_object('title', b.title, 'price', b.price) order by b.price desc nulls last) as books
+from book_category c
+join book b using (category_id)
+group by c.name
+order by c.name;
+```
+
+There are 3 rows. Each `books` cell contains a JSON array with objects such as `{"title": "Learning Python", "price": 3200}`. The price is a JSON number; its displayed formatting can depend on how the result is parsed and rendered.
+
+Prices are ordered highest first. `nulls last` puts The Island of Lost Ships, which has no price, at the end of Science fiction. Without it, PostgreSQL's default for `desc` puts `NULL` first.
+
+The application can receive each category and its books together, avoiding a separate query per category. Whether this is faster than other approaches depends on the workload and execution plan.
+
+## What is missing from the result
+
+- ❌ Six reviews rated below 5 in `great`: `FILTER` skips them only for this aggregate; they remain in `all_reviews`.
+- ❌ Simple Python in the lists made with `JOIN`: it has no `category_id`, so it has no match.
+- ❌ Fiction, Programming and Photography categories: no books have those category IDs, so the join produces no rows for them.
+- ❌ The Island of Lost Ships in `string_agg(price::text, ...)`: its price is `NULL`, and `string_agg` skips null values.
+- ❌ Books without reviews in the `book_id` query: review contains no rows for them.
+
+## Traps
+
+<Callout kind="trap">
+`FILTER` follows an aggregate call; it cannot be applied directly to a column:
+
+```sql run expectError=42601
+select rating filter (where rating >= 5) from review;
+```
+
+The result is code `42601`, `syntax error at or near "filter"`. Put an aggregate before `FILTER`, such as `count(*)`, `sum(rating)` or `string_agg(...)`.
+</Callout>
+
+<Callout kind="trap">
+`count` counts every non-null value, including zero. An `else 0` in this `CASE` silently turns a conditional count into a total:
+
+```sql run expect=rows:1
+select count(case when rating >= 5 then 1 else 0 end) as wrong
+from review;
+```
+
+The result is 10 instead of 4. Zero is not `NULL`, so `count` includes it. Omit `else` or use `FILTER`.
+</Callout>
+
+<Callout kind="trap">
+`string_agg` skips `NULL`, while `array_agg` and `json_agg` retain it:
+
+```sql run expect=rows:1
+select category_id,
+       string_agg(price::text, ', ') as str,
+       array_agg(price) as arr
+from book
+where category_id = 3
+group by category_id;
+```
+
+`str` contains the three prices 560.00, 610.00 and 610.00, in unspecified order. `arr` has four elements, including `NULL`, the price of The Island of Lost Ships. To omit `NULL` from the array, add `filter (where price is not null)` to its aggregate.
+</Callout>
+
+<Callout kind="tip">
+Several `FILTER` clauses can calculate different subsets in one query. This can avoid separate queries and repeated scans; compare plans and timings for your workload.
+</Callout>
+
+## Check yourself
+
+1. What does `count(*) filter (where rating = 5)` return? Answer first, then check on the board.
+2. Does `count(*) filter (where rating > 5)` return 0 or `NULL`? Why?
+3. Add `where rating >= 4` to the grouped review query. What will `good` and `all_reviews` count? Work it out first.
+4. How many elements are in the `titles` array for category 4?
+
+<Cheatsheet>
+- `agg(x) filter (where condition)`: only rows where the condition is `TRUE` reach that aggregate.
+- `FILTER` affects one aggregate. Other aggregates still see the query's full input.
+- `count(case when condition then 1 end)` is another conditional count; adding `else 0` changes its result.
+- `string_agg(value, delimiter order by ...)` joins text values.
+- `array_agg(value order by ...)` collects an array.
+- `json_agg(expression order by ...)` collects a JSON array; `json_build_object` makes an object.
+- `order by` inside an aggregate orders its input values, not the result rows.
+- `string_agg` skips `NULL`; `array_agg` and `json_agg` retain it.
+- PostgreSQL places `NULL` first for `desc` unless `nulls last` is specified.
+</Cheatsheet>
