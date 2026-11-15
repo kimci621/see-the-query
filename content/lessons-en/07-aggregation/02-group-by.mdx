@@ -1,0 +1,219 @@
+---
+id: group-by
+title: "GROUP BY: piles of rows"
+chapter: aggregation
+number: "7.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.author, public.book, public.orders]
+  layout:
+    book: { x: 0, y: 0 }
+    author: { x: 0, y: 480 }
+    orders: { x: 560, y: 480 }
+initialQuery: |
+  select category_id, count(*) from book group by category_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/tutorial-agg.html
+    title: "Tutorial: Aggregate Functions"
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY and HAVING
+course: ["11.54"]
+tags: [group by, groups, grouping, count, aggregate]
+mvp: true
+---
+
+<TlDr>`GROUP BY` puts rows with the same key into groups. Each group can then become one output row with an aggregate.</TlDr>
+
+## The data
+
+There are three tables on the board. <T id="public.author">author</T> has 6 authors: 4 from Russia, 1 from Brazil and 1 from France. Boris Pasternak has no books.
+
+<T id="public.book">book</T> has 11 books. The category number is in <C id="public.book.category_id">category_id</C>: 3 is Science fiction, 4 is Classics, and 6 is Python. Simple Python has no category, so its value is `NULL`. The Island of Lost Ships has no price.
+
+<T id="public.orders">orders</T> has 8 orders, each with one of four values in <C id="public.orders.status">status</C>.
+
+## One aggregate per group
+
+In lesson 7.1, an aggregate reduced the whole table to one row. To count authors separately for each country, use **`GROUP BY`**:
+
+```sql run expect=rows:3
+select country, count(*) from author group by country;
+```
+
+There are 3 rows: Russia 4, Brazil 1, France 1. Each country produces one row, and `count(*)` is calculated within that group.
+
+On the board, select the `GROUP BY` step to see the three country groups and their counts. The caption reads “GROUP BY country: 6 rows → 3 groups”. You can think of a **group** as a pile of rows with the same key.
+
+<Callout kind="analogy">
+Think of sorting letters at a post office. Letters go into slots labeled by country. The report has one line per slot: “Russia, 4 letters”. It contains the totals, not the letters themselves.
+</Callout>
+
+## What can go in SELECT
+
+After grouping, there is one output row per group. You can select grouping columns and aggregates. An ungrouped column normally causes an error:
+
+```sql run expectError=42803
+select country, name from author group by country;
+```
+
+The error card shows code `42803`. The Russia group contains four different names, but has only one output row. Postgres cannot pick a name from the group at random. The editor underlines `name`, and the result area explains the error.
+
+There is an exception: when a table's primary key is grouped, PostgreSQL can also select other columns from that table because the key determines their values.
+
+To fix this particular query, add `name` to `GROUP BY`, giving each author a separate group in this dataset. Or combine the names with an aggregate. `string_agg` joins values from the group into one string:
+
+```sql run expect=rows:3
+select country, string_agg(name, ', ') as names
+from author
+group by country;
+```
+
+Russia has four comma-separated names in `names`; Brazil and France have one each. The query now runs because `name` is inside an aggregate. Lesson 7.4 covers `string_agg` in detail. The order of names within each string is unspecified unless you add an `ORDER BY` inside `string_agg`.
+
+## NULL forms a group too
+
+Group books by category:
+
+```sql run expect=rows:4
+select category_id, count(*) from book group by category_id;
+```
+
+There are 4 rows: 4 books each in Classics and Science fiction, 2 in Python, and one with `category_id` `NULL`: Simple Python.
+
+In lesson 4.5, `NULL = NULL` returned `UNKNOWN`. Grouping follows a different rule: all `NULL` keys go into one group. If the database had three more books without a category, the `NULL` group would contain 4 books.
+
+The category table has six categories, but this result has three plus `NULL`. The other three are absent, including Photography: no book has that `category_id`. With no input rows for a key, there is no group and no zero to show. You'll see how to get a zero below, with authors.
+
+## Other aggregates per group
+
+The aggregates from lesson 7.1 also work within each group. Here is the average price by category:
+
+```sql run expect=rows:4
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id;
+```
+
+Classics is 502.50, Science fiction 593.33, Python 2800.00, and the book without a category 1990.00. Python books cost more than five times as much on average as Classics.
+
+Science fiction has 4 books, but its average is 593.33, or 1780 / 3. The Island of Lost Ships belongs to the same group, but its price is `NULL`, so `avg` skips it, as in lesson 7.1.
+
+## Each input row belongs to one group
+
+Orders by status:
+
+```sql run expect=rows:4
+select status, count(*) from orders group by status;
+```
+
+There are 4 rows: paid 4, new 2, shipped 1, cancelled 1. Their counts add up to 8, the number of orders in the table. In this ordinary grouping, each input row belongs to exactly one group: grouping neither loses nor duplicates input rows.
+
+## Aliases and positions in GROUP BY
+
+Lesson 4.2 introduced `GROUP BY` before `SELECT` in the logical order. Even so, Postgres accepts output aliases in `GROUP BY`:
+
+```sql run expect=rows:4
+select category_id as category, count(*) as books
+from book
+group by category;
+```
+
+The 4 rows are the same as in the `NULL` example. There is no `category` column in book, so Postgres resolves it to the `SELECT` alias for `category_id`. A position works too: `group by 1` means the first expression in `SELECT`.
+
+PostgreSQL extends the SQL standard by allowing an output name or position here. If a name matches both an input column and an output alias, the input column wins:
+
+```sql run expect=rows:6
+select left(name, 1) as name, count(*)
+from author
+group by name;
+```
+
+We wanted groups by first letter, but got 6 rows, one per author. “A” appears twice, for Pushkin and Belyaev. `group by name` uses author’s `name` column, not the alias. The six groups are keyed by full names. Give the alias a different name, such as `letter`, and there will be 5 groups.
+
+`HAVING` does not accept a `SELECT` alias this way; an otherwise unknown alias causes error `42703`. Lesson 7.3 explores that trap.
+
+## Books per author, including zero
+
+Combine this with lesson 6.3. We need every author and their book count, including Pasternak:
+
+```sql run expect=rows:6
+select a.name,
+       count(*) as all_rows,
+       count(b.book_id) as books
+from author a
+left join book b on b.author_id = a.author_id
+group by a.author_id, a.name
+order by books desc, a.name;
+```
+
+There are 6 rows; Pasternak has 0 in `books`. The `LEFT JOIN` first produces 10 rows, including one for Pasternak with `NULL` in every book column. `GROUP BY` then puts those rows into 6 groups, one per author. At the `GROUP BY` step, the board shows Pasternak with `all_rows` 1 and `books` 0.
+
+Pasternak has `all_rows` 1 but `books` 0. This is the `count(*)` trap from lesson 6.3, now inside each group. To count books, use `count` on a right-hand column that cannot be `NULL` in a matched book, such as its primary key.
+
+The grouping key has two columns. Rows share a group only when both values match. `author_id` separates authors with identical names; `name` is included to show the name in the result. In PostgreSQL, grouping by the author's primary key alone would also allow selecting its name.
+
+Try the main examples in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="All authors in one row: 6">
+
+```sql run expect=rows:1
+select count(*) from author;
+```
+
+</Step>
+<Step caption="Authors by country: 3 groups">
+
+```sql run expect=rows:3
+select country, count(*) from author group by country;
+```
+
+</Step>
+<Step caption="Books by category: 4 groups, including NULL">
+
+```sql run expect=rows:4
+select category_id, count(*) from book group by category_id;
+```
+
+</Step>
+</Scene>
+
+## What is missing from the result
+
+- ❌ Author names in `select country, name`: `name` is neither grouped nor aggregated, and `country` does not determine a single name. Error `42803`.
+- ❌ Photography and two other categories in the books-by-category result: no book has those category IDs, so there are no groups for them.
+- ❌ The price of The Island of Lost Ships in the Science fiction average: `avg` skips `NULL`.
+- ❌ The original table rows: each group becomes one result row.
+
+## Traps
+
+<Callout kind="trap">
+A `NULL` key puts rows together even when the missing values may have nothing in common. Group books by author:
+
+```sql run expect=rows:6
+select author_id, count(*) from book group by author_id;
+```
+
+There are 6 rows; the `NULL` row has count 2. Simple Python and Learning Python have no author recorded. Postgres puts them in one group, even though their unrecorded authors could be different. When a report has a `NULL` group, think about what it represents.
+</Callout>
+
+<Callout kind="tip">
+The order of groups is not guaranteed without `ORDER BY`. Russia could appear first or last in the countries query. For a report, order by an aggregate or a key, and add a second key for ties, as in `order by books desc, a.name` above.
+</Callout>
+
+## Check yourself
+
+1. Add `where customer_id = 1` to the orders-by-status query. How many groups remain? Where did `new` and `cancelled` go?
+2. How many books were written by authors from each country? Join `author` and `book` and group by `a.country`. Work it out first, then check.
+3. Group books by two columns: `group by author_id, category_id`. There are 7 groups instead of 6. Which group from the trap split in two?
+
+<Cheatsheet>
+- `group by key`: put rows with the same key into one group, then produce one row per group.
+- In `SELECT`, use grouped columns and aggregates. An ungrouped column normally causes error `42803`; a table's other columns are allowed when its primary key is grouped.
+- `group by a, b`: one group for each pair of values.
+- `group by alias` and `group by 1` are PostgreSQL extensions. If a name matches an input column and an alias, the input column wins.
+- `NULL` keys form one group.
+- No input rows for a key means no group. To include a zero, use `left join` and `count` on a non-nullable column of the right table.
+- Group order is not guaranteed; add `order by`.
+</Cheatsheet>
