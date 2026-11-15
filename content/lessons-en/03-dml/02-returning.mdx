@@ -1,0 +1,85 @@
+---
+id: returning
+title: RETURNING
+chapter: dml
+number: "3.2"
+order: 2
+dataset: bookstore
+initialQuery: |
+  select book_id, title, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/dml-returning.html
+    title: Returning data from modified rows
+course: ["11.14"]
+tags: [returning, insert, update, delete, old, new]
+---
+
+<TlDr>`RETURNING` returns values from rows changed by a statement. You don't need a separate `SELECT` after an `INSERT`, `UPDATE` or `DELETE` to get those values.</TlDr>
+
+## What's in the data
+
+`book` has eleven books. The price of And Quiet Flows the Don is 890.00. `review` has ten reviews; two have a rating below four.
+
+## INSERT: the new row's ID
+
+```sql run expect=rows:1
+insert into author (name, country, born_year) values ('Leo Tolstoy', 'Russia', 1828) returning author_id;
+```
+
+`RETURNING author_id` returns the ID supplied by the sequence. On the board, the row flies into `author`, and the result panel shows `author_id` with the value 7. A separate query could retrieve the ID, but that adds a query and another chance to pick the wrong row.
+
+## UPDATE: old and new values
+
+```sql run expect=rows:1
+update book set price = price * 0.9 where book_id = 1 returning old.price, new.price;
+```
+
+PostgreSQL 18 can return both the old and new values. `old.price` is 890.00; `new.price` is 801.00. On the board, the row starts with the old price, then the cell flips to the new one.
+
+If you only need the new value, write `returning price`: the unqualified column name refers to the value after the update.
+
+## DELETE: which rows were removed
+
+```sql run expect=rows:2
+delete from review where rating < 4 returning *;
+```
+
+`RETURNING *` returns every column of each deleted row. The result has two rows: reviews rated 3 and 2. On the board, they are crossed out and removed. Without `RETURNING`, you would see only `DELETE: 2`, not which rows matched.
+
+## Why use it?
+
+`RETURNING` changes rows and reads their values in one statement. There is no gap between the change and a separate query in which another transaction could change or delete the row. This helps when you need to pass the ID or value on immediately, for example to create an order, record an audit entry or return a new record to a client.
+
+## What's missing and why
+
+- ❌ Rows not changed by the statement are absent from `RETURNING`: `UPDATE` returns only rows that matched its `WHERE` condition.
+- ❌ An unqualified column name in `UPDATE ... RETURNING` gives the new value; use `old` for the old value.
+- ❌ After preview, the tables have none of these inserts or changes: they were rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+`RETURNING` cannot save you from a missing `WHERE`. Without a condition, `UPDATE` or `DELETE` affects every row, and `RETURNING` returns them all. Check the condition with `SELECT` first:
+
+```sql noexec
+select book_id, price from book where book_id = 1;
+```
+</Callout>
+
+<Callout kind="tip">
+The order of rows returned by `RETURNING` is not guaranteed. If the order matters, sort the result outside the modifying statement. For bulk changes, request only the columns you need: `*` on a wide table transfers extra data.
+</Callout>
+
+## Check yourself
+
+1. What does `UPDATE` with `RETURNING old.price, new.price` return?
+2. How many rows does `DELETE ... RETURNING *` return for ratings below 4?
+3. Why can `RETURNING` be more reliable than a separate `SELECT` after an insert?
+
+<Cheatsheet>
+- `RETURNING` works with `INSERT`, `UPDATE`, `DELETE` and `MERGE`.
+- `returning *` returns every column of the changed rows.
+- `returning old.price, new.price` shows the values before and after.
+- Only rows affected by the statement are returned.
+- The order of rows in `RETURNING` is not guaranteed.
+</Cheatsheet>

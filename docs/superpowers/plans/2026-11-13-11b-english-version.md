@@ -186,7 +186,7 @@
 **03-dml**
 
 - [x] 3.1 `insert`: `content/lessons-en/03-dml/01-insert.mdx`
-- [ ] 3.2 `returning`: `content/lessons-en/03-dml/02-returning.mdx`
+- [x] 3.2 `returning`: `content/lessons-en/03-dml/02-returning.mdx`
 - [ ] 3.3 `update`: `content/lessons-en/03-dml/03-update.mdx`
 - [ ] 3.4 `delete`: `content/lessons-en/03-dml/04-delete.mdx`
 - [ ] 3.5 `upsert`: `content/lessons-en/03-dml/05-upsert.mdx`
