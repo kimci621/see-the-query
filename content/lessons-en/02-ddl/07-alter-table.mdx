@@ -1,0 +1,99 @@
+---
+id: alter-table
+title: ALTER TABLE
+chapter: ddl
+number: "2.6"
+order: 7
+dataset: bookstore
+initialQuery: |
+  select author_id, name, born_year from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-alter.html
+    title: Modifying tables
+  - url: https://www.postgresql.org/docs/18/sql-altertable.html
+    title: ALTER TABLE
+course: ["11.34"]
+tags: [alter table, add column, drop column, rename, type, constraint]
+---
+
+<TlDr>`ALTER TABLE` changes an existing table: it can add or rename columns, change their types and add constraints. The rows stay in the table.</TlDr>
+
+## What's in the data
+
+`author` has six rows. Its `born_year` column stores the birth year as an `integer`; there is no `email` column yet. `employee` has eight rows. The director, Olga Nikolaeva, earns 300000.
+
+Every example runs in preview and rolls back. The board returns to the original schema and the data stays unchanged.
+
+## Add a column
+
+```sql run expect=rows:0
+alter table author add column email text;
+```
+
+A new `email` column appears on the `author` table. All six existing rows have `NULL`: there was no value for them. With a `DEFAULT`, Postgres supplies that value for existing rows too.
+
+## Drop a column
+
+```sql run expect=rows:0
+alter table author drop column born_year;
+```
+
+The `born_year` column disappears along with its values. This is not a rename: the data is no longer accessible. `ALTER TABLE ... ADD COLUMN` can bring back an empty column, but not the old years.
+
+## Rename
+
+```sql run expect=rows:0
+alter table author rename column born_year to birth_year;
+```
+
+Only the column name changes on the board. The values and their order stay the same. Renaming a table works the same way:
+
+```sql run expect=rows:0
+alter table author rename to writer;
+```
+
+## Change a type
+
+```sql run expect=rows:0
+alter table author alter column born_year type bigint;
+```
+
+Postgres converts the values to the new type. This change rewrites the table. With six rows it is quick; with a million it takes longer and blocks writes. If the conversion is not automatic, add `USING`, for example `alter column price type integer using price::integer`.
+
+## Add a constraint
+
+```sql run expectError=23514
+alter table employee add constraint salary_check check (salary <= 180000);
+```
+
+Postgres returns `23514`: the check failed. The board highlights the director, who earns 300000, and a manager who earns 190000. The constraint cannot be added while those rows violate it. Fix the data first, then add the rule.
+
+## What's missing and why
+
+- ❌ There is no `email` after preview: the `ALTER TABLE` rolled back.
+- ❌ `born_year` is still there after `DROP COLUMN`: preview restored the schema.
+- ❌ There is no `salary_check`: Postgres rejected it because existing salaries exceed the limit.
+
+## Pitfalls
+
+<Callout kind="trap">
+`ALTER TABLE` locks the table. On a large production table, changing a type or adding a constraint can block writes for minutes. For a `CHECK` constraint, add it as `NOT VALID`, then check existing rows with `VALIDATE CONSTRAINT`. New and updated rows are checked immediately. The commands still take locks, but validation allows concurrent writes.
+</Callout>
+
+<Callout kind="tip">
+In PostgreSQL 11 and later, adding a column with a constant `DEFAULT` does not rewrite the table: Postgres stores the value in metadata. A volatile default can require a rewrite. Type changes usually rewrite the table too, though some compatible conversions do not; a rewrite needs extra disk space.
+</Callout>
+
+## Check yourself
+
+1. What will the board show in the new `email` column for the six existing rows?
+2. Why is `DROP COLUMN` more dangerous than a rename?
+3. Which rows prevent `salary_check` from being added?
+
+<Cheatsheet>
+- `ALTER TABLE ... ADD COLUMN` adds a column; existing rows get `NULL` or the `DEFAULT` value.
+- `DROP COLUMN` removes access to the column and its values.
+- `RENAME COLUMN` changes only the name, not the data.
+- `ALTER COLUMN ... TYPE` changes the type; use `USING` when an automatic conversion is unavailable.
+- `ADD CONSTRAINT` checks existing rows and fails if any violate the rule.
+</Cheatsheet>
