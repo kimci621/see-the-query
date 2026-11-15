@@ -1,0 +1,204 @@
+---
+id: rollup-cube
+title: ROLLUP, CUBE and GROUPING SETS
+chapter: aggregation
+number: "7.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.book]
+  layout:
+    book: { x: 300, y: 0 }
+initialQuery: |
+  select category_id, count(*) from book group by rollup(category_id) order by grouping(category_id), category_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUPING-SETS
+    title: GROUPING SETS, CUBE and ROLLUP
+  - url: https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-GROUPING-TABLE
+    title: GROUPING operation
+course: ["11.57"]
+tags: [rollup, cube, "grouping sets", grouping, totals, "multiple grouping levels"]
+mvp: false
+---
+
+<TlDr>`ROLLUP` adds subtotal and grand-total levels, `CUBE` builds all combinations of keys, and `GROUPING SETS` uses the levels you list. `GROUPING()` shows which keys are absent from a level.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has 11 books. By <C id="public.book.category_id">category_id</C>, the groups 3, 4, 6 and `NULL` contain 4, 4, 2 and 1 book respectively. Categories 1, 2 and 5 have no books directly assigned to them.
+
+By <C id="public.book.author_id">author_id</C>, authors 1, 3, 4 and 5 have two books each, author 2 has one, and two books have no author. Five authors plus the missing-author group make 6 groups.
+
+## Ordinary GROUP BY: 4 detail rows
+
+Start with the query from lesson 7.2:
+
+```sql run expect=rows:4
+select category_id, count(*) from book
+group by category_id
+order by category_id;
+```
+
+There are 4 rows: 3, 4, 6 and `NULL`. The counts add up to 4 + 4 + 2 + 1 = 11. These are detail rows, one for each group in the data.
+
+## ROLLUP: a fifth row
+
+**`ROLLUP`** adds a grand total to the ordinary groups. Try it with categories:
+
+```sql run expect=rows:5
+select category_id, count(*) from book
+group by rollup(category_id)
+order by grouping(category_id), category_id;
+```
+
+There are 5 rows: the four previous groups plus a fifth row with `category_id` `NULL` and count 11. It is the total for the table.
+
+`ROLLUP(category_id)` creates two grouping levels: one by `category_id`, then one without a key, covering the whole input. For two keys, `rollup(a, b)` has three levels: `(a, b)`, `(a)` and `()`. Longer lists can produce more subtotals.
+
+The total counts all 11 input rows. The key is absent from that grouping level, so its output value is `NULL`.
+
+## GROUPING: identifying the data NULL
+
+In the previous result, two rows have `NULL` for `category_id`. The key alone cannot distinguish them. Use `GROUPING`:
+
+```sql run expect=rows:5
+select category_id, grouping(category_id) as g, count(*)
+from book
+group by rollup(category_id)
+order by grouping(category_id), category_id;
+```
+
+There are 5 rows. The four detail rows have `g` 0; the total has 1. **`GROUPING`** returns 0 when its argument is part of the current grouping set and 1 when it is omitted.
+
+Look at `NULL / 0 / 1`: this is Simple Python, whose category is missing in the data. `NULL / 1 / 11` is the total. Both keys look the same, but `GROUPING` identifies the level.
+
+`GROUPING` can be used in `SELECT`, `ORDER BY` and `HAVING`. With several arguments it returns a bit mask: `grouping(a, b)` can be 0, 1, 2 or 3, with the rightmost argument as the least significant bit.
+
+A report can label the total “Total”. In SQL, identify it with `grouping(category_id) = 1`.
+
+## CUBE: all combinations
+
+**`CUBE`** builds every subset of the keys. With two columns, there are four levels: the pair, each key on its own, and the empty set.
+
+```sql run expect=rows:18
+select author_id,
+       category_id,
+       grouping(author_id) as g_author,
+       grouping(category_id) as g_category,
+       count(*) as books
+from book
+group by cube(author_id, category_id)
+order by grouping(author_id), grouping(category_id), author_id, category_id;
+```
+
+There are 18 rows:
+
+- 7 detail rows for author-category pairs present in the data;
+- 6 rows by author: five authors and the group of two books without one;
+- 4 rows by category: 3, 4, 6 and `NULL`;
+- 1 grand total.
+
+That is 7 + 6 + 4 + 1 = 18. For comparison, `rollup(author_id, category_id)` produces 7 + 6 + 1 = 14 rows for these keys. `CUBE` adds the category-only level.
+
+In detail rows both flags are 0, even when an author or category is `NULL` in the data. In author-level rows `g_category` is 1: category is omitted. In category-level rows `g_author` is 1. Both flags are 1 in the grand total.
+
+Each level answers a different question: counts by pair, by author, by category, or for all 11 books.
+
+## GROUPING SETS: choose levels explicitly
+
+**`GROUPING SETS`** lists the sets of keys you want:
+
+```sql run expect=rows:11
+select author_id, category_id, count(*)
+from book
+group by grouping sets ((author_id), (category_id), ())
+order by grouping(author_id), grouping(category_id), author_id, category_id;
+```
+
+There are 11 rows: 6 by author, 4 by category and 1 total. 6 + 4 + 1 = 11.
+
+In author-level rows `category_id` is omitted; in category-level rows `author_id` is omitted. Without `GROUPING()` in the output, a missing key can be confused with a `NULL` from the data. Include the flags next to the keys when the distinction matters.
+
+For categories and a total only, use `grouping sets ((category_id), ())`. It produces the same 5 rows as `rollup(category_id)`. For categories and authors without a grand total, leave out the empty set `()`.
+
+## Keep only detail rows
+
+`HAVING` filters after grouping, so it can use `GROUPING()`:
+
+```sql run expect=rows:4
+select category_id, count(*)
+from book
+group by rollup(category_id)
+having grouping(category_id) = 0
+order by category_id;
+```
+
+There are 4 rows, all details. The total is removed. To keep only the total instead, change the condition to `= 1`.
+
+## What is missing from the result
+
+- ❌ Categories 1, 2 and 5 in the detail rows: they have no books assigned directly, so there are no groups for them.
+- ❌ Simple Python in categories 3, 4 and 6: its `category_id` is `NULL`, so it belongs to the `NULL` detail group.
+- ❌ The count 11 in the detail rows: it appears at the grand-total level.
+- ❌ A way to distinguish the `NULL` group from the total using the key alone: both display `NULL`.
+
+Do not add the grand total to the details as if they were separate books: 4 + 4 + 2 + 1 + 11 = 22, but the total already includes those 11 books.
+
+## Traps
+
+<Callout kind="trap">
+`GROUPING()` matters because a data `NULL` and a total's `NULL` look alike. Try finding the total by key value:
+
+```sql run expect=rows:2
+select category_id, count(*)
+from book
+group by rollup(category_id)
+having category_id is null;
+```
+
+There are 2 rows instead of one: the `NULL` group with Simple Python and count 1, and the total with count 11. The condition matches both. For the total use `having grouping(category_id) = 1`.
+</Callout>
+
+<Callout kind="trap">
+`GROUPING()` cannot be used at the same query level in `WHERE`. It is evaluated for grouping levels, while `WHERE` filters input first:
+
+```sql run expectError=42803
+select category_id, count(*) from book
+where grouping(category_id) = 0
+group by rollup(category_id);
+```
+
+Code `42803`: `grouping operations are not allowed in WHERE`. Filter levels in `HAVING`.
+</Callout>
+
+<Callout kind="trap">
+An argument to `GROUPING` must match a grouping expression at its query level. A different column produces an error:
+
+```sql run expectError=42803
+select grouping(price) from book group by rollup(category_id);
+```
+
+Code `42803`: `arguments to GROUPING must be grouping expressions of the associated query level`. The grouping expression here is `category_id`, not `price`.
+</Callout>
+
+<Callout kind="tip">
+Give a total a readable label in a report: `case when grouping(category_id) = 1 then 'Total' else category_id::text end`. The reader can identify it without guessing.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `group by rollup(author_id)` return? Work out the levels first, then check.
+2. How do you keep only the total in `rollup(category_id)`? Write a `HAVING` condition.
+3. How many rows does `group by grouping sets ((author_id, category_id), ())` return?
+4. How do the row counts of `cube(author_id, category_id)` and `rollup(author_id, category_id)` differ?
+
+<Cheatsheet>
+- `group by rollup(a, b)`: levels `(a, b)`, `(a)`, `()`. One key gives details plus a total.
+- `group by cube(a, b)`: every subset: `(a, b)`, `(a)`, `(b)`, `()`.
+- `group by grouping sets ((a), (b), ())`: the listed levels.
+- A key omitted from a grouping set appears as `NULL` in that level's output.
+- `grouping(x)`: 0 if the key is in the current set, 1 if it is omitted. Several arguments form a bit mask.
+- Filter totals with `having grouping(x) = 1` and details with `= 0` for the one-key rollup shown here.
+- `order by grouping(x), x` puts details first and the total last in that rollup.
+- The total includes all input rows. Do not add it to the details again.
+</Cheatsheet>
