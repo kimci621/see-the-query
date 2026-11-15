@@ -1,0 +1,99 @@
+---
+id: drop-truncate
+title: DROP, TRUNCATE and CASCADE
+chapter: ddl
+number: "2.7"
+order: 8
+dataset: bookstore
+initialQuery: |
+  select author_id, name from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-droptable.html
+    title: DROP TABLE
+  - url: https://www.postgresql.org/docs/18/sql-truncate.html
+    title: TRUNCATE
+  - url: https://www.postgresql.org/docs/18/ddl-depend.html
+    title: Object dependencies
+course: ["11.34"]
+tags: [drop table, truncate, cascade, dependencies]
+---
+
+<TlDr>`TRUNCATE` quickly empties a table; `DROP` removes the table itself. `CASCADE` extends the operation to dependent objects.</TlDr>
+
+## What's in the data
+
+`review` has ten reviews. `book.author_id` is a foreign key that references `author`. `order_item` references both `book` and `orders`.
+
+Every example runs in preview and rolls back. The schema and data return to their original state afterwards.
+
+## TRUNCATE empties a table
+
+```sql run expect=rows:0
+truncate review;
+```
+
+All ten rows fade at once. `DELETE FROM review` would process rows individually and could remove only some of them with a filter. `TRUNCATE` has no `WHERE`: it clears the whole table without scanning its rows, which is faster on large tables.
+
+```sql run expect=rows:0
+truncate review restart identity;
+```
+
+`RESTART IDENTITY` resets the sequence owned by `review_id` to its starting value. Without it, the sequence keeps its current state.
+
+## TRUNCATE and foreign keys
+
+```sql run expectError=0A000
+truncate author;
+```
+
+Postgres returns `0A000`: a foreign key in `book` references `author`. Even if no book currently references an author, Postgres refuses the command without scanning the referencing table. You can list all referencing tables in the same command, or use `CASCADE`:
+
+```sql run expect=rows:0
+truncate author cascade;
+```
+
+Postgres also empties tables that reference `author`, following the chain of foreign keys. Here those are `book`, `order_item` and `review`. `TRUNCATE ... CASCADE` removes rows, not constraints.
+
+## DROP removes a table
+
+```sql run expectError=2BP01
+drop table author;
+```
+
+Postgres returns `2BP01`: other objects depend on `author`, including the foreign key in `book`. The table cannot be dropped while those dependencies remain.
+
+```sql run expect=rows:0
+drop table author cascade;
+```
+
+On the board, `author` fades along with the foreign-key arrow. The `book` table and its `author_id` column remain. `DROP ... CASCADE` removes dependent constraints and views, but leaves the rows in referencing tables.
+
+## What's missing and why
+
+- ❌ The ten reviews disappear during `TRUNCATE`, but return when preview rolls back.
+- ❌ `author` is not dropped without `CASCADE`: the foreign key in `book` prevents it.
+- ❌ `author` is absent from the `DROP ... CASCADE` scene, but preview restores it afterwards.
+
+## Pitfalls
+
+<Callout kind="trap">
+`DROP TABLE ... CASCADE` and `TRUNCATE ... CASCADE` do different things. `DROP` removes the table and dependent objects, while rows in other tables remain. `TRUNCATE` removes rows from tables along the foreign-key chain. Check which tables the chain reaches before using `CASCADE`.
+</Callout>
+
+<Callout kind="tip">
+In PostgreSQL, `TRUNCATE` is transactional: it can be rolled back. But it takes an `ACCESS EXCLUSIVE` lock, which conflicts with concurrent reads and writes. Plan a large-table cleanup with that lock in mind.
+</Callout>
+
+## Check yourself
+
+1. How many rows remain in `review` after `TRUNCATE`?
+2. Why does `TRUNCATE author` fail when you only want to empty `author`?
+3. What happens to `book.author_id` after `DROP TABLE author CASCADE`?
+
+<Cheatsheet>
+- `TRUNCATE` quickly empties a table.
+- `TRUNCATE ... RESTART IDENTITY` resets its owned sequences.
+- `TRUNCATE` requires referencing tables in the same command, or `CASCADE`.
+- `DROP TABLE` removes the table and its data.
+- `DROP TABLE ... CASCADE` removes dependent constraints and views, but not rows in other tables.
+</Cheatsheet>

@@ -180,7 +180,7 @@
 - [x] 2.4 `fk-on-delete`: `content/lessons-en/02-ddl/05-fk-on-delete.mdx`
 - [x] 2.5 `identity-sequences`: `content/lessons-en/02-ddl/06-identity-sequences.mdx`
 - [x] 2.6 `alter-table`: `content/lessons-en/02-ddl/07-alter-table.mdx`
-- [ ] 2.7 `drop-truncate`: `content/lessons-en/02-ddl/08-drop-truncate.mdx`
+- [x] 2.7 `drop-truncate`: `content/lessons-en/02-ddl/08-drop-truncate.mdx`
 - [ ] 2.8 `comment-on`: `content/lessons-en/02-ddl/09-comment-on.mdx`
 
 **03-dml**
