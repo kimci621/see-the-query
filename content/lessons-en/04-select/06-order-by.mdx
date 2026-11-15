@@ -1,0 +1,158 @@
+---
+id: order-by
+title: "ORDER BY: sorting and ties"
+chapter: select
+number: "4.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.book, public.employee]
+  layout:
+    book: { x: 0, y: 0 }
+    employee: { x: 0, y: 480 }
+initialQuery: |
+  select title, price from book order by price desc;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-order.html
+    title: Sorting rows with ORDER BY
+course: ["11.20"]
+tags: [order by, asc, desc, nulls first, nulls last, sorting, ties]
+mvp: true
+---
+
+<TlDr>`ORDER BY` sorts rows by a key: `ASC` ascending, `DESC` descending. By default, NULL sorts last with `ASC` and first with `DESC`. A second key can break ties.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books; The Island of Lost Ships has no price. Two pairs have the same price: Journey to the Center of the Earth (320 pages) and Captain Grant's Children (704) cost 610; The Fate of a Man (64) and The Tale of the Fisherman and the Fish (32) cost 350. <T id="public.employee">employee</T> has 8 employees; warehouse assistants Natalia Lebedeva and Igor Novikov both earn 70000.
+
+## Without ORDER BY, order is not guaranteed
+
+Without `ORDER BY`, Postgres returns rows in whatever order its plan produces. That can change with the query plan or the way rows are stored. If you need an order, ask for it explicitly.
+
+## Sort by one column
+
+```sql run expect=rows:11
+select title, price from book order by price;
+```
+
+Eleven rows, from cheapest to most expensive. The direction is omitted, so it defaults to `ASC`. At the `ORDER BY` step, the player highlights `price` as the sort key and moves the rows into order.
+
+At the bottom is The Island of Lost Ships with a gray badge instead of a price. By default, Postgres sorts NULL as if it were larger than any non-NULL value, so it comes last in ascending order.
+
+## DESC: NULL moves to the top
+
+```sql run expect=rows:11
+select title, price from book order by price desc;
+```
+
+`DESC` reverses the direction: expensive books come first. The Island is now first too. NULL is still treated as larger for sorting, so it appears before the prices in descending order. That can be a surprise when asking for the most expensive books.
+
+## NULLS FIRST and NULLS LAST
+
+Set the position of NULL explicitly. `NULLS LAST` puts missing values at the end:
+
+```sql run expect=rows:11
+select title, price from book order by price desc nulls last;
+```
+
+Learning Python at 3200 comes first; The Island moves to the bottom. Conversely, `NULLS FIRST` puts NULL first even in ascending order:
+
+```sql run expect=rows:11
+select title, price from book order by price nulls first;
+```
+
+The Island comes first, followed by books at 350.
+
+## Ties: rows with the same key
+
+Journey to the Center of the Earth and Captain Grant's Children both cost 610. With `order by price`, Postgres does not promise which comes first. Their order can change between executions.
+
+Add a second key, separated by a comma. Use page count:
+
+```sql run expect=rows:11
+select title, price, pages from book order by price desc, pages;
+```
+
+Among the books at 610, Journey to the Center of the Earth (320 pages) comes before Captain Grant's Children (704). The pair at 350 is also separated: The Tale of the Fisherman and the Fish (32) comes before The Fate of a Man (64). The second key matters only when the first key is tied.
+
+<Callout kind="analogy">
+In a class register, students are sorted by surname, but two share the surname Smith. The teacher then uses first names: Alice Smith before Ben Smith. First names settle the Smiths' tie; they do not move anyone ahead of a different surname.
+</Callout>
+
+## Each key has its own direction
+
+Sort employees by position, then by salary from highest to lowest within each position:
+
+```sql run expect=rows:8
+select name, position, salary from employee order by position, salary desc;
+```
+
+Eight rows. Positions are sorted in ascending order. Among the employees with position Manager, Alexey Morozov (190000) comes before Dmitry Sokolov (90000). Warehouse assistants Lebedeva and Novikov are adjacent, but their order is unspecified: their salaries tie and there is no third key.
+
+`DESC` applies only to `salary`. With no direction after `position`, it is ascending. Thus `order by position, salary desc` means `position asc, salary desc`, not descending for both.
+
+Watch NULL move in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="ASC: NULL last">
+
+```sql run expect=rows:11
+select title, price from book order by price;
+```
+
+</Step>
+<Step caption="DESC: NULL first">
+
+```sql run expect=rows:11
+select title, price from book order by price desc;
+```
+
+</Step>
+<Step caption="DESC NULLS LAST: expensive first, missing prices last">
+
+```sql run expect=rows:11
+select title, price from book order by price desc nulls last;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+No rows disappear here. Instead, consider what Postgres does not guarantee:
+
+- ❌ Row order without `ORDER BY`.
+- ❌ The order within a tie on the last sort key. The two books at 610 can appear in either order until another key separates them.
+- ❌ The Island at the bottom with plain `DESC`: NULL sorts first by default. Use `NULLS LAST` to move it down.
+
+## Pitfalls
+
+<Callout kind="trap">
+A tie at a `LIMIT` boundary can make pages unstable. Take the five cheapest books:
+
+```sql run expect=rows:5
+select title, price from book order by price limit 5;
+```
+
+Journey and Captain Grant's Children tie for fifth at 610. One appears, but which one is unspecified. A later query with `offset 5` can repeat one book or miss another. Pagination is covered in lesson 4.7.
+</Callout>
+
+<Callout kind="tip">
+When order matters, end the sort list with a unique key, usually the primary key: `order by price, pages, book_id`. Page counts can tie too, but each `book_id` is distinct. The order is then deterministic for the same data.
+</Callout>
+
+## Check yourself
+
+1. Run `select title, price from book order by price, title`. In what order do the books at 350 appear?
+2. What changes if the employee query uses `order by position desc, salary`? Predict the first row, then run it.
+3. Who was hired first? Sort <T id="public.employee">employee</T> by `hired_at`.
+
+<Cheatsheet>
+- `order by column [asc | desc]`: `asc` is the default.
+- By default, NULL sorts last with `asc` and first with `desc`.
+- `nulls first` and `nulls last` set its position explicitly.
+- Later keys break ties on earlier keys.
+- Each key has its own direction: `order by a, b desc` means `a asc, b desc`.
+- Without `order by`, row order is unspecified; ties on the last key are unspecified too.
+</Cheatsheet>
