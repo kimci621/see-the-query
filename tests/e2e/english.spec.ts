@@ -84,3 +84,41 @@ test('английская песочница выполняет запросы 
   );
   await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 30_000 });
 });
+
+test('неудачная вставка не меняет сохранённый номер после восстановления', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto('/l/how-to-use?lang=en');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 60_000 });
+  await writeSql(
+    page,
+    "insert into customer (name, email, created_at) values ('X', 'anna@example.com', now())",
+  );
+  await page.getByTestId('apply-button').click();
+  await expect(page.locator('[data-sonner-toast][data-type="error"]')).toContainText(
+    'This value already exists',
+    {
+      timeout: 30_000,
+    },
+  );
+
+  await page.reload();
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 60_000 });
+  await writeSql(
+    page,
+    "insert into customer (name, email, created_at) values ('New Customer', 'new@example.com', now()) returning customer_id",
+  );
+  await expect(page.getByTestId('cell-0-0')).toHaveText('8', { timeout: 30_000 });
+  await page.getByTestId('apply-button').click();
+  await expect(page.getByTestId('apply-button')).toContainText('Applied', { timeout: 30_000 });
+  await page.reload();
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 60_000 });
+  await writeSql(page, "select customer_id from customer where email = 'new@example.com'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('8', { timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+  await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await writeSql(page, "select customer_id from customer where email = 'new@example.com'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('8', { timeout: 30_000 });
+});

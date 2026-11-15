@@ -24,14 +24,19 @@ export function useLessonSandbox(
     // пока наш loadLesson не завершился, события относятся к прошлому уроку
     let loaded = false;
     let active = true;
-    const saveJournal = () => useLessonStore.getState().setJournal(lessonId, [...sandbox.journal()], locale);
+    const saveJournal = () =>
+      useLessonStore
+        .getState()
+        .setJournal(lessonId, [...sandbox.journal()], locale, [...sandbox.sequenceCheckpoints()]);
     const off = sandbox.subscribe((e) => {
       if (e.type === 'restarted')
         toast.warning(message(useSettingsStore.getState().locale, RESTART_MESSAGES[e.reason]));
-      if (e.type === 'changed' && loaded) saveJournal();
+      if ((e.type === 'changed' || e.type === 'journalChanged') && loaded) saveJournal();
     });
     const saved = () => useLessonStore.getState().byId[lessonId]?.workspaces[locale]?.journal ?? [];
-    void sandbox.loadLesson(datasetId, saved, locale).then(
+    const savedCheckpoints = () =>
+      useLessonStore.getState().byId[lessonId]?.workspaces[locale]?.sequenceCheckpoints ?? [];
+    void sandbox.loadLesson(datasetId, saved, locale, savedCheckpoints).then(
       () => {
         if (!active) return;
         loaded = true;

@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
-import type { Sandbox, SandboxEvent } from './sandbox';
+import type { Sandbox, SandboxEvent, SequenceCheckpoint } from './sandbox';
 import { RESTART_MESSAGES, useLessonSandbox } from './useLessonSandbox';
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), error: vi.fn() } }));
@@ -16,6 +16,7 @@ function fakeSandbox() {
   let listener: (e: SandboxEvent) => void = () => {};
   let finish: () => void = () => {};
   let journal: string[] = [];
+  let checkpoints: SequenceCheckpoint[] = [];
   const sandbox = {
     loadLesson: vi.fn((_id: string, j: Parameters<Sandbox['loadLesson']>[1]) => {
       journal = [...journalValue(j)];
@@ -24,6 +25,7 @@ function fakeSandbox() {
       });
     }),
     journal: () => journal,
+    sequenceCheckpoints: () => checkpoints,
     whenIdle: () => Promise.resolve(),
     subscribe: (l: (e: SandboxEvent) => void) => {
       listener = l;
@@ -38,6 +40,9 @@ function fakeSandbox() {
     finish: () => act(async () => finish()),
     setJournal: (j: string[]) => {
       journal = j;
+    },
+    setCheckpoints: (values: SequenceCheckpoint[]) => {
+      checkpoints = values;
     },
   };
 }
@@ -56,6 +61,7 @@ describe('useLessonSandbox', () => {
     let finishFence = () => {};
     const sandbox = {
       journal: () => current,
+      sequenceCheckpoints: () => [],
       subscribe: (listener: (event: SandboxEvent) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -87,6 +93,7 @@ describe('useLessonSandbox', () => {
     const listeners = new Set<(event: SandboxEvent) => void>();
     const sandbox = {
       journal: () => current,
+      sequenceCheckpoints: () => [],
       subscribe: (listener: (event: SandboxEvent) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -125,6 +132,7 @@ describe('useLessonSandbox', () => {
     const pending: Array<() => void> = [];
     const sandbox = {
       journal: () => current,
+      sequenceCheckpoints: () => [],
       whenIdle: () => Promise.resolve(),
       subscribe: (listener: (event: SandboxEvent) => void) => {
         listeners.add(listener);
@@ -160,6 +168,7 @@ describe('useLessonSandbox', () => {
     const sandbox = {
       loadLesson: vi.fn().mockRejectedValue(new Error('load failed')),
       journal: () => ['чужой журнал'],
+      sequenceCheckpoints: () => [],
       subscribe: () => () => {},
     } as unknown as Sandbox;
     await act(async () => {
@@ -193,6 +202,35 @@ describe('useLessonSandbox', () => {
     f.emit({ type: 'changed' });
     const saved = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}');
     expect(saved.state.byId['dml-insert'].workspaces.ru.journal).toEqual(['delete from review']);
+  });
+
+  it('сохраняет состояние последовательности после неудачного применения отдельно для языка', async () => {
+    useSettingsStore.setState({ locale: 'en' });
+    const f = fakeSandbox();
+    renderHook(() => useLessonSandbox(f.sandbox, 'lesson', 'bookstore'));
+    await f.finish();
+    const checkpoints = [{ at: 0, values: { 'public.customer_customer_id_seq': '7' } }];
+    f.setCheckpoints(checkpoints);
+    f.emit({ type: 'journalChanged' });
+    const saved = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}');
+    expect(saved.state.byId.lesson.workspaces.en).toMatchObject({
+      journal: [],
+      sequenceCheckpoints: checkpoints,
+    });
+    expect(saved.state.byId.lesson.workspaces.ru).toBeUndefined();
+  });
+
+  it('передаёт сохранённые состояния последовательностей в загрузку выбранного языка', () => {
+    const ru = [{ at: 0, values: { 'public.author_author_id_seq': '7' } }];
+    const en = [{ at: 0, values: { 'public.customer_customer_id_seq': '7' } }];
+    const store = useLessonStore.getState();
+    store.setJournal('lesson', [], 'ru', ru);
+    store.setJournal('lesson', [], 'en', en);
+    useSettingsStore.setState({ locale: 'en' });
+    const f = fakeSandbox();
+    renderHook(() => useLessonSandbox(f.sandbox, 'lesson', 'bookstore'));
+    const saved = vi.mocked(f.sandbox.loadLesson).mock.calls[0]?.[3];
+    expect(typeof saved === 'function' ? saved() : saved).toEqual(en);
   });
 
   it('после перезапуска показывает тост с причиной', () => {

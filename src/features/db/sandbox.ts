@@ -3,6 +3,11 @@ import { type DatasetId, loadDatasetSql } from './datasets';
 import { introspect } from './introspect';
 import { type DbClient, DbException, type QueryResult, SANDBOX_CRASHED, SANDBOX_TIMEOUT } from './types';
 
+export interface SequenceCheckpoint {
+  at: number;
+  values: Record<string, string | null>;
+}
+
 export interface Sandbox {
   readonly status: 'booting' | 'ready' | 'restarting' | 'failed';
   readonly datasetId: DatasetId | null;
@@ -11,6 +16,7 @@ export interface Sandbox {
     datasetId: DatasetId,
     journal: readonly string[] | (() => readonly string[]),
     locale?: Locale,
+    checkpoints?: readonly SequenceCheckpoint[] | (() => readonly SequenceCheckpoint[]),
   ): Promise<void>;
   whenIdle(): Promise<void>;
   // BEGIN; fn(client); ROLLBACK: всегда, даже при ошибке. Зависание ловит сторож клиента (VS001).
@@ -20,6 +26,7 @@ export interface Sandbox {
   undo(): Promise<void>; // снапшот датасета + журнал без последнего
   reset(): Promise<void>; // снапшот датасета, журнал пуст
   journal(): readonly string[];
+  sequenceCheckpoints(): readonly SequenceCheckpoint[];
   datasetTables(): readonly string[]; // id таблиц самого датасета, без созданных учеником
   subscribe(listener: (e: SandboxEvent) => void): () => void;
 }
@@ -27,6 +34,7 @@ export type SandboxEvent =
   | { type: 'status'; status: Sandbox['status'] }
   | { type: 'restarted'; reason: 'timeout' | 'crash' }
   | { type: 'rebuilding' } // loadLesson пересобирает базу: схема на доске устарела, новая придёт с changed
+  | { type: 'journalChanged' } // последовательность изменилась без успешной команды
   // после apply/undo/reset/loadLesson: пора обновить доску. apply: изменение принёс «Применить»;
   // since - номер его транзакции или меньше: строки, которые он записал, получили xmin >= since
   | { type: 'changed'; apply?: { since: number; command: string | undefined } };
@@ -45,21 +53,31 @@ async function xactId(db: DbClient): Promise<string | null> {
 }
 
 // Последовательности не откатываются вместе с транзакцией: снимаем их до превью и возвращаем после
-const SEQ_STATE = 'select seqrelid::regclass::text, pg_sequence_last_value(seqrelid)::text from pg_sequence';
+const SEQ_STATE = `
+  select pg_catalog.format('%I.%I', n.nspname, c.relname), pg_catalog.pg_sequence_last_value(s.seqrelid)::text
+  from pg_catalog.pg_sequence s
+  join pg_catalog.pg_class c on c.oid = s.seqrelid
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  order by 1
+`;
 
 async function sequenceState(db: DbClient): Promise<Map<string, string | null>> {
   const { rows } = await db.query(SEQ_STATE);
   return new Map(rows.map((r) => [String(r[0]), r[1] === null ? null : String(r[1])]));
 }
 
-// ponytail: setval(seq, 1, false) предполагает START WITH 1; при нужде читать seqstart из pg_sequence
+// ponytail: для is_called=false предполагается START WITH 1; для других начальных значений или
+// setval(..., false) нужно отдельно читать last_value и is_called у каждой последовательности.
+async function setSequence(db: DbClient, seq: string, value: string | null): Promise<void> {
+  if (value === null) await db.query('select pg_catalog.setval($1::regclass, 1, false)', [seq]);
+  else await db.query('select pg_catalog.setval($1::regclass, $2::bigint, true)', [seq, value]);
+}
+
 async function restoreSequences(db: DbClient, before: Map<string, string | null>): Promise<void> {
   const after = await sequenceState(db);
   for (const [seq, value] of before) {
     if (!after.has(seq) || after.get(seq) === value) continue;
-    // null: последовательность ещё ни разу не выдавала значение
-    if (value === null) await db.query('select setval($1::regclass, 1, false)', [seq]);
-    else await db.query('select setval($1::regclass, $2::bigint, true)', [seq, value]);
+    await setSequence(db, seq, value);
   }
 }
 
@@ -84,6 +102,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
   let datasetId: DatasetId | null = null;
   let locale: Locale = 'ru';
   let journal: string[] = [];
+  let checkpoints: SequenceCheckpoint[] = [];
   let db: DbClient | null = null;
   let lock: Promise<unknown> = Promise.resolve();
 
@@ -109,7 +128,12 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
 
   // Новый клиент: снапшот датасета (из кэша или собранный сейчас) + повтор журнала.
   // Запись журнала, которая больше не выполняется, и всё после неё отбрасываются.
-  async function rebuild(id: DatasetId, entries: readonly string[], nextLocale: Locale): Promise<void> {
+  async function rebuild(
+    id: DatasetId,
+    entries: readonly string[],
+    nextLocale: Locale,
+    savedCheckpoints: readonly SequenceCheckpoint[],
+  ): Promise<void> {
     const key = `${nextLocale}:${id}`;
     const old = db;
     db = null;
@@ -133,23 +157,35 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     };
     let next = await fresh();
     const kept: string[] = [];
-    for (const sql of entries) {
+    const restoreAt = async (client: DbClient, at: number) => {
+      for (const checkpoint of savedCheckpoints.filter((item) => item.at === at))
+        for (const [seq, value] of Object.entries(checkpoint.values)) await setSequence(client, seq, value);
+    };
+    let restored = false;
+    for (const [index, sql] of entries.entries()) {
+      await restoreAt(next, index);
       try {
         await applyOne(next, sql);
         kept.push(sql);
       } catch (e) {
-        // запись журнала убила клиент: поднимаем новый без неё, иначе песочница не поднимется никогда
-        if (isDeath(e)) {
-          next = await fresh();
-          for (const s of kept) await applyOne(next, s);
+        // Неудачная запись могла сдвинуть последовательность, поэтому пересобираем только сохранённый префикс.
+        if (!isDeath(e)) await next.close();
+        next = await fresh();
+        for (const [keptIndex, keptSql] of kept.entries()) {
+          await restoreAt(next, keptIndex);
+          await applyOne(next, keptSql);
         }
+        await restoreAt(next, kept.length);
+        restored = true;
         break;
       }
     }
+    if (!restored) await restoreAt(next, kept.length);
     db = next;
     datasetId = id;
     locale = nextLocale;
     journal = kept;
+    checkpoints = savedCheckpoints.filter((checkpoint) => checkpoint.at <= kept.length);
   }
 
   // Клиент умер (сторож или падение worker'а): поднимаем новый из снапшота + журнала
@@ -158,7 +194,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     setStatus('restarting');
     const before = journal;
     try {
-      await rebuild(datasetId, journal, locale);
+      await rebuild(datasetId, journal, locale, checkpoints);
     } catch (err) {
       setStatus('failed');
       throw err;
@@ -181,9 +217,14 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     });
   }
 
-  async function changeTo(entries: readonly string[]): Promise<void> {
+  async function changeTo(entries: readonly string[], savedCheckpoints = checkpoints): Promise<void> {
     if (!datasetId) throw new Error('Урок не загружен');
-    await rebuild(datasetId, entries, locale);
+    await rebuild(
+      datasetId,
+      entries,
+      locale,
+      savedCheckpoints.filter((checkpoint) => checkpoint.at <= entries.length),
+    );
     emit({ type: 'changed' });
   }
 
@@ -196,6 +237,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
     },
     client: live,
     journal: () => journal,
+    sequenceCheckpoints: () => checkpoints,
     datasetTables: () => (datasetId ? (baseTables.get(`${locale}:${datasetId}`) ?? []) : []),
     subscribe(listener) {
       listeners.add(listener);
@@ -204,23 +246,26 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
 
     whenIdle: () => exclusive(async () => {}),
 
-    loadLesson: (id, requestedEntries, nextLocale = 'ru') =>
+    loadLesson: (id, requestedEntries, nextLocale = 'ru', requestedCheckpoints = []) =>
       exclusive(async () => {
         // Журнал читается после предыдущей команды, даже если переключение уже поставлено в очередь.
         const entries = typeof requestedEntries === 'function' ? requestedEntries() : requestedEntries;
+        const savedCheckpoints =
+          typeof requestedCheckpoints === 'function' ? requestedCheckpoints() : requestedCheckpoints;
         // тот же датасет и тот же журнал: база уже в нужном состоянии
         if (
           db &&
           id === datasetId &&
           locale === nextLocale &&
           entries.length === journal.length &&
-          entries.every((s, i) => s === journal[i])
+          entries.every((s, i) => s === journal[i]) &&
+          JSON.stringify(savedCheckpoints) === JSON.stringify(checkpoints)
         )
           return;
         emit({ type: 'rebuilding' });
         setStatus('booting');
         try {
-          await rebuild(id, entries, nextLocale);
+          await rebuild(id, entries, nextLocale, savedCheckpoints);
         } catch (e) {
           setStatus('failed');
           throw e;
@@ -272,7 +317,28 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
         const since = Number(
           (await db.query('select pg_snapshot_xmax(pg_current_snapshot())::text')).rows[0][0],
         );
-        const res = await applyOne(db, sql);
+        const before = await sequenceState(db);
+        let res: QueryResult[];
+        try {
+          res = await applyOne(db, sql);
+        } catch (e) {
+          if (!isDeath(e)) {
+            const after = await sequenceState(db);
+            const values = Object.fromEntries(
+              [...after].filter(([seq, value]) => before.has(seq) && before.get(seq) !== value),
+            );
+            if (Object.keys(values).length) {
+              const at = journal.length;
+              const previous = checkpoints.find((checkpoint) => checkpoint.at === at);
+              checkpoints = [
+                ...checkpoints.filter((checkpoint) => checkpoint.at !== at),
+                { at, values: { ...previous?.values, ...values } },
+              ];
+              emit({ type: 'journalChanged' });
+            }
+          }
+          throw e;
+        }
         journal = [...journal, sql];
         emit({
           type: 'changed',
@@ -282,6 +348,6 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
       }),
 
     undo: () => guarded(() => (journal.length ? changeTo(journal.slice(0, -1)) : Promise.resolve())),
-    reset: () => guarded(() => changeTo([])),
+    reset: () => guarded(() => changeTo([], [])),
   };
 }

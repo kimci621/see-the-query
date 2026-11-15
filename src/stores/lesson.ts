@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { SequenceCheckpoint } from '@/features/db/sandbox';
 import type { Locale } from '@/lib/i18n';
 
 export interface LessonWorkspace {
   lastQuery?: string;
   journal: string[];
+  sequenceCheckpoints?: SequenceCheckpoint[];
   viewport?: { x: number; y: number; zoom: number };
 }
 
@@ -24,7 +26,7 @@ export interface LessonStore {
   markRanExample(id: string): void;
   markReadToEnd(id: string): void;
   setLastQuery(id: string, q: string | undefined, locale?: Locale): void;
-  setJournal(id: string, j: string[], locale?: Locale): void;
+  setJournal(id: string, j: string[], locale?: Locale, checkpoints?: SequenceCheckpoint[]): void;
   setViewport(id: string, v: LessonWorkspace['viewport'], locale?: Locale): void;
 }
 
@@ -72,7 +74,11 @@ export const useLessonStore = create<LessonStore>()(
           if (!get().byId[id]?.readToEnd) patch(id, { readToEnd: true });
         },
         setLastQuery: (id, lastQuery, locale = 'ru') => patchWorkspace(id, locale, { lastQuery }),
-        setJournal: (id, journal, locale = 'ru') => patchWorkspace(id, locale, { journal }),
+        setJournal: (id, journal, locale = 'ru', sequenceCheckpoints) =>
+          patchWorkspace(id, locale, {
+            journal,
+            ...(sequenceCheckpoints === undefined ? {} : { sequenceCheckpoints }),
+          }),
         setViewport: (id, viewport, locale = 'ru') => patchWorkspace(id, locale, { viewport }),
       };
     },

@@ -294,6 +294,58 @@ describe('sandbox: применить, отменить, сбросить', () =
     T,
   );
 
+  it('сохраняет номера после неудачных вставок при смене языка, восстановлении и отмене', async () => {
+    const { sandbox } = await bookstore();
+    await sandbox.loadLesson('bookstore', [], 'en');
+    const failed = "insert into customer (name, email, created_at) values ('X', 'anna@example.com', now())";
+    const addCustomer = (name: string) =>
+      `insert into customer (name, email, created_at) values ('${name}', '${name}@example.com', now()) returning customer_id`;
+
+    await expect(sandbox.apply(failed)).rejects.toMatchObject({ db: { code: '23505' } });
+    expect(sandbox.journal()).toEqual([]);
+    const afterFailure = [...sandbox.sequenceCheckpoints()];
+    await sandbox.loadLesson('bookstore', [], 'ru');
+    await sandbox.loadLesson('bookstore', [], 'en', afterFailure);
+    expect((await sandbox.apply(addCustomer('first')))[0].rows).toEqual([[8]]);
+
+    await expect(sandbox.apply(failed)).rejects.toMatchObject({ db: { code: '23505' } });
+    expect((await sandbox.apply(addCustomer('second')))[0].rows).toEqual([[10]]);
+    const journal = [...sandbox.journal()];
+    const checkpoints = [...sandbox.sequenceCheckpoints()];
+    const restored = createSandbox(mortalClient);
+    await restored.loadLesson('bookstore', journal, 'en', checkpoints);
+    expect(
+      (
+        await restored
+          .client()
+          .query("select customer_id from customer where name in ('first', 'second') order by customer_id")
+      ).rows,
+    ).toEqual([[8], [10]]);
+
+    await restored.undo();
+    expect((await restored.apply(addCustomer('third')))[0].rows).toEqual([[10]]);
+    await restored.undo();
+    await restored.undo();
+    expect((await restored.apply(addCustomer('fourth')))[0].rows).toEqual([[8]]);
+    await restored.reset();
+    expect((await restored.apply(addCustomer('fifth')))[0].rows).toEqual([[7]]);
+  }, 40000);
+
+  it(
+    'не записывает служебное состояние, если ошибка не изменила последовательности',
+    async () => {
+      const { sandbox, events } = await bookstore();
+      events.length = 0;
+      await expect(sandbox.apply('select * from no_such_table')).rejects.toMatchObject({
+        db: { code: '42P01' },
+      });
+      expect(sandbox.journal()).toEqual([]);
+      expect(sandbox.sequenceCheckpoints()).toEqual([]);
+      expect(events).toEqual([]);
+    },
+    T,
+  );
+
   it(
     'apply сообщает границу: строки оператора и только они получают xmin не меньше since (P8.16)',
     async () => {
