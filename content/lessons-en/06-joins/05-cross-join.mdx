@@ -1,0 +1,135 @@
+---
+id: cross-join
+title: "CROSS JOIN: every combination"
+chapter: joins
+number: "6.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name, b.title
+  from author a
+  cross join book b
+  order by a.name, b.title;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-FROM
+    title: "FROM: table lists"
+tags: ["cross join", "Cartesian product", "all pairs", "combinations", "row multiplication"]
+mvp: false
+---
+
+<TlDr>`CROSS JOIN` pairs every row of one input with every row of the other. There is no `ON` condition, so the result has exactly `N × M` rows.</TlDr>
+
+## What's in the data
+
+There are 6 authors in <T id="public.author">author</T> and 11 books in <T id="public.book">book</T>. Some books are expensive, some lack a price and some lack an author. `CROSS JOIN` does not compare these values: it takes every combination of rows.
+
+Two counts in this lesson: 6 × 11 = 66 and 6 × 2 = 12. The first uses all books; the second limits the other input to two.
+
+## Every pair
+
+Pair every author with every book:
+
+```sql run expect=rows:66
+select a.name, b.title
+from author a
+cross join book b
+order by a.name, b.title;
+```
+
+Sixty-six rows. Every author appears 11 times, and every book 6 times. This is a **Cartesian product**: all possible pairs.
+
+On the board, the `CROSS JOIN` step connects each author row to each book row and reports 6 × 11 = 66 rows. Here both inputs have rows, so each row has partners. If either input were empty, there would be no pairs and the result would have zero rows.
+
+`CROSS JOIN` does not compare NULLs. A book without an author still pairs with every author because there is no comparison.
+
+For two inputs, a comma in `FROM` gives the same product:
+
+```sql run expect=rows:66
+select a.name, b.title
+from author a, book b
+order by a.name, b.title;
+```
+
+This older syntax cross-joins the tables; a join condition can then be written in `WHERE`. With more tables and explicit joins, comma and `JOIN` bind differently, so parentheses or explicit joins make the intended grouping clearer.
+
+## Limit the second input
+
+The second input need not be a whole table. Take the two most expensive books:
+
+```sql run expect=rows:12
+select a.name, b.title
+from author a
+cross join (
+  select title
+  from book
+  order by price desc nulls last, book_id
+  limit 2
+) b
+order by a.name, b.title;
+```
+
+Twelve rows. The subquery chose Learning Python at 3200 and Fluent Python at 2400. Each of the 6 authors is paired with each of the 2 books.
+
+In this lesson, the app shows a subquery in `FROM` by its result without step-by-step animation. Lesson 8.2 covers that view. The rows and count are real.
+
+## CROSS JOIN and WHERE
+
+A filter after the product gives the same result here:
+
+```sql run expect=rows:12
+select a.name, b.title
+from author a
+cross join book b
+where b.book_id in (2, 11)
+order by a.name, b.title;
+```
+
+Twelve rows, with the same two books. In the logical query steps, the product has 66 pairs and `WHERE` keeps 12. The board shows those steps. PostgreSQL's execution plan may apply the filter earlier instead of building every pair.
+
+Products grow quickly with larger inputs. Consider how many combinations the query needs and inspect the execution plan when performance matters.
+
+## What's missing and why
+
+- ❌ Nine books in the subquery example: it kept only the two most expensive.
+- ❌ Fifty-four pairs with `where b.book_id in (2, 11)`: the filter kept 2 books out of 11, or 6 × 2 = 12 rows.
+- ❌ Unmatched rows in this result: both inputs have rows, and every row is paired with every row of the other input.
+- ❌ Sixty-six output rows in the `count(*)` query: the aggregate reduces the pairs to one row containing 66.
+
+## Pitfalls
+
+<Callout kind="trap">
+A forgotten join condition in the older syntax produces a product:
+
+```sql run expect=rows:1
+select count(*) as pairs
+from author a, book b;
+```
+
+One row containing 66. If the intended report was “authors and their books”, it would pair each author with every book in the store. With large tables, the number can reach millions. Two comma-separated inputs in `FROM` form a cross join, even when that was unintended.
+</Callout>
+
+<Callout kind="tip">
+Use `CROSS JOIN` for combinations: all employees and shift days, or all authors and categories for a matrix. Keep an input small when appropriate, for example with a `LIMIT` subquery or a list of values. If you need pairs based on a condition, use a `JOIN` with `ON`.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `author cross join book_category` return? There are 6 categories and 6 authors.
+2. How many rows does `book cross join book` return? There are 11 books.
+3. How many rows remain from the 66-row query with `where a.country = 'Russia'`? Four authors are from Russia.
+
+<Cheatsheet>
+- `a cross join b`: every row of `a` paired with every row of `b`, for `N × M` rows. An empty input gives zero rows.
+- For two inputs, `from a, b` gives the same product. Explicit `JOIN` has different binding precedence when more tables are involved.
+- There is no `ON` condition. Logically, `WHERE` filters the product; the planner may choose a different execution order.
+- NULL values do not prevent a pair because no equality comparison is made.
+- Use it for combinations, matrices and calendars; watch the size of both inputs.
+- A forgotten condition in a comma-separated `FROM` multiplies rows.
+</Cheatsheet>
