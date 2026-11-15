@@ -1,0 +1,140 @@
+---
+id: row-multiplication
+title: "Row multiplication in JOIN: 8 orders and 15 rows"
+chapter: joins
+number: "6.12"
+order: 12
+dataset: bookstore
+board:
+  tables: [public.orders, public.order_item]
+  layout:
+    orders: { x: 0, y: 0 }
+    order_item: { x: 0, y: 360 }
+initialQuery: |
+  select o.order_id, i.book_id
+  from orders o
+  join order_item i using (order_id)
+  order by o.order_id, i.book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/tutorial-join.html
+    title: "Tutorial: joins"
+tags: ["row multiplication", "join", "count", "one-to-many", "aggregate"]
+mvp: false
+---
+
+<TlDr>`JOIN` repeats a left row for each match on the right. An order with three items produces three rows, and `count(*)` counts those rows, not orders.</TlDr>
+
+## What's in the data
+
+There are 8 orders in <T id="public.orders">orders</T> and 15 items in <T id="public.order_item">order_item</T>. Order 3 has three items; orders 1, 5, 6, 7 and 8 have two each; orders 2 and 4 have one each.
+
+All eight orders have at least one item. The Island of Lost Ships was never ordered, so there is no item row for it.
+
+## Count orders
+
+```sql run expect=rows:1
+select count(*) from orders;
+```
+
+One row containing 8. That is the number of orders in the table.
+
+## Join the items
+
+```sql run expect=rows:15
+select o.order_id, i.book_id
+from orders o
+join order_item i using (order_id)
+order by o.order_id, i.book_id;
+```
+
+Fifteen rows: 8 orders became 15 joined rows.
+
+This is a **one-to-many** relationship. The join places each item beside its order; it does not combine the items into one row. Order 3 appears three times, order 2 once.
+
+On the board, order 3 pairs with books 6, 8 and 9. The result has 15 rows. An order with no items would be excluded by this inner `JOIN`, but the dataset has none.
+
+## One order up close
+
+```sql run expect=rows:3
+select o.order_id, i.book_id, i.qty
+from orders o
+join order_item i using (order_id)
+where o.order_id = 3
+order by i.book_id;
+```
+
+Three rows: books 6, 8 and 9, one copy each. One orders row produces three result rows.
+
+The more matching items an order has, the more joined rows it produces.
+
+## Items per order
+
+```sql run expect=rows:8
+select o.order_id, count(*) as items
+from orders o
+join order_item i using (order_id)
+group by o.order_id
+order by o.order_id;
+```
+
+Eight rows, one per order. `GROUP BY` collects the joined rows by order. Order 3 has three items; orders 1, 5, 6, 7 and 8 have two each; orders 2 and 4 have one each. The counts add up to 15.
+
+## count(*) and count(distinct)
+
+```sql run expect=rows:1
+select count(*) as joined_rows,
+       count(distinct o.order_id) as orders
+from orders o
+join order_item i using (order_id);
+```
+
+One row: `joined_rows` is 15 and `orders` is 8.
+
+`count(*)` counts joined rows. `count(distinct o.order_id)` counts distinct orders represented in the join. Here that is all orders; with an inner join, an order with no items would be absent from both counts.
+
+## What's missing and why
+
+- ❌ The Island of Lost Ships: it has no order_item row.
+- ❌ Eight result rows from the join: there are 8 distinct orders, but 15 joined rows because orders repeat.
+- ❌ Orders without items: none exist in this dataset. An inner join would exclude one if it existed.
+- ❌ 15 in `count(distinct o.order_id)`: it counts distinct represented orders, not joined rows.
+
+## Pitfalls
+
+<Callout kind="trap">
+A report counting paid orders through a join may count items instead:
+
+```sql run expect=rows:1
+select count(*) from orders o
+join order_item i using (order_id)
+where o.status = 'paid';
+```
+
+One row containing 9. There are four paid orders: 1, 3, 6 and 7. They have 2, 3, 2 and 2 items, for 9 joined rows.
+
+`count(*)` counts the multiplied rows, so this report overstates the order count. Count orders before joining or use `count(distinct o.order_id)` for orders represented in the join. You can calculate an item sum and a distinct order count in one query when those are the intended measures.
+</Callout>
+
+<Callout kind="tip">
+For an item total, start with order_item: `sum(qty)` or `sum(qty * price)`. Joining each item to its one order does not multiply the item amount, though filters can exclude rows.
+
+Joining two independent one-to-many relationships can multiply their rows against each other. Aggregate each side before joining when the report needs their separate totals.
+</Callout>
+
+## Check yourself
+
+1. How many joined rows belong to order 5? Count its items, then check.
+2. How many distinct books were ordered? Use `count(distinct i.book_id)` on the join.
+3. Replace `join` with `left join`. How many rows result, and why?
+
+<Cheatsheet>
+- In a one-to-many join, a left row repeats for each matching right row.
+- `count(*)` after the join counts pairs, not orders.
+- `count(distinct pk)` counts distinct left keys represented in the joined result.
+- `GROUP BY` a left key collects its joined rows into a group.
+- `INNER JOIN` excludes unmatched left rows; `LEFT JOIN` preserves them.
+- Item sums can be calculated on order_item without an unnecessary join.
+- Two independent one-to-many joins can multiply each other's rows.
+</Cheatsheet>

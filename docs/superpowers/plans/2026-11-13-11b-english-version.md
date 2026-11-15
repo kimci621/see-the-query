@@ -230,7 +230,7 @@
 - [x] 6.9 `on-vs-where`: `content/lessons-en/06-joins/09-on-vs-where.mdx`
 - [x] 6.10 `semi-join`: `content/lessons-en/06-joins/10-semi-join.mdx`
 - [x] 6.11 `anti-join`: `content/lessons-en/06-joins/11-anti-join.mdx`
-- [ ] 6.12 `row-multiplication`: `content/lessons-en/06-joins/12-row-multiplication.mdx`
+- [x] 6.12 `row-multiplication`: `content/lessons-en/06-joins/12-row-multiplication.mdx`
 - [ ] 6.13 `lateral-join`: `content/lessons-en/06-joins/13-lateral-join.mdx`
 
 **07-aggregation**
