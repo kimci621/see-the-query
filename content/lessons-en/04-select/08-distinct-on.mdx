@@ -1,0 +1,167 @@
+---
+id: distinct-on
+title: DISTINCT and DISTINCT ON
+chapter: select
+number: "4.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.book, public.author]
+  layout:
+    book: { x: 0, y: 0 }
+    author: { x: 330, y: 360 }
+initialQuery: |
+  select distinct category_id from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-select-lists.html#QUERIES-DISTINCT
+    title: DISTINCT and DISTINCT ON
+  - url: https://www.postgresql.org/docs/current/sql-select.html
+    title: SELECT
+tags: [distinct, "distinct on", "unique rows", "order by"]
+mvp: false
+---
+
+<TlDr>`DISTINCT` removes duplicate whole rows; `DISTINCT ON` keeps one row for each group of key values.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books. The category column has four distinct values: 3, 4, 6 and NULL. The author column has six: 1, 2, 3, 4, 5 and NULL. Two books have no author; one has no category.
+
+`DISTINCT` considers the whole selected row, not just one column. Keep that in mind for the examples.
+
+## DISTINCT: unique values
+
+All book categories:
+
+```sql run expect=rows:4
+select distinct category_id from book
+order by category_id nulls last;
+```
+
+Four rows: 3, 4, 6 and NULL. There are 11 books, but fewer category values. On the board, equal values move into stacks and collapse to one row per value.
+
+`DISTINCT` treats NULLs as equal when removing duplicates. Here only one book lacks a category, so there is one NULL row in the result.
+
+Authors:
+
+```sql run expect=rows:6
+select distinct author_id from book
+order by author_id nulls last;
+```
+
+Six rows: five author IDs and NULL. Sholokhov's two books and Verne's two books each produce one row for their author.
+
+<Callout kind="trap">
+`DISTINCT` applies to all columns in the `SELECT` list, not just the first:
+
+```sql run expect=rows:11
+select distinct author_id, title from book;
+```
+
+Eleven rows remain because the titles differ. Two rows are duplicates only when all selected columns match.
+</Callout>
+
+## DISTINCT ON: one row per group
+
+`DISTINCT ON (author_id)` keeps the first row for each author key. `ORDER BY` determines which row comes first.
+
+The most expensive book per author:
+
+```sql run expect=rows:6
+select distinct on (author_id) title, author_id, price
+from book
+order by author_id nulls last, price desc nulls last, title;
+```
+
+Six rows. The selected books are And Quiet Flows the Don for Sholokhov (890), Fluent Python for Ramalho (2400), The Captain's Daughter for Pushkin (420), Professor Dowell's Head for Belyaev (560), Captain Grant's Children for Verne (610), and Learning Python for the NULL author group (3200).
+
+Verne has two books at 610. The third key, `title`, breaks the tie: Captain Grant's Children sorts before Journey to the Center of the Earth.
+
+On the board, rows are grouped by `author_id`, and the selected row in each group is highlighted. The others fade.
+
+## DISTINCT ON by category
+
+Use a different key to find the most expensive book in each category:
+
+```sql run expect=rows:4
+select distinct on (category_id) category_id, title, price
+from book
+order by category_id nulls last, price desc nulls last, title;
+```
+
+Four rows: one each for categories 3, 4, 6 and NULL. And Quiet Flows the Don wins category 4 at 890; Learning Python wins category 6 at 3200.
+
+<Callout kind="analogy">
+`DISTINCT ON` is like picking a team captain: the key defines the teams, and the ordering determines the captain. Change the ordering and the captain may change, even though the teams stay the same.
+</Callout>
+
+## ORDER BY and the key
+
+`DISTINCT ON` can run without `ORDER BY`, but the first row in each group is then unpredictable. When `ORDER BY` is present, its initial expressions must match the `DISTINCT ON` expressions:
+
+```sql run expectError=42P10
+select distinct on (author_id) title from book
+order by price desc;
+```
+
+Code `42P10`: `SELECT DISTINCT ON expressions must match initial ORDER BY expressions`. Put `author_id` first, then the keys used to choose a row within each group:
+
+```sql run expect=rows:6
+select distinct on (author_id) title, author_id
+from book
+order by author_id nulls last, price desc nulls last;
+```
+
+Six rows. On the board, `author_id` is highlighted as the first key; price chooses the leading row within each group. Ties in price still have no specified winner here.
+
+<Callout kind="tip">
+`DISTINCT ON` helps with questions such as “latest entry per user” or “most expensive item per category”. Add enough sort keys to break ties when the selected row matters.
+</Callout>
+
+## DISTINCT and NULL
+
+NULLs are considered equal when duplicates are removed:
+
+```sql run expect=rows:6
+select distinct author_id from book
+order by author_id nulls last;
+```
+
+The sixth row is NULL: books 10 and 11 have no author and produce one NULL row. `GROUP BY` also groups NULLs together.
+
+## What's missing and why
+
+- ❌ Repeated category values in `distinct category_id`: each value appears once. The single book without a category contributes one NULL row.
+- ❌ Verne's other book in `distinct on (author_id)`: Captain Grant's Children wins the price tie by title.
+- ❌ Journey to the Center of the Earth among the category 3 winners: the two books at 610 tie on price, and Captain Grant's Children sorts first by title.
+
+## Pitfalls
+
+<Callout kind="trap">
+`DISTINCT ON` without `ORDER BY` runs, but does not define the winner:
+
+```sql run expect=rows:6
+select distinct on (author_id) title, author_id from book;
+```
+
+There are still 6 rows, but which books appear can depend on the plan and physical order. Do not rely on a particular winner without an ordering that resolves ties.
+</Callout>
+
+<Callout kind="trap">
+`DISTINCT` does not replace `GROUP BY` for aggregates per author. `select distinct author_id, count(*) from book` is rejected because `author_id` is neither grouped nor aggregated. Use `GROUP BY author_id` to count books per author.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `select distinct category_id from book` return without `NULLS LAST`? Does the count change?
+2. Which Verne book wins `distinct on (author_id)` if `title` is removed from `ORDER BY`? Run it, and consider whether the choice is guaranteed.
+3. What happens if `distinct on (category_id)` uses `order by price desc, category_id`? Predict the error, then check.
+
+<Cheatsheet>
+- `DISTINCT` removes duplicate rows across all selected columns.
+- NULLs count as equal for `DISTINCT`.
+- `DISTINCT ON (key)` keeps one row per key group.
+- If present, `ORDER BY` must begin with the `DISTINCT ON` expressions.
+- `ORDER BY` chooses the row within each group; add keys to break ties.
+- Use `GROUP BY` for aggregates per group.
+</Cheatsheet>

@@ -201,7 +201,7 @@
 - [x] 4.5 `null-logic`: `content/lessons-en/04-select/05-null-logic.mdx`
 - [x] 4.6 `order-by`: `content/lessons-en/04-select/06-order-by.mdx`
 - [x] 4.7 `limit-offset`: `content/lessons-en/04-select/07-limit-offset.mdx`
-- [ ] 4.8 `distinct-on`: `content/lessons-en/04-select/08-distinct-on.mdx`
+- [x] 4.8 `distinct-on`: `content/lessons-en/04-select/08-distinct-on.mdx`
 - [ ] 4.9 `case-when`: `content/lessons-en/04-select/09-case-when.mdx`
 - [ ] 4.10 `values-generate-series`: `content/lessons-en/04-select/10-values-generate-series.mdx`
 
