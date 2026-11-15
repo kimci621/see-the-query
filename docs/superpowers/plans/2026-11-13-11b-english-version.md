@@ -250,7 +250,7 @@
 - [x] 8.5 `set-operations`: `content/lessons-en/08-subqueries/05-set-operations.mdx`
 - [x] 8.6 `cte`: `content/lessons-en/08-subqueries/06-cte.mdx`
 - [x] 8.7 `recursive-cte`: `content/lessons-en/08-subqueries/07-recursive-cte.mdx`
-- [ ] 8.8 `cte-materialization`: `content/lessons-en/08-subqueries/08-cte-materialization.mdx`
+- [x] 8.8 `cte-materialization`: `content/lessons-en/08-subqueries/08-cte-materialization.mdx`
 
 **09-windows**
 

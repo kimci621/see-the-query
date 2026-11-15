@@ -1,0 +1,136 @@
+---
+id: cte-materialization
+title: MATERIALIZED, NOT MATERIALIZED and DML in CTEs
+chapter: subqueries
+number: "8.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.author, public.review]
+  layout:
+    author: { x: 0, y: 0 }
+    review: { x: 0, y: 380 }
+initialQuery: |
+  with a as materialized (select author_id from author)
+  select count(*) from a;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION
+    title: CTE materialization
+  - url: https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING
+    title: Data-modifying statements in WITH
+tags: [cte, materialized, "not materialized", "data modification", with]
+mvp: false
+---
+
+<TlDr>`MATERIALIZED` prevents folding a CTE into its parent query; `NOT MATERIALIZED` requests folding when eligible. A data-modifying CTE changes data, but this lesson's preview rolls changes back until Apply.</TlDr>
+
+## The data
+
+<T id="public.author">author</T> has 6 authors. Boris Pasternak has no books, but that does not matter here: the CTE selects all authors.
+
+<T id="public.review">review</T> has 10 reviews. Only one has rating 2: `review_id = 7`, for Simple Python (book 10). The last example deletes it.
+
+## MATERIALIZED: a separate result
+
+```sql run expect=rows:1
+with a as materialized (
+  select author_id from author
+)
+select count(*) from a;
+```
+
+There is 1 row with `count = 6`. The CTE supplies six author IDs, and the outer `SELECT` counts them.
+
+`MATERIALIZED` prevents the planner from folding this CTE into the parent query. References share the separate CTE result rather than repeating the body. A `SELECT` CTE may still produce only as many rows as its consumers demand; this example's count needs all six. Materialization can be useful for an expensive calculation used several times or to avoid repeated evaluation of side effects.
+
+## NOT MATERIALIZED: folding into the parent
+
+{/* final-only: NOT MATERIALIZED пока не анимируется */}
+```sql run expect=rows:1 trace=final-only
+with a as not materialized (
+  select author_id from author
+)
+select count(*) from a;
+```
+
+The answer is still one row with `count = 6`. What changes is the plan: an eligible `NOT MATERIALIZED` CTE is folded into the parent query. The planner can optimize both levels together, potentially pushing outer conditions down to the base table.
+
+The tracer shows only the final result for this example. Lesson 8.6 used a CTE like a table; that does not mean a separate table must exist in the execution plan.
+
+Folding applies to suitable non-recursive, side-effect-free `SELECT` CTEs. If a CTE is referenced several times, folding can repeat work. `MATERIALIZED` prevents folding; neither choice is always faster.
+
+## DML inside a CTE
+
+A top-level `WITH` can contain `INSERT`, `UPDATE`, `DELETE` or `MERGE`. This can modify rows and pass the changed rows to another part of the same statement. This is the last working example because it changes data:
+
+{/* final-only: DML внутри CTE пока не анимируется */}
+```sql run apply expect=rows:1 trace=final-only
+with moved as (
+  delete from review where rating = 2
+  returning review_id
+)
+select count(*) from moved;
+```
+
+There is 1 row with `count = 1`. `DELETE` removes review 7 and passes its `review_id` through `RETURNING` as the result of `moved`. The outer `SELECT` counts those rows.
+
+When this query is in the editor, preview runs it in a transaction and rolls it back: all 10 reviews remain. The example’s Apply button commits the `DELETE`, leaving 9 reviews. Running it again returns count 0 because the review has already been deleted.
+
+A data-modifying CTE executes once and to completion, even if the parent reads only part of its output. Sibling statements and the main query use the same snapshot and cannot see one another's changes to target tables directly; use `RETURNING` to pass changed rows. Avoid modifying the same row twice in one statement, since the outcome is not reliably predictable.
+
+## What is missing from the result
+
+- ❌ Five authors in `a`: author has six rows and there is no filter.
+- ❌ Two deleted reviews in `moved`: only review 7 has rating 2.
+- ❌ A list of deleted reviews in the result: the outer `SELECT` returns only the count.
+- ❌ The other nine reviews in `moved`: `DELETE` selects only rating 2.
+- ❌ A second count of 1 after Apply: the review is already deleted, so another run returns 0.
+
+## Traps
+
+<Callout kind="trap">
+A data-modifying statement in `WITH` must be attached to the top-level statement:
+
+```sql run expectError=0A000
+select * from (
+  with moved as (
+    delete from review where rating = 2 returning review_id
+  )
+  select * from moved
+) x;
+```
+
+Code `0A000`: `WITH clause containing a data-modifying statement must be at the top level`. This `DELETE` is inside a `FROM` subquery, rather than a `WITH` attached to the top-level statement.
+
+Another error is referencing a data-modifying CTE without `RETURNING`:
+
+```sql run expectError=0A000
+with moved as (
+  delete from review where rating = 2
+)
+select count(*) from moved;
+```
+
+`WITH query "moved" does not have a RETURNING clause`. Without `RETURNING`, the CTE has no output relation to reference. If the main query did not refer to it, the `DELETE` would still execute.
+</Callout>
+
+<Callout kind="tip">
+`MATERIALIZED` can prevent an outer filter from being pushed into the CTE, so it may do extra work. It can also avoid repeated calculations. Compare plans and timings for your query before choosing an override.
+</Callout>
+
+## Check yourself
+
+1. How many rows and what count does `select count(*) from a` return if `materialized` is removed?
+2. How many reviews remain after Apply?
+3. What does another run of the `DELETE` block return?
+4. Is Pasternak included in `a`?
+
+<Cheatsheet>
+- `with a as materialized (select ...)`: prevent folding and use a separate CTE result.
+- `with a as not materialized (select ...)`: request folding into the parent when eligible.
+- Since PostgreSQL 12, a suitable single-reference CTE is normally folded by default.
+- A separate `SELECT` CTE need not produce rows that its parent never demands.
+- A top-level `WITH` can contain `insert`, `update`, `delete` or `merge`; `returning` supplies rows for other parts of the statement.
+- Preview rolls changes back; Apply commits them.
+- A data-modifying CTE executes once and to completion.
+</Cheatsheet>
