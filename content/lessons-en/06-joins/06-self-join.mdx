@@ -1,0 +1,139 @@
+---
+id: self-join
+title: "SELF JOIN: a table joined to itself"
+chapter: joins
+number: "6.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.employee]
+  layout:
+    employee: { x: 0, y: 0 }
+initialQuery: |
+  select e.name, m.name as boss
+  from employee e
+  join employee m on e.manager_id = m.employee_id
+  order by e.employee_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/tutorial-join.html
+    title: "Tutorial: joining tables"
+tags: ["self join", "table alias", "hierarchy", "manager and employee"]
+mvp: false
+---
+
+<TlDr>A `SELF JOIN` is an ordinary `JOIN` with the same table on both sides. Distinct names give its rows two roles, letting a query pair an employee with their manager.</TlDr>
+
+## What's in the data
+
+There are 8 people in <T id="public.employee">employee</T>. Each has an <C id="public.employee.employee_id">employee_id</C> and a <C id="public.employee.manager_id">manager_id</C> reference.
+
+Olga Nikolaeva is the director; her manager_id is NULL. The other seven people reference someone. Alexey Morozov earns 190000, while his manager Pavel Orlov earns 180000. Tatiana Zaitseva is on the fourth level of the tree.
+
+## Two instances of one table
+
+To pair each employee with their manager, join the table to itself:
+
+```sql run expect=rows:7
+select e.name, m.name as boss
+from employee e
+join employee m on e.manager_id = m.employee_id
+order by e.employee_id;
+```
+
+Seven rows. Pavel Orlov and Svetlana Volkova report to Olga; Dmitry and Alexey to Pavel; Natalia and Igor to Svetlana; Tatiana to Dmitry.
+
+There are eight employees but seven rows. Olga has no match: her manager_id is `NULL`, and an ordinary equality comparison with NULL does not return `TRUE`. `INNER JOIN` excludes her row in the employee role.
+
+On the board, employee is scanned twice: alias `e` on the left and `m` on the right. These are two roles for the same table. The join has 7 pairs. Olga has no match as an employee; Alexey, Natalia, Igor and Tatiana have no matches as managers because nobody reports to them.
+
+## Why use aliases?
+
+`e` and `m` are **table aliases**, like `b` and `a` in lesson 6.2. They do not rename the table in the schema. They provide distinct names inside the query so you can write `e.name` and `m.name`.
+
+Without distinct names, Postgres cannot tell the instances apart:
+
+```sql run expectError=42712
+select * from employee join employee on employee.manager_id = employee.employee_id;
+```
+
+The error is `42712`: employee is specified twice. At least one instance needs an alias; giving both aliases makes their roles clear.
+
+Another error: the aliases exist, but the column is not qualified.
+
+```sql run expectError=42702
+select name from employee e join employee m on e.manager_id = m.employee_id;
+```
+
+The error is `42702`: `name` exists in both instances. Write `e.name` or `m.name`.
+
+## Who earns more than their manager?
+
+The condition assigns the roles. Employee on the left and manager on the right gives `e.manager_id = m.employee_id`.
+
+```sql run expect=rows:1
+select e.name, e.salary, m.name as boss, m.salary as boss_salary
+from employee e
+join employee m on e.manager_id = m.employee_id
+where e.salary > m.salary
+order by e.employee_id;
+```
+
+One row: Alexey Morozov earns 190000; his manager Pavel Orlov earns 180000. The other employees earn less than their managers or have no manager.
+
+`SELF JOIN` can answer hierarchy questions: who reports to whom, how many reports a manager has, and who earns more than their manager.
+
+## A director without a manager
+
+`INNER JOIN` omitted Olga. To keep all employees, including the director, use `LEFT JOIN`:
+
+```sql run expect=rows:8
+select e.name, m.name as boss
+from employee e
+left join employee m on e.manager_id = m.employee_id
+order by e.employee_id;
+```
+
+Eight rows. Olga has NULL in `boss`; the other rows are unchanged.
+
+## What's missing and why
+
+- ❌ Olga Nikolaeva in the employee role in `INNER JOIN`: manager_id is NULL, so she has no match.
+- ❌ Alexey, Natalia, Igor and Tatiana in the `boss` column: nobody references their identifiers as a manager.
+- ❌ Other employees in the salary comparison: they do not earn more than their managers, or have none.
+- ❌ Olga's manager in `LEFT JOIN`: she has none, so `boss` is NULL.
+
+## Pitfalls
+
+<Callout kind="trap">
+Reverse the condition and the roles reverse too. The query runs, but its labels become misleading:
+
+```sql run expect=rows:7
+select e.name as employee, m.name as boss
+from employee e
+join employee m on e.employee_id = m.manager_id
+order by m.employee_id;
+```
+
+Seven rows, with “employee Olga Nikolaeva, boss Pavel Orlov” first. Pavel actually reports to Olga. `e.employee_id = m.manager_id` makes `e` the manager and `m` the report, while the output labels say the opposite. Check which side holds manager_id.
+</Callout>
+
+<Callout kind="tip">
+For an employee hierarchy, use a foreign key from manager_id to employee_id and prevent cycles in the application or with a trigger. A self join does not create cycles, but cyclic data can produce unexpected pairs and can make a recursive query repeat indefinitely unless it handles cycles.
+</Callout>
+
+## Check yourself
+
+1. How many rows does a `LEFT JOIN` of employees to managers return? Check on the board.
+2. Who manages nobody? Use a `left join` and keep rows without a matching report.
+3. What changes if you swap the roles of `e` and `m` in the main condition but keep the column labels?
+
+<Cheatsheet>
+- `SELF JOIN` is an ordinary `JOIN` of a table to itself, not a separate SQL keyword.
+- Give the table instances distinct names; `employee e` and `employee m` make both roles clear.
+- `e.manager_id = m.employee_id`: e is the employee, m the manager.
+- `INNER JOIN` excludes the root whose manager_id is NULL; `LEFT JOIN` keeps it with NULL for the manager.
+- Duplicate table names give `42712`; an unqualified column present in both instances gives `42702`.
+- The direction of the condition determines the roles. Check the output labels.
+</Cheatsheet>
