@@ -1,0 +1,146 @@
+---
+id: types-casting
+title: Types and casts
+chapter: types
+number: "5.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, price, pages from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype.html
+    title: Data types
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS
+    title: Type casts
+course: ["11.25"]
+tags: [types, casting, cast]
+---
+
+<TlDr>Every column has a type. When Postgres has no operator for the types you give it, an explicit cast can convert a value with `::`.</TlDr>
+
+## What's in the data
+
+The <T id="public.book">book</T> table has 11 books and 9 columns. The Island of Lost Ships has no price; Simple Python has no author. This time, look at the columns: <C id="public.book.price">price</C> is numeric, <C id="public.book.pages">pages</C> is int, <C id="public.book.published_at">published_at</C> is date, and <C id="public.book.tags">tags</C> is text[], an array of strings. The board labels each column's type.
+
+## A type is a contract
+
+A column's type determines which values it can hold and which operations apply to them. You can add a number to a price, but not to a title:
+
+```sql run expect=rows:1
+select title, price, pages, published_at, tags from book where book_id = 1;
+```
+
+On the board, `WHERE` keeps one row and `SELECT` keeps five columns. And Quiet Flows the Don has a numeric price of 890.00, an integer page count, a date and an array of two tags.
+
+Now compare text with a number:
+
+```sql run expectError=42883
+select title from book where title = 5;
+```
+
+Postgres reports `operator does not exist: text = integer`. It cannot find a suitable equality operator for those types, so the query stops before comparing rows.
+
+<Callout kind="analogy">
+Think of two keys: one opens a door, the other a mailbox. They may look similar, but one cannot necessarily replace the other. A cast converts a value into a type an operation can accept.
+</Callout>
+
+## Casting with `::`
+
+Write an explicit cast as `value::type`. The standard form is `cast(value as type)`.
+
+Turn the price into text and append a ruble sign:
+
+```sql run expect=rows:1
+select price::text || ' ₽' as label from book where book_id = 1;
+```
+
+At `SELECT`, a new `label` column appears with `890.00 ₽`. The stored price remains numeric: only the expression's result changed.
+
+Cast text to a number for arithmetic:
+
+```sql run expect=rows:1
+select '42'::int + 1 as answer;
+```
+
+The result is `43`. No table is needed; Postgres evaluates the expression and returns one row.
+
+The same operation with standard `CAST` syntax:
+
+```sql run expect=rows:1
+select cast('42' as integer) + 1 as answer;
+```
+
+The answer is `43` again. `CAST` also works in other SQL databases; `::` is PostgreSQL's shorthand.
+
+A cast does not repair invalid input. Text that cannot be read as an integer raises an error:
+
+```sql run expectError=22P02
+select 'abc'::int;
+```
+
+Error `22P02` (`invalid_text_representation`): `invalid input syntax for type integer: "abc"`.
+
+## When Postgres converts for you
+
+Postgres can infer a type for an untyped string literal from context. Here it interprets `'500'` as numeric for the comparison:
+
+```sql run expect=rows:7
+select book_id, title, price from book where price > '500' order by book_id;
+```
+
+Seven rows pass `WHERE`. This is convenient, but not every pair of types has an implicit conversion. Use a numeric literal or an explicit cast when that makes the intended comparison clearer.
+
+An untyped literal and an expression explicitly typed as `text` are different. Assign the string the type `text`:
+
+```sql run expectError=42883
+select title from book where price > '500'::text;
+```
+
+The operator now has numeric on the left and text on the right. Postgres finds no matching comparison and returns an error. Use `500` or cast the string to numeric.
+
+## A range comparison
+
+This filter from chapter 4 uses numeric boundaries against the numeric price:
+
+```sql run expect=rows:4
+select title, price from book where price > 500 and price < 1000 order by book_id;
+```
+
+Four rows remain. In the dates chapter, you'll see the same pattern with date boundaries.
+
+## What's missing and why
+
+- ❌ The Island of Lost Ships in either price comparison: its price is NULL, so neither comparison is `TRUE`.
+- ❌ Books priced exactly 500 or 1000: there are none in this dataset, and the boundaries are strict.
+- ❌ The Fate of a Man, The Captain's Daughter and The Tale of the Fisherman and the Fish in the range query: their prices are below 500.
+
+## Pitfalls
+
+<Callout kind="trap">
+An empty string is text, not zero. It cannot be cast to a number either:
+
+```sql run expectError=22P02
+select ''::int;
+```
+
+If an empty string in a text column means a missing value, convert it to `NULL` first: `nullif(col, '')::int`. Other text that is not a valid integer still raises an error.
+</Callout>
+
+<Callout kind="tip">
+Check the types on both sides before comparing values. This app labels each column on the board; elsewhere, inspect the table definition or `information_schema.columns`.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `select title from book where pages > 1000` return? Predict, then check on the board.
+2. What does `select '890.50'::numeric + 1` return? What about `select '890,50'::numeric + 1`?
+3. Cast the page count of book 1 to text and concatenate it with the word “pages”. How many casts did you need?
+
+<Cheatsheet>
+- A column type determines its values and available operations. An operator may not exist for incompatible types: `42883`.
+- Explicit casts: `x::type` or `cast(x as type)`. Invalid integer text gives `22P02`.
+- Text concatenation can convert a non-string operand; an untyped string literal can take its type from context.
+- Check the types when a comparison is unclear, and cast explicitly where needed.
+</Cheatsheet>
