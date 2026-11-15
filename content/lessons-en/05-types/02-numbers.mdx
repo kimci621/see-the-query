@@ -1,0 +1,133 @@
+---
+id: numbers
+title: Numbers
+chapter: types
+number: "5.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book, public.order_item]
+initialQuery: |
+  select title, price, pages from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-numeric.html
+    title: Numeric types
+  - url: https://www.postgresql.org/docs/current/functions-math.html
+    title: Mathematical functions and operators
+course: ["11.26"]
+tags: [numbers, integer, numeric, float, division, rounding]
+---
+
+<TlDr>Integer division discards the fractional part. Numeric is suitable for money; float stores many fractions approximately.</TlDr>
+
+## What's in the data
+
+The <T id="public.book">book</T> table has two numeric columns: <C id="public.book.price">price</C> is numeric(10,2), and <C id="public.book.pages">pages</C> is int. One book, The Island of Lost Ships, has no price, so price aggregates skip it.
+
+## Integer division
+
+Dividing two integers discards the fractional part, without rounding:
+
+```sql run expect=rows:1
+select 7 / 2 as int_div, 7::numeric / 2 as exact_div;
+```
+
+The same query gives two answers: `3` and `3.5000000000000000`. When one operand is numeric, the fractional part is retained. A fraction such as one third still needs rounding. This can catch you out: `pages / 100` gives 0 for books with fewer than 100 pages:
+
+```sql run expect=rows:1
+select pages, pages::numeric / 100 as hundreds from book where book_id = 3;
+```
+
+The Fate of a Man has 64 pages, or `0.64` hundreds. Without `::numeric`, the result would be `0`.
+
+## numeric: exact decimal values
+
+Numeric stores decimal values exactly within its supported precision. For example, storing the price `890.00` introduces no binary floating-point error. Operations with non-terminating decimal results and columns with a declared scale can still require rounding.
+
+```sql run expect=rows:1
+select sum(price) as total, avg(price) as middle from book;
+```
+
+The sum of known prices is `11380.00`, and their average is `1138.0000000000000000`. The book without a price is excluded, so `avg` uses 10 books. `count(*)` would count 11.
+
+## Rounding
+
+For numeric, ties are rounded away from zero:
+
+```sql run expect=rows:1
+select round(2.5) as r25, round(3.5) as r35;
+```
+
+The results are 3 and 4. Negative ties also go away from zero: `round(-2.5)` gives -3. For float, the tie-breaking rule depends on the platform; rounding to the nearest even number is common. To round numeric to two decimal places, use `round(x, 2)`.
+
+## float: approximate storage
+
+Floating-point numbers use a binary representation. Some decimal fractions cannot be represented exactly in that format:
+
+```sql run expect=rows:1
+select (0.1::float8 + 0.2::float8) as float_sum, (0.1::float8 + 0.2::float8)::numeric as cast_sum;
+```
+
+`float_sum` shows `0.30000000000000004`. The cast value `cast_sum` shows `0.3`, but casting a result after calculation does not restore lost precision. For money, it is better to store and calculate the original values as numeric.
+
+```sql run expect=rows:1
+select price::float8 as approx_price from book where book_id = 1;
+```
+
+The result displays as `890`: float does not preserve the number of decimal places in the original notation. The integer 890 itself is exactly representable, but not every decimal fraction is.
+
+## Overflow
+
+An int uses 32 bits and has a maximum of 2147483647. The page counts in this small table won't overflow it, but an event counter in a busy system might:
+
+```sql run expectError=22003
+select 2147483647 + 1;
+```
+
+The error is `22003 numeric_value_out_of_range`. For larger counters and identifiers, bigint offers an eight-byte range.
+
+## Calculating money with numeric
+
+Calculate the revenue for order 1: multiply quantity by price, then sum the results.
+
+```sql run expect=rows:1
+select sum(qty * price) as revenue from order_item where order_id = 1;
+```
+
+The result is `1730.00`: one copy of And Quiet Flows the Don at 890 and two copies of The Captain's Daughter at 420 each. On the board, `SUM` combines both order rows into one total.
+
+## What's missing and why
+
+- ❌ The book without a price in `sum` and `avg`: these aggregates ignore NULL. `count(*)` counts rows regardless.
+- ❌ `0.64` hundreds of pages without `::numeric`: integer division discards the fraction.
+- ❌ Equality between `0.1 + 0.2` and `0.3` as float8 values: use an appropriate tolerance or numeric for the calculation.
+
+## Pitfalls
+
+<Callout kind="trap">
+Division in the middle of an expression can discard the fractional part before multiplication:
+
+```sql run expect=rows:1
+select 13 / 10 * 10 as int_result, 13::numeric / 10 * 10 as numeric_result;
+```
+
+The first result is `10`, the second `13.0000000000000000`. If later operations need the fraction, cast an operand before dividing.
+</Callout>
+
+<Callout kind="tip">
+For money, use numeric with suitable precision and scale, or an integer number of the smallest currency unit. For float, choose an acceptable tolerance for the task. Check a counter's required range before choosing int or bigint.
+</Callout>
+
+## Check yourself
+
+1. What does `select 5 / 2 * 2` return? What about `select 5::numeric / 2 * 2`?
+2. Why does `avg(price)` use 10 of the 11 books?
+3. Which type would you choose for a percentage discount with two decimal places?
+
+<Cheatsheet>
+- int / int produces an integer, truncating toward zero. Numeric retains the fractional part to the available precision.
+- Numeric suits money and other decimal quantities that need exact arithmetic where possible.
+- float4 and float8 are approximate: `0.1::float8 + 0.2::float8 != 0.3::float8`.
+- Int overflow gives `22003`. Bigint has a larger range.
+- `sum` and `avg` ignore NULL.
+</Cheatsheet>
