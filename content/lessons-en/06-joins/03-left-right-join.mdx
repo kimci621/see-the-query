@@ -1,0 +1,201 @@
+---
+id: left-right-join
+title: "LEFT and RIGHT JOIN: unmatched rows"
+chapter: joins
+number: "6.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select b.title, a.name
+  from book b
+  left join author a on a.author_id = b.author_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+course: ["11.39"]
+tags: [left join, right join, outer join, "null", unmatched rows]
+mvp: true
+---
+
+<TlDr>`LEFT JOIN` keeps every row from the left table. When there is no match, the right-side columns are filled with `NULL`. `RIGHT JOIN` does the same for the right table.</TlDr>
+
+## What's in the data
+
+The tables are the same as in lesson 6.2: 11 books in <T id="public.book">book</T> and 6 authors in <T id="public.author">author</T>. Simple Python and Learning Python have no author; their <C id="public.book.author_id">book.author_id</C> is `NULL`. Boris Pasternak has no books.
+
+## Starting point: INNER JOIN
+
+Recall the previous lesson:
+
+```sql run expect=rows:9
+select b.title, a.name
+from book b
+join author a on a.author_id = b.author_id;
+```
+
+Nine rows. The two books without authors have no match in author, so `INNER JOIN` excludes them. Pasternak is absent too.
+
+## LEFT JOIN: every row on the left
+
+Add one word:
+
+```sql run expect=rows:11
+select b.title, a.name
+from book b
+left join author a on a.author_id = b.author_id;
+```
+
+Eleven rows, up from nine: both books without authors are back. Their `name` is `NULL`.
+
+For Simple Python, `author_id` is `NULL`, and `ON` is never `TRUE` with any author. `INNER JOIN` excludes the row; `LEFT JOIN` keeps it and supplies `NULL` for the author columns.
+
+This is an **outer join**. Conceptually, Postgres forms the matching pairs as with an inner join, then adds each unmatched left row with NULL in the right-side columns. Every left row appears at least once.
+
+The **left table** is before `LEFT JOIN`: here it is `book`. The right table is `author`. Pasternak is on the right, so this `LEFT JOIN` does not keep his unmatched row.
+
+On the board, matching keys connect as in lesson 6.2. The unmatched books are kept with NULL author columns; Pasternak is excluded. The join reports 9 pairs and 2 unmatched left rows, for 11 rows total.
+
+The full name is `LEFT OUTER JOIN`; `OUTER` is usually omitted.
+
+## RIGHT JOIN: every row on the right
+
+`RIGHT JOIN` preserves the right table instead and fills unmatched left-side columns with NULL:
+
+```sql run expect=rows:10
+select b.title, a.name
+from book b
+right join author a on a.author_id = b.author_id;
+```
+
+Ten rows: 9 pairs and Boris Pasternak with NULL for `title`. Books without authors are absent again: they are on the left, which `RIGHT JOIN` does not preserve.
+
+On the board, the two books without authors are excluded; Pasternak remains with NULL in the book columns. The result is 9 pairs and 1 unmatched right row.
+
+Swap the tables and a `LEFT JOIN` gives the same pairs:
+
+```sql run expect=rows:10
+select a.name, b.title
+from author a
+left join book b on b.author_id = a.author_id;
+```
+
+Again, 10 rows, including Pasternak with NULL for the book. For `INNER JOIN`, swapping the tables preserves the matching pairs. For `LEFT` and `RIGHT`, the preserved side depends on the order.
+
+A `RIGHT JOIN` can be written as a `LEFT JOIN` with the inputs swapped. Many queries use the latter so the preserved input comes first.
+
+<Callout kind="analogy">
+At a dance, two lists of guests arrive. `INNER JOIN` puts only matched pairs on the floor. `LEFT JOIN` includes everyone on the left list, leaving an empty place for anyone without a partner. `RIGHT JOIN` does the same for the right list.
+</Callout>
+
+## Filtering after a LEFT JOIN
+
+Suppose you want all books, with an author shown only if they are from Russia. A first attempt:
+
+```sql run expect=rows:6
+select b.title, a.name
+from book b
+left join author a on a.author_id = b.author_id
+where a.country = 'Russia';
+```
+
+Six rows instead of 11. Both books without authors are gone, as are Ramalho's book and Verne's books, which were meant to stay with an empty author. `WHERE` applies after the join. The two unmatched books have NULL in `country`; their comparison is `UNKNOWN`, and `WHERE` keeps only `TRUE`. The board's `WHERE` step reports 6 of 11 rows and 2 unknown results.
+
+A condition explicitly requiring an author has the same effect on unmatched rows:
+
+```sql run expect=rows:9
+select b.title, a.name
+from book b
+left join author a on a.author_id = b.author_id
+where a.name is not null;
+```
+
+The same 9 rows as `INNER JOIN`. The join kept the books, then `WHERE` removed them. This time `IS NOT NULL` yields `FALSE` for the missing authors, not `UNKNOWN`.
+
+A `WHERE` condition that cannot be `TRUE` for the NULL-filled right side removes unmatched left rows. To keep all books but match only Russian authors, put the country condition in `ON`:
+
+```sql run expect=rows:11
+select b.title, a.name
+from book b
+left join author a
+  on a.author_id = b.author_id and a.country = 'Russia';
+```
+
+All 11 books remain. Ramalho's and Verne's books now have no matching author under `ON`, so `LEFT JOIN` keeps them with NULL author columns. The board reports 6 pairs and 5 unmatched left rows. Lesson 6.9 explores `ON` and `WHERE` in more detail.
+
+Walk through the three counts in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="INNER JOIN: pairs only, 9 rows">
+
+```sql run expect=rows:9
+select b.title, a.name
+from book b
+join author a on a.author_id = b.author_id;
+```
+
+</Step>
+<Step caption="LEFT JOIN: all books, 11 rows; two have NULL authors">
+
+```sql run expect=rows:11
+select b.title, a.name
+from book b
+left join author a on a.author_id = b.author_id;
+```
+
+</Step>
+<Step caption="LEFT JOIN from authors: 10 rows; Pasternak has a NULL book">
+
+```sql run expect=rows:10
+select a.name, b.title
+from author a
+left join book b on b.author_id = a.author_id;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+- ❌ Simple Python and Learning Python in the `INNER JOIN` and `RIGHT JOIN`: neither keeps their unmatched left rows.
+- ❌ Boris Pasternak in the `INNER JOIN` and book-to-author `LEFT JOIN`: his unmatched right row is not preserved.
+- ❌ Both books without authors in the examples with `WHERE`: the join kept them, but the filters removed their NULL-filled author rows.
+- ❌ Books by Ramalho and Verne with `where a.country = 'Russia'`: the authors are not from Russia, so the comparison is false.
+
+## Pitfalls
+
+<Callout kind="trap">
+An unmatched row after `LEFT JOIN` is still a row. `count(*)` counts it:
+
+```sql run expect=rows:1
+select count(*) as all_rows,
+       count(b.book_id) as books
+from author a
+left join book b on b.author_id = a.author_id;
+```
+
+`all_rows` is 10, while `books` is 9. Pasternak's row is included in `count(*)`, even though it has no book. `count(b.book_id)` skips NULL and counts only books. Lesson 7.1 covers aggregates; when counting books per author in lesson 7.2, count a column from the book table. With `count(*)`, Pasternak would have one instead of zero.
+</Callout>
+
+<Callout kind="tip">
+For “all X, including those without Y”, a `LEFT JOIN` with X on the left is often useful. If adding `WHERE` on Y's columns, check what it does to rows where Y is NULL. Depending on the goal, you may want an `INNER JOIN` or a condition in `ON`.
+</Callout>
+
+## Check yourself
+
+1. Add `where a.country = 'Russia'` to the book-to-author `RIGHT JOIN`. How many rows remain? Is Pasternak among them?
+2. Use a `LEFT JOIN` from authors to books, then filter with `where b.title is null`. How many rows remain, and who are they?
+3. Add `where b.price is not null` to the book-to-author `LEFT JOIN`. How many rows remain? Has it become an `INNER JOIN`?
+
+<Cheatsheet>
+- `a left join b on condition`: all rows of `a`; missing matches get NULL in `b`'s columns.
+- `a right join b on condition`: all rows of `b`; swapping inputs gives a corresponding left join.
+- `OUTER` is optional in `LEFT OUTER JOIN` and `RIGHT OUTER JOIN`.
+- Input order matters for which side an outer join preserves.
+- `WHERE` follows the join. A condition rejecting NULL-filled right rows removes unmatched left rows.
+- NULLs after `LEFT JOIN` work with `is null` and `count(col)` as elsewhere.
+</Cheatsheet>
