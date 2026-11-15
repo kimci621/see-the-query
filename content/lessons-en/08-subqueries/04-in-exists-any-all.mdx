@@ -1,0 +1,179 @@
+---
+id: in-exists-any-all
+title: "IN, EXISTS, ANY, ALL"
+chapter: subqueries
+number: "8.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.book, public.book_category, public.review]
+  layout:
+    book: { x: 0, y: 0 }
+    book_category: { x: 620, y: 0 }
+    review: { x: 0, y: 400 }
+initialQuery: |
+  select title from book where category_id in (select category_id from book_category where parent_id = 1) order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-IN
+    title: IN with a subquery
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS
+    title: EXISTS with a subquery
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#SQL-SYNTAX-ANY
+    title: ANY and ALL
+tags: ["in subquery", "exists", "any and all", "not in and null"]
+mvp: false
+---
+
+<TlDr>`EXISTS` tests whether rows exist. `IN`, `ANY` and `ALL` compare values with a subquery's results and can yield `UNKNOWN` when `NULL` is involved.</TlDr>
+
+## The data
+
+<T id="public.book_category">book_category</T> has 6 categories. Fiction (1) has children 3 and 4. Programming (2) has child 6. Photography (5) has no children.
+
+<T id="public.book">book</T> has 11 books: 8 in categories 3 and 4, two in category 6 and one without a category. <T id="public.review">review</T> has 10 reviews for 7 books.
+
+## IN: is a value in the set?
+
+```sql run expect=rows:8
+select title from book
+where category_id in (select category_id from book_category where parent_id = 1)
+order by book_id;
+```
+
+There are 8 rows. The subquery returns 3 and 4. `IN` checks whether each book's category matches either value. Eight match, two do not, and the book with `NULL` category produces `UNKNOWN` and does not pass `WHERE`.
+
+## EXISTS: does any row exist?
+
+```sql run expect=rows:7
+select b.title from book b
+where exists (select 1 from review r where r.book_id = b.book_id)
+order by b.book_id;
+```
+
+There are 7 rows. The subquery asks whether at least one review exists for each book. In this example, `select 1`, `select *` and `select r.rating` give the same existence result: the values are not compared; only the presence of a row matters.
+
+Books 1, 2, 3, 6, 8, 9 and 10 have reviews. `EXISTS` is either true or false, even when the selected value is `NULL`.
+
+## ANY: greater than at least one
+
+```sql run expect=rows:6
+select title, price from book
+where price > any (select price from book where category_id = 3)
+order by book_id;
+```
+
+There are 6 rows. The inner prices are 560.00, `NULL`, 610.00 and 610.00. `> ANY` is true if at least one comparison is true. For And Quiet Flows the Don, 890.00 is greater than 560.00, which is enough.
+
+A `NULL` comparison is `UNKNOWN`, but a true comparison makes `ANY` true. If none is true and at least one is unknown, the result is unknown. For example, 560.00 is not greater than any non-null value here, and its comparison with `NULL` is unknown, so it does not pass.
+
+## ALL: greater than every value
+
+```sql run expect=rows:0
+select title, price from book
+where price > all (select price from book where category_id = 3)
+order by book_id;
+```
+
+There are no rows. The highest price, 3200.00, is greater than 560.00 and 610.00, but `3200 > NULL` is `UNKNOWN`, so `ALL` is unknown. A false comparison makes `ALL` false even if another comparison is unknown. Neither false nor unknown passes `WHERE`.
+
+For an empty subquery, `ANY` is false and `ALL` is true. With nonempty input, consider true, false and unknown comparisons separately.
+
+<Callout kind="analogy">
+At an event entrance, `IN` checks a name against a list. `EXISTS` asks whether a matching guest exists. `ANY` and `ALL` compare a guest with the list: at least one comparison must pass for `ANY`, every comparison for `ALL`.
+</Callout>
+
+Try the four queries in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="IN: 8 books in categories 3 and 4">
+
+```sql run expect=rows:8
+select title from book
+where category_id in (select category_id from book_category where parent_id = 1)
+order by book_id;
+```
+
+</Step>
+<Step caption="EXISTS: 7 books with reviews">
+
+```sql run expect=rows:7
+select b.title from book b
+where exists (select 1 from review r where r.book_id = b.book_id)
+order by b.book_id;
+```
+
+</Step>
+<Step caption="ANY: 6 books cost more than at least one book in category 3">
+
+```sql run expect=rows:6
+select title, price from book
+where price > any (select price from book where category_id = 3)
+order by book_id;
+```
+
+</Step>
+<Step caption="ALL: 0 books cost more than all books in category 3">
+
+```sql run expect=rows:0
+select title, price from book
+where price > all (select price from book where category_id = 3)
+order by book_id;
+```
+
+</Step>
+</Scene>
+
+## What is missing from the result
+
+- ❌ Books 2 and 11 in `IN`: their category is 6, not a child of category 1.
+- ❌ Simple Python in `IN`: its category is `NULL`, so the result is `UNKNOWN`.
+- ❌ The Captain's Daughter, The Tale of the Fisherman and the Fish, The Island of Lost Ships and Learning Python in `EXISTS`: none has a review.
+- ❌ Professor Dowell's Head in `ANY`: 560.00 is not greater than any non-null inner price, and the remaining comparison is unknown.
+- ❌ Any row in `ALL`: each result is false or unknown, never true.
+- ❌ Books outside category 6 in the first `NOT IN` query below: no equal non-null match exists, but the inner `NULL` makes their result unknown.
+
+## Traps
+
+<Callout kind="trap">
+`NOT IN` can produce unexpected results when its subquery contains `NULL`:
+
+```sql run expect=rows:0
+select title from book
+where category_id not in (select category_id from book where price > 1000)
+order by book_id;
+```
+
+There are no rows, although many books are outside category 6. The inner result contains 6 and `NULL`: Simple Python has no category. For category 3, `3 <> 6` is true but `3 <> NULL` is unknown, so `NOT IN` is unknown. For category 6, an equal value makes `NOT IN` false. A `NULL` outer category is also unknown here.
+
+Remove `NULL` from the inner result:
+
+```sql run expect=rows:8
+select title from book
+where category_id not in (
+  select category_id from book where price > 1000 and category_id is not null
+)
+order by book_id;
+```
+
+There are 8 rows: all books in categories 3 and 4. The book with a `NULL` category still does not pass `NOT IN` against the nonempty set.
+</Callout>
+
+<Callout kind="tip">
+`NOT EXISTS` is often useful for an anti-join because it tests for the absence of matching rows. With an equality condition, an outer `NULL` does not match another `NULL`; decide whether such rows should be included. `NOT EXISTS` and `NOT IN` can therefore differ when either side contains `NULL`.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `where price >= all (select price from book where category_id = 6)` return? Check on the board.
+2. Why does `where price > all (select price from book where category_id = 6)` return no rows, even though 3200.00 is the highest price?
+3. Replace `EXISTS` with `book_id in (select book_id from review)`. How many rows remain?
+
+<Cheatsheet>
+- `in (subquery)`: equal to at least one value; equivalent to `= any (subquery)`.
+- `exists (subquery)`: true if the subquery returns a row; `select 1` works for this example.
+- `> any`: true if at least one comparison is true. With no true and at least one unknown, the result is unknown.
+- `> all`: false if any comparison is false. With no false and at least one unknown, the result is unknown.
+- An empty subquery gives false for `ANY` and true for `ALL`.
+- `NOT IN` with `NULL` can yield unknown; compare `NOT EXISTS` carefully, including outer `NULL` values.
+- In this lesson: `IN` gives 8, `EXISTS` 7, `ANY` 6, `ALL` 0 rows.
+</Cheatsheet>
