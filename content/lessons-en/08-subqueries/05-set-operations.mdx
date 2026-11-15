@@ -1,0 +1,161 @@
+---
+id: set-operations
+title: UNION, INTERSECT and EXCEPT
+chapter: subqueries
+number: "8.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 0, y: 0 }
+    book: { x: 0, y: 360 }
+initialQuery: |
+  select author_id, name, country from author where country = 'Russia'
+  union
+  select author_id, name, country from author where country = 'France';
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-union.html
+    title: Combining queries (UNION, INTERSECT, EXCEPT)
+tags: [union, "union all", intersect, except, "set operations"]
+mvp: false
+---
+
+<TlDr>`UNION`, `INTERSECT` and `EXCEPT` combine two query results: join them, keep common rows or subtract one result from another. Branches need the same number of columns with compatible types; use an outer `ORDER BY` to order the result.</TlDr>
+
+## The data
+
+<T id="public.author">author</T> has 6 authors. By <C id="public.author.country">country</C>, four are from Russia (Sholokhov, Pushkin, Belyaev and Pasternak), one from France (Jules Verne) and one from Brazil (Luciano Ramalho).
+
+<T id="public.book">book</T> has 11 books. Science fiction (`category_id = 3`) has books 6, 7, 8 and 9. The `adventure` tag in <C id="public.book.tags">tags</C> appears on three of them: 7, 8 and 9. <T id="public.review">review</T> has 10 reviews; four have rating 5: reviews 1, 2, 6 and 10.
+
+## Combine two lists
+
+```sql run expect=rows:5
+select author_id, name, country from author where country = 'Russia'
+union
+select author_id, name, country from author where country = 'France';
+```
+
+Four Russian authors plus one French author make 5 rows. The branches happen to read the same table, but `UNION` combines query results, not tables.
+
+`UNION` removes duplicate complete rows. Here there are no duplicates because the two country selections do not overlap.
+
+## UNION versus UNION ALL
+
+Run the same query twice, selecting reviews rated 5. First use `UNION`:
+
+```sql run expect=rows:4
+select review_id, book_id from review where rating = 5
+union
+select review_id, book_id from review where rating = 5;
+```
+
+There are 4 rows. Now use `UNION ALL`:
+
+```sql run expect=rows:8
+select review_id, book_id from review where rating = 5
+union all
+select review_id, book_id from review where rating = 5;
+```
+
+There are 8 rows. Each branch returns the same four rows. `UNION` compares complete rows and keeps one copy of each; `UNION ALL` retains all copies. The pair to remember is 4 versus 8.
+
+## INTERSECT: rows in both lists
+
+```sql run expect=rows:3
+select book_id, title from book where category_id = 3
+intersect
+select book_id, title from book where 'adventure' = any(tags);
+```
+
+There are 3 rows: books 7, 8 and 9. Science fiction has four books, and three of them have the `adventure` tag. Book 6, Professor Dowell's Head, appears only in the category selection.
+
+`INTERSECT` keeps complete rows present on both sides. It compares every selected column, not just `book_id`. Without `ALL`, duplicate result rows are removed.
+
+## EXCEPT: subtract one list from another
+
+```sql run expect=rows:3
+select book_id, title from book where category_id = 3
+except
+select book_id, title from book where title like '%Journey%';
+```
+
+Again there are 3 rows: books 6, 7 and 9. Journey to the Center of the Earth (8) is removed because its title matches the pattern.
+
+`EXCEPT` returns rows from the left branch that are absent from the right. Without `ALL`, duplicates are removed. Reversing the branches in this example gives no rows: the only matching Journey is already in the Science fiction list.
+
+## Order the combined result
+
+Without an outer `ORDER BY`, the final order is not guaranteed. Even if branches are sorted, the combined result can come back in another order:
+
+```sql run expect=rows:5
+select author_id, name, country from author where country = 'Russia'
+union
+select author_id, name, country from author where country = 'France'
+order by name;
+```
+
+There are 5 rows, now ordered by name. The final `ORDER BY` applies to the whole result. Output column names come from the first `SELECT`, so `order by name` uses its `name` column.
+
+An individual branch can have its own `ORDER BY` when enclosed in parentheses, for example to choose rows with `LIMIT`. Add an outer `ORDER BY` when the final order matters.
+
+## What is missing from the result
+
+- ❌ Luciano Ramalho in the country `UNION`: he is from Brazil, while the branches select Russia and France.
+- ❌ Professor Dowell's Head in `INTERSECT`: it is Science fiction but has no `adventure` tag.
+- ❌ Journey to the Center of the Earth in `EXCEPT`: its title matches `%Journey%`.
+- ❌ Four repeated rows in the `UNION` of reviews rated 5: each pair is reduced to one.
+- ❌ A guaranteed order in `UNION` without an outer `ORDER BY`.
+
+## Traps
+
+<Callout kind="trap">
+Branches need the same number of columns:
+
+```sql run expectError=42601
+select name from author where country = 'Russia'
+union
+select name, country from author where country = 'France';
+```
+
+Postgres returns `each UNION query must have the same number of columns`, code `42601`. The left branch has one column and the right has two. Add `country` on the left to make the lists match.
+
+The corresponding types must also be compatible:
+
+```sql run expectError=42804
+select name from author
+union
+select born_year from author;
+```
+
+The error is `UNION types text and integer cannot be matched`, code `42804`. Casting `born_year::text` removes the type error, but first consider whether names and years belong in the same column.
+</Callout>
+
+<Callout kind="trap">
+An unparenthesized `ORDER BY` before the first branch ends causes a syntax error:
+
+```sql run expectError=42601
+select author_id from author where country = 'Russia' order by author_id
+union
+select author_id from author where country = 'France';
+```
+
+For the whole result, put `ORDER BY` after the final branch. Parentheses allow an `ORDER BY` within a branch, but its order does not guarantee the order of the combined result.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `UNION ALL` return for Russia and France? Check on the board.
+2. How many books remain if the right branch of the `EXCEPT` query becomes `select book_id, title from book where 'adventure' = any(tags)`?
+3. How many distinct countries does `select country from author union select country from author` return? Why not 12?
+
+<Cheatsheet>
+- `union`: combine results and remove duplicate complete rows.
+- `union all`: combine results and retain copies.
+- `intersect`: keep rows in both branches; `except`: keep left rows absent on the right. Without `ALL`, duplicates are removed.
+- Branches need the same number of columns and compatible corresponding types.
+- Output column names come from the first `select`.
+- Use a final `order by` for the combined result. Parenthesized branches may have their own ordering.
+- Set operations treat `NULL` values as equal when identifying duplicate rows.
+</Cheatsheet>
