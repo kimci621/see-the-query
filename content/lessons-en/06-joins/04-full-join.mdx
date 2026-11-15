@@ -1,0 +1,138 @@
+---
+id: full-join
+title: "FULL OUTER JOIN: rows from both sides"
+chapter: joins
+number: "6.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name, b.title
+  from author a
+  full join book b using (author_id)
+  order by a.name nulls last, b.title;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/tutorial-join.html
+    title: "Tutorial: joining tables"
+tags: ["full join", "full outer join", "outer join", "unmatched rows", "null in joins"]
+mvp: false
+---
+
+<TlDr>`FULL JOIN` preserves rows from both tables: matching pairs come together, and an unmatched row gets `NULL` on the opposite side. Unmatched rows from both sides remain.</TlDr>
+
+## What's in the data
+
+There are 6 authors in <T id="public.author">author</T> and 11 books in <T id="public.book">book</T>. Nine books find an author through <C id="public.book.author_id">author_id</C>, making 9 pairs.
+
+One left row has no match: Boris Pasternak has no books. Two right rows have no match: Simple Python and Learning Python have no author. Together: 9 + 1 + 2 = 12 rows.
+
+## First, LEFT and RIGHT
+
+Put authors on the left. `LEFT JOIN` preserves all authors:
+
+```sql run expect=rows:10
+select a.name, b.title
+from author a
+left join book b using (author_id)
+order by a.name nulls last, b.title;
+```
+
+Ten rows: 9 pairs and Pasternak with NULL for the book. The two books without authors are absent.
+
+`RIGHT JOIN` preserves the books:
+
+```sql run expect=rows:11
+select a.name, b.title
+from author a
+right join book b using (author_id)
+order by a.name nulls last, b.title;
+```
+
+Eleven rows: 9 pairs and two books without authors. Pasternak is absent: he is an unmatched row on the left, which `RIGHT JOIN` does not preserve.
+
+## FULL JOIN: unmatched rows on both sides
+
+`FULL JOIN` preserves unmatched rows from both sides:
+
+```sql run expect=rows:12
+select a.name, b.title
+from author a
+full join book b using (author_id)
+order by a.name nulls last, b.title;
+```
+
+Twelve rows. The first 10 have an author name: 9 pairs and Pasternak. The last 2 have NULL for name: Learning Python and Simple Python.
+
+The full name is `FULL OUTER JOIN`; `OUTER` can be omitted.
+
+On the board, the `FULL JOIN` step shows three groups: 9 combined pairs, Pasternak with NULL book columns, and two books with NULL author columns. Its caption reports 9 pairs, 1 unmatched left row and 2 unmatched right rows.
+
+## Two NULL-filled sides
+
+All book columns in Pasternak's row are NULL: title, category_id, price, pages and the rest. The two books without authors have NULL in all author columns: name, country and born_year.
+
+With `USING`, the result has one author_id column. It is 6 for Pasternak, the matching author identifier for each pair, and NULL for books 10 and 11 because those books have no author.
+
+With `ON`, there would be two author_id columns, one from each side. For Pasternak, the left one would be 6 and the right one NULL. For books 10 and 11, both would be NULL. The merged key is a feature of `USING`, not a separate rule of `FULL JOIN`.
+
+## Find unmatched rows
+
+A useful `FULL JOIN` query finds rows without a counterpart:
+
+```sql run expect=rows:3
+select a.name, b.title
+from author a
+full join book b using (author_id)
+where a.name is null or b.title is null
+order by a.name nulls last, b.title;
+```
+
+Three rows: Pasternak without a book and two books without authors. The 9 matching pairs are filtered out. This works because author name and book title are `NOT NULL` in the source tables. You can use the pattern to compare two lists and find entries present on only one side.
+
+## What's missing and why
+
+- ❌ The two books without authors in the author-to-book `LEFT JOIN`: only the left side is preserved.
+- ❌ Boris Pasternak in the author-to-book `RIGHT JOIN`: only the right side is preserved.
+- ❌ Both books without authors in `FULL JOIN` with `where a.name is not null`: their author name is NULL.
+- ❌ Pasternak in `FULL JOIN` with `where b.title is not null`: there is no book title in his row.
+
+## Pitfalls
+
+<Callout kind="trap">
+A `WHERE` condition can remove the NULL-filled rows added by a `FULL JOIN`:
+
+```sql run expect=rows:10
+select a.name, b.title
+from author a
+full join book b using (author_id)
+where a.name is not null
+order by a.name, b.title;
+```
+
+Ten rows instead of 12. The two books without authors are removed because `IS NOT NULL` is false for their NULL names. Here the remaining rows are the same as for an author-to-book `LEFT JOIN`: author names cannot be NULL in the source. Similarly, `where b.title is not null` removes Pasternak and leaves 11 rows, like the corresponding `RIGHT JOIN`. With a nullable source column or a different condition, the result can differ.
+</Callout>
+
+<Callout kind="tip">
+Use `FULL JOIN` to reconcile two sources, such as a database and an imported file, or old and new reference lists. A report needing all orders and any matching customers can often use `LEFT JOIN` instead.
+</Callout>
+
+## Check yourself
+
+1. How many rows does the query with `where a.name is null or b.title is null` return if you replace `or` with `and`? Predict, then check.
+2. Replace `full join` with `left join` in the main query. How many rows remain, and who is missing?
+3. How many rows match `where a.name is null`? How many match `where b.title is null`? Why are the counts different?
+
+<Cheatsheet>
+- `full join` preserves matching pairs and unmatched rows from both tables.
+- An unmatched row gets NULL in the opposite table's columns.
+- `USING (col)` merges the named key into one output column; `ON` keeps both input columns in `select *`.
+- Conceptually, FULL JOIN combines LEFT and RIGHT results without repeating matching pairs.
+- A `WHERE` condition can remove NULL-filled rows; check whether the tested source column can itself be NULL.
+- To find unmatched rows, test non-nullable columns from both sides: `where a.name is null or b.title is null`.
+</Cheatsheet>
