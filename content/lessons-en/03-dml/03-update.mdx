@@ -1,0 +1,93 @@
+---
+id: update
+title: UPDATE and UPDATE ... FROM
+chapter: dml
+number: "3.3"
+order: 3
+dataset: bookstore
+initialQuery: |
+  select book_id, title, author_id, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/dml-update.html
+    title: Updating data
+  - url: https://www.postgresql.org/docs/18/sql-update.html
+    title: UPDATE
+course: ["11.22"]
+tags: [update, where, update from, mvcc]
+---
+
+<TlDr>`UPDATE` changes rows that match `WHERE`; other rows stay as they are. `UPDATE ... FROM` can use another table to choose rows or supply values.</TlDr>
+
+## What's in the data
+
+`book` has eleven books. Four cost more than 800: And Quiet Flows the Don, Fluent Python, Simple Python and Learning Python. Luciano Ramalho from Brazil has one book.
+
+## WHERE chooses rows
+
+```sql run expect=rows:4
+update book set price = price * 0.9 where price > 800 returning book_id, title, price;
+```
+
+On the board, `WHERE` keeps four rows and dims seven. Then the `price` cells of those four rows flip to their new values. `RETURNING` shows the new prices. The other rows remain unchanged.
+
+Postgres finds rows using `WHERE`, then applies `SET` to each selected row. Here `price > 800` tests the old price, before multiplication.
+
+## Without WHERE
+
+<Callout kind="trap">
+Leave out `WHERE` and `UPDATE` affects every row. On a real database, that can be an accident. In preview, you can see what happens:
+
+```sql run expect=rows:11
+update book set price = price * 0.9;
+```
+
+All eleven books are updated. Before a bulk `UPDATE`, check the same condition with `SELECT` and run the change in a transaction.
+</Callout>
+
+## UPDATE ... FROM
+
+The new value need not be a constant or a calculation using only the same row. You can also use another table to choose rows or supply values:
+
+```sql run expect=rows:1
+update book set price = price * 0.5
+from author a
+where book.author_id = a.author_id and a.country = 'Brazil'
+returning book_id, title, price;
+```
+
+On the board, Postgres reads `book` and `author`, then the join and `WHERE` select one book. Only its price changes. Without `FROM`, you could use a subquery or find the author's ID separately.
+
+## A new row version
+
+`UPDATE` does not overwrite the old row in place. Postgres writes a new version; the old one remains visible to other transactions according to their snapshots and may remain on disk afterwards. This is part of MVCC. We'll cover it in the transactions chapter. For now, remember that a bulk `UPDATE` creates many new versions and needs space.
+
+## What's missing and why
+
+- ❌ Seven books do not appear in the first `UPDATE` result: their prices did not pass `price > 800`, and they were not changed.
+- ❌ Books by authors outside Brazil do not appear in the `UPDATE ... FROM` result. Luciano Ramalho's book does appear.
+- ❌ The database has none of these changes after preview: the examples rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+An `UPDATE` without `WHERE` and one with a mistyped condition can both finish successfully. Compare the number of updated rows with what you expected. If the command updated 11 instead of 4, the condition did not select what you intended.
+</Callout>
+
+<Callout kind="tip">
+For a large table, consider updating in batches: `where book_id between 1 and 1000`, then the next batch. Committing each batch can shorten how long its row locks are held and lets you spot mistakes earlier. For a bulk migration, check the query plan and available disk space first.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `UPDATE book SET price = price * 0.9 WHERE price > 800` update?
+2. What happens if you remove `WHERE`?
+3. Why does `UPDATE ... FROM` change only one book?
+
+<Cheatsheet>
+- `update t set column = value where condition;`
+- `WHERE` selects rows before `SET` is applied.
+- Without `WHERE`, all rows in the table are updated.
+- `UPDATE ... FROM` can use another table in the join condition or update expression.
+- `RETURNING` shows the updated rows.
+- `UPDATE` creates new row versions; vacuum eventually removes versions no longer needed.
+</Cheatsheet>
