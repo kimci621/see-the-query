@@ -1,0 +1,100 @@
+---
+id: upsert
+title: INSERT ... ON CONFLICT
+chapter: dml
+number: "3.5"
+order: 5
+dataset: bookstore
+initialQuery: |
+  select customer_id, name, email, bonus from customer order by customer_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-insert.html
+    title: INSERT and ON CONFLICT
+course: ["11.14"]
+tags: [upsert, on conflict, excluded, unique]
+---
+
+<TlDr>`ON CONFLICT` tells Postgres what to do when an insert conflicts with a unique key: skip the row or update the existing one. This is an upsert in one statement.</TlDr>
+
+## What's in the data
+
+`customer` has six customers. Anna Smirnova has `customer_id = 1`, the unique email `anna@example.com` and a bonus of 120. Names are not unique: the table has two customers named Ivan Petrov. You cannot use `name` as a conflict target here.
+
+## DO NOTHING
+
+```sql run expect=rows:0
+insert into customer (name, email, bonus, created_at)
+values ('Anna Smirnova', 'anna@example.com', 0, now())
+on conflict (email) do nothing
+returning customer_id;
+```
+
+The email already exists, so Postgres skips the incoming row. On the board, it flies towards `customer`, meets the conflict and bounces back. The result has zero rows: nothing was inserted or updated.
+
+## DO UPDATE
+
+You can update the existing row instead of skipping the insert:
+
+```sql run expect=rows:1
+insert into customer (name, email, bonus, created_at)
+values ('Anna Smirnova', 'anna@example.com', 0, now())
+on conflict (email) do update set bonus = customer.bonus + 200
+returning customer_id, bonus;
+```
+
+Anna already exists, so `DO UPDATE` sets her bonus to 120 + 200 = 320. On the board, a conflict line connects the rows and the `bonus` cell flips from its old value to the new one.
+
+Inside `DO UPDATE`, `customer` refers to the existing row and `excluded` to the row proposed for insertion. Here `excluded.bonus` is 0 and `customer.bonus` is 120.
+
+## The conflict target
+
+```sql run expectError=42P10
+insert into customer (name, email, created_at)
+values ('Ivan Petrov', 'new@example.com', now())
+on conflict (name) do nothing;
+```
+
+Postgres returns `42P10`: there is no matching unique constraint or unique index on `name`. A column target like `(name)` needs a matching eligible unique index.
+
+If you need a conflict on an expression, you can create a matching unique index:
+
+```sql noexec
+create unique index customer_email_lower_idx on customer (lower(email));
+```
+
+Then the conflict target can use that expression: `on conflict (lower(email))`.
+
+## What's missing and why
+
+- ❌ There is no new row after `DO NOTHING`: the conflict was skipped.
+- ❌ There is no second Anna after `DO UPDATE`: the existing row was updated.
+- ❌ There is no row from the `name` conflict example: Postgres found no matching unique constraint and returned an error.
+
+## Pitfalls
+
+<Callout kind="trap">
+`DO UPDATE` changes the columns named in `SET`. Assigning a proposed value such as `bonus = excluded.bonus` replaces the current bonus; use `customer.bonus + 200` when the intent is to increment it. You can also add a condition to skip the update for a conflicting row:
+
+```sql noexec
+on conflict (email) do update set bonus = customer.bonus + 200
+where customer.bonus < 1000;
+```
+</Callout>
+
+<Callout kind="tip">
+`ON CONFLICT DO UPDATE` resolves the insert-or-update choice atomically, even when another transaction is inserting the same key. A separate `SELECT` followed by `INSERT` or `UPDATE` leaves a gap in which another transaction can insert that key.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `DO NOTHING` return on a conflict?
+2. What is `bonus` after `DO UPDATE` with `customer.bonus + 200`?
+3. Why does `on conflict (name)` fail?
+
+<Cheatsheet>
+- `insert ... on conflict (key) do nothing;` skips a conflicting row.
+- `do update set column = value` updates the existing row.
+- `excluded` is the row proposed for insertion.
+- A column conflict target needs a matching eligible unique index.
+- `ON CONFLICT DO UPDATE` makes the insert-or-update choice atomic.
+</Cheatsheet>

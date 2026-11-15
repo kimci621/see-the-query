@@ -189,7 +189,7 @@
 - [x] 3.2 `returning`: `content/lessons-en/03-dml/02-returning.mdx`
 - [x] 3.3 `update`: `content/lessons-en/03-dml/03-update.mdx`
 - [x] 3.4 `delete`: `content/lessons-en/03-dml/04-delete.mdx`
-- [ ] 3.5 `upsert`: `content/lessons-en/03-dml/05-upsert.mdx`
+- [x] 3.5 `upsert`: `content/lessons-en/03-dml/05-upsert.mdx`
 - [ ] 3.6 `merge`: `content/lessons-en/03-dml/06-merge.mdx`
 
 **04-select**
