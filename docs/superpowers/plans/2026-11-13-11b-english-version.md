@@ -211,7 +211,7 @@
 - [x] 5.2 `numbers`: `content/lessons-en/05-types/02-numbers.mdx`
 - [x] 5.3 `strings`: `content/lessons-en/05-types/03-strings.mdx`
 - [x] 5.4 `dates-time`: `content/lessons-en/05-types/04-dates-time.mdx`
-- [ ] 5.5 `boolean`: `content/lessons-en/05-types/05-boolean.mdx`
+- [x] 5.5 `boolean`: `content/lessons-en/05-types/05-boolean.mdx`
 - [ ] 5.6 `enum`: `content/lessons-en/05-types/06-enum.mdx`
 - [ ] 5.7 `arrays`: `content/lessons-en/05-types/07-arrays.mdx`
 - [ ] 5.8 `jsonb`: `content/lessons-en/05-types/08-jsonb.mdx`

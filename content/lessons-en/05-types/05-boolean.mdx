@@ -1,0 +1,121 @@
+---
+id: boolean
+title: boolean
+chapter: types
+number: "5.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.customer]
+initialQuery: |
+  select name, bonus from customer;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-boolean.html
+    title: Boolean type
+  - url: https://www.postgresql.org/docs/current/functions-logical.html
+    title: Logical operators
+  - url: https://www.postgresql.org/docs/current/functions-comparison.html
+    title: Comparison operators
+course: ["11.30"]
+tags: [boolean, "true", "false", "null", filter, is distinct from]
+---
+
+<TlDr>Boolean expresses true or false. SQL uses NULL for an unknown result; AND, OR and NOT account for this third state.</TlDr>
+
+## What's in the data
+
+Each customer has a <C id="public.customer.bonus">bonus</C>: an integer of zero or more. `NOT NULL` rules out missing values, and `CHECK` rejects negative numbers. “Has a bonus” is an expression, `bonus > 0`, not a column. Three of the six customers have one. One customer has no city: her city is NULL.
+
+## True and false in an expression
+
+A **Boolean expression** returns true, false or an unknown result represented by NULL. You can show it as a column:
+
+```sql run expect=rows:6
+select name, bonus > 0 as has_bonus from customer order by customer_id;
+```
+
+The six rows have true or false in `has_bonus`. The board shows the expression evaluated for each row.
+
+<Callout kind="analogy">
+On a checklist, each item can be marked “yes” or “no”. A blank mark does not mean “no”: perhaps the check has not happened yet. Similarly, NULL in a condition does not automatically become false.
+</Callout>
+
+## AND and OR with NULL
+
+In lesson 4.5, a comparison with NULL could produce an unknown result. Look at four cases for AND and OR:
+
+```sql run expect=rows:1
+select true and null as tan, false and null as fan, true or null as ton, false or null as fon;
+```
+
+The results are NULL, false, true and NULL. If either side of `AND` is false, the result is false even when the other side is unknown. For `OR`, one true side is enough. In the other two cases shown, the result is unknown.
+
+## FILTER: count by condition
+
+An aggregate with `filter` uses only rows that pass its condition:
+
+```sql run expect=rows:1
+select count(*) filter (where bonus > 0) as with_bonus, count(*) as total from customer;
+```
+
+Three out of six. This gives the same count as `count(case when bonus > 0 then 1 end)`, but `FILTER` separates the condition from the aggregate.
+
+## A range
+
+```sql run expect=rows:1
+select name from customer where bonus between 100 and 200;
+```
+
+One customer falls in the range. `BETWEEN` includes both boundaries. If the value is unknown, the comparison result can also be unknown.
+
+## Comparing NULL with is distinct from
+
+Ordinary `city <> null` yields NULL, so the row is filtered out. To check whether a city is present:
+
+```sql run expect=rows:1
+select count(*) as with_city from customer where city is distinct from null;
+```
+
+Five customers have a city. `IS DISTINCT FROM` treats two NULLs as equal and a NULL and a known value as different. The more familiar `city IS NOT NULL` gives the same result here.
+
+```sql run expect=rows:6
+select name, coalesce(city, 'not specified') as city from customer order by customer_id;
+```
+
+`COALESCE` returns the first value that is not NULL. The customer without a city now has the label “not specified”.
+
+## What's missing and why
+
+- ❌ The customer without a city in `city is distinct from null`: the predicate returns false when both sides are NULL.
+- ❌ Rows with a NULL bonus in `where bonus > 0`: none exist in this dataset because the column is NOT NULL. In a table allowing NULL bonuses, both `bonus > 0` and `not (bonus > 0)` would filter them out.
+- ❌ Rows from `city <> null`: comparison with NULL yields NULL, so none pass. Use `IS NOT NULL` or `IS DISTINCT FROM NULL` to check for a city.
+
+## Pitfalls
+
+<Callout kind="trap">
+`NOT` does not turn an unknown result into true. Compare these checks:
+
+```sql run expect=rows:1
+select not null::boolean as negated, null::boolean is not true as not_true;
+```
+
+The first column is NULL and the second is true. Both `where not (bonus > 0)` and `where bonus > 0` would filter out a row with a NULL bonus. To include unknown results, use `IS NOT TRUE` or a separate condition.
+</Callout>
+
+<Callout kind="tip">
+Name flags so they can be answered with yes or no: `is_active`, `has_discount`. If an unknown state is not needed, add `NOT NULL`; set an appropriate default separately with `DEFAULT`.
+</Callout>
+
+## Check yourself
+
+1. What does `select count(*) from customer where not (bonus > 0)` return? How many rows would be lost if one bonus were NULL? Predict, then check on the board.
+2. How many customers match `city is distinct from 'Moscow'`? How does that differ from `city <> 'Moscow'`?
+3. What does `select null and null` return? Work it out, then check.
+
+<Cheatsheet>
+- Boolean can be true or false; NULL represents an unknown Boolean result.
+- False AND NULL gives false; true OR NULL gives true. Other combinations with one NULL can be unknown.
+- `count(*) filter (where ...)` counts matching rows without a subquery.
+- `is distinct from` compares NULLs as equal to each other and distinct from known values.
+- `not (NULL::boolean)` yields NULL: negating a condition still filters out unknown rows.
+</Cheatsheet>
