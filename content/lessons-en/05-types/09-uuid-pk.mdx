@@ -1,0 +1,130 @@
+---
+id: uuid-pk
+title: UUID and primary keys
+chapter: types
+number: "5.9"
+order: 9
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-uuid.html
+    title: UUID type
+  - url: https://www.postgresql.org/docs/current/functions-uuid.html
+    title: UUID functions
+  - url: https://www.postgresql.org/docs/current/ddl-constraints.html
+    title: Constraints and primary keys
+  - url: https://www.postgresql.org/docs/current/ddl-identity-columns.html
+    title: Identity columns
+course: ["12.37", "12.38", "12.39"]
+tags: [uuid, primary key, identity, bigint, md5]
+---
+
+<TlDr>A primary key uniquely identifies a row. `bigint` and `uuid` offer different ways to do this; choose based on how identifiers are generated and what the system needs.</TlDr>
+
+## What's in the data
+
+The books' primary key <C id="public.book.book_id">book_id</C> is defined as `bigint generated always as identity`. A sequence supplies its values, and the `PRIMARY KEY` constraint enforces uniqueness and disallows NULL.
+
+```sql run expect=rows:1
+select book_id, pg_typeof(book_id)::text as type from book where book_id = 1;
+```
+
+The first book has identifier 1 and type `bigint`.
+
+```sql run expect=rows:1
+select count(*) as n from book;
+```
+
+There are 11 books. Don't use the last identifier as a row count: deletions and failed inserts can leave gaps in a sequence.
+
+<Callout kind="analogy">
+A book number is like an inventory label: the title or price can change, while the label still points to the same record. The number itself need not describe the book.
+</Callout>
+
+## What is a UUID?
+
+A UUID holds 128 bits, or 16 bytes. Its familiar notation has 32 hexadecimal digits and hyphens. You can generate one in the database or application before inserting a row.
+
+```sql run expect=rows:1
+select gen_random_uuid() as u, gen_random_uuid() = gen_random_uuid() as same;
+```
+
+`gen_random_uuid()` generates a random version 4 UUID. Two calls will almost certainly produce different values, so `same` will almost certainly be false. The function is random: values change on each run, and the board and result panel can show different values.
+
+```sql run expect=rows:1
+select 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid as u,
+       pg_typeof('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid)::text as type;
+```
+
+This is a specific value of type `uuid`. PostgreSQL validates the format and displays it in standard notation.
+
+## Value size
+
+```sql run expect=rows:1
+select pg_column_size(1::bigint) as bigint_bytes,
+       pg_column_size('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid) as uuid_bytes;
+```
+
+An individual `bigint` value occupies 8 bytes; a UUID occupies 16. Table and index sizes depend on more than the value size. PostgreSQL stores indexes separately from the table: the primary key is not automatically added to every other index.
+
+## How to choose
+
+`bigint` with a sequence is convenient when one database issues the identifiers. Independent databases can issue the same numbers, so merging their data needs a reconciliation strategy.
+
+UUIDs can be generated independently on different nodes. This helps when combining data, but collisions remain possible: a `PRIMARY KEY` constraint is still needed. UUID v4 is random; UUID v7 includes time and usually keeps newly generated values closer together when sorted. It does not guarantee exact creation order. PostgreSQL 18 has a built-in `uuidv7()` function:
+
+```sql noexec
+create table event (
+  event_id uuid default uuidv7() primary key,
+  payload jsonb
+);
+```
+
+A UUID is not an access check. Even a hard-to-guess identifier does not grant permission to read someone else's record.
+
+## Hash and identifier
+
+```sql run expect=rows:1
+select md5('a') as hash;
+```
+
+The result is `0cc175b9c0f1b6a831c399e269772661`. A hash is calculated from content: the same input gives the same result, but matching hashes do not prove the data is identical. MD5 is not suitable for cryptographic protection. Account for collision risk when checking for matches, and compare the original data when necessary.
+
+## What's missing and why
+
+- ❌ A second book with `book_id = 1`: the primary key prohibits duplicates.
+- ❌ The book count in `book_id`: a sequence issues values; it does not count current rows.
+- ❌ Guaranteed uniqueness from UUID generation alone: a table constraint enforces it.
+
+## Pitfalls
+
+<Callout kind="trap">
+`identity` alone does not guarantee uniqueness: a sequence can be reset or values changed. Add `PRIMARY KEY` or `UNIQUE` to enforce uniqueness.
+</Callout>
+
+```sql run expectError=22P02
+select 'not-a-uuid'::uuid;
+```
+
+An invalid UUID representation raises `22P02`.
+
+<Callout kind="tip">
+Choose a key based on stability, generation and data size. A natural key can work if it is stable, unique and always present; a surrogate key separates the identifier from properties that may change.
+</Callout>
+
+## Check yourself
+
+1. Why doesn't the maximum `book_id` have to equal the number of books?
+2. What does `PRIMARY KEY` add beyond generating a value?
+3. Why might two independent sources choose UUIDs rather than their own sequences?
+
+<Cheatsheet>
+- `PRIMARY KEY` requires a unique value without NULL.
+- `bigint` uses 8 bytes; `uuid` holds 128 bits, or 16 bytes.
+- `gen_random_uuid()` generates UUID v4; PostgreSQL 18 provides `uuidv7()`.
+- A sequence can have gaps, and UUID generation does not replace a uniqueness constraint.
+- A content hash and a row identifier solve different problems.
+</Cheatsheet>
