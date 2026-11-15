@@ -1,0 +1,119 @@
+---
+id: identity-sequences
+title: Identity, serial and sequences
+chapter: ddl
+number: "2.5"
+order: 6
+dataset: bookstore
+initialQuery: |
+  select author_id, name from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-createtable.html
+    title: CREATE TABLE and identity
+  - url: https://www.postgresql.org/docs/18/sql-createsequence.html
+    title: CREATE SEQUENCE
+  - url: https://www.postgresql.org/docs/18/functions-sequence.html
+    title: Sequence functions
+course: ["11.35"]
+tags: [identity, serial, sequence, nextval, currval]
+---
+
+<TlDr>A sequence supplies row numbers. `identity` and `serial` do this automatically, but the numbers do not have to be consecutive.</TlDr>
+
+## What's in the data
+
+Most tables in `bookstore` use `generated always as identity` for their primary key; `order_item` has a composite key instead. The `author` table has six authors numbered 1 through 6. Its sequence remembers the last number issued. The next `INSERT` without a number gets 7.
+
+## How a table gets a number
+
+A **sequence** is a separate database object that supplies numbers from a configured series. `GENERATED ALWAYS AS IDENTITY` links one to a column: when an insert omits the number, Postgres calls `nextval` and supplies the result.
+
+```sql run expect=rows:1
+insert into author (name, country, born_year) values ('Leo Tolstoy', 'Russia', 1828) returning author_id;
+```
+
+On the board, a row moves into `author`, and the counter by `author_id` shows the number before and after. The first time it goes from 6 to 7. Preview rolls back the row and restores the sequence, so the next insert can receive 7.
+
+**`serial`** is an older way to do this. It is not a separate type: Postgres creates an ordinary `integer` column, a sequence and a `DEFAULT nextval(...)`. `identity` was introduced in PostgreSQL 10 and is part of the column definition. For new tables, choose `identity`.
+
+## Why gaps appear
+
+A number is issued before constraints are checked. Try inserting a customer with an email that is already taken:
+
+```sql apply expectError=23505
+insert into customer (name, email, created_at) values ('Alex', 'anna@example.com', now());
+```
+
+Postgres calls `nextval`, then checks `UNIQUE` and reports an error. The row is not saved, but the number has already been issued. `nextval` is not rolled back with the transaction, so the failed insert through `Apply` leaves a gap.
+
+The next insert skips a number:
+
+```sql apply expect=rows:1
+insert into customer (name, email, created_at) values ('New Customer', 'new@example.com', now()) returning customer_id;
+```
+
+The sandbox preview restores sequence state, so numbers are not used up while you type. In an ordinary transaction, `ROLLBACK` does not return the number. Don't build application logic on the assumption that numbers are consecutive.
+
+## Your own identity value
+
+`GENERATED ALWAYS` does not let you supply a number by hand:
+
+```sql run expectError=428C9
+insert into author (author_id, name) values (100, 'Alex');
+```
+
+Postgres returns `428C9` and suggests `overriding system value`. Allow one exception:
+
+```sql run expect=rows:1
+insert into author (author_id, name) overriding system value values (100, 'Alex');
+```
+
+The row moves in with number 100. The sequence does not advance, so the next automatic number stays the same. This can be useful when moving data from another system; for ordinary inserts, leave the number automatic.
+
+## Using a sequence directly
+
+Create a separate sequence and look at its functions:
+
+```sql apply expect=rows:0
+create sequence lesson_counter;
+```
+
+`currval` returns the last number issued in the current session. Before the first `nextval`, there is no such number:
+
+```sql run expectError=55000
+select currval('lesson_counter');
+```
+
+Now get a number:
+
+```sql run expect=rows:1
+select nextval('lesson_counter');
+```
+
+`nextval` gives the next value; `currval` repeats the last one. In preview, `nextval` shows the same number each time because the sequence is restored to its previous state. The new value is retained only after you click `Apply`.
+
+## What's missing and why
+
+- Leo Tolstoy is absent from `author` after preview: the row rolled back and the number returned to the sequence.
+- Alex with Anna's email is absent from `customer`: the insert through `Apply` failed on `UNIQUE`, but the customer number was already used.
+- The author with number 100 is absent after preview: `OVERRIDING SYSTEM VALUE` allowed the insert, but the transaction rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+A gap in numbers does not mean a row was lost. The sequence issues numbers independently of the table: a failed insert through `Apply` and a `ROLLBACK` can leave gaps. If you need consecutive numbering in a result, number rows when reading them. Those numbers can change when the result changes.
+</Callout>
+
+## Check yourself
+
+1. What does the counter on the board show when you insert an author without a number?
+2. Why does the insert after a failed customer insert skip a number?
+3. How does `serial` differ from `generated always as identity`?
+
+<Cheatsheet>
+- `generated always as identity` defines automatic numbering as part of a column.
+- `serial` is shorthand for a column, a sequence and a `DEFAULT`.
+- `nextval` issues the next number; `currval` repeats the last one in the session.
+- `OVERRIDING SYSTEM VALUE` allows an explicit value in `GENERATED ALWAYS`.
+- Gaps are normal: rollback and errors do not return the number.
+</Cheatsheet>
