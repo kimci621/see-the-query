@@ -1,0 +1,163 @@
+---
+id: anti-join
+title: "ANTI JOIN: NOT EXISTS and the NOT IN trap"
+chapter: joins
+number: "6.11"
+order: 11
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name
+  from author a
+  where not exists (select 1 from book b where b.author_id = a.author_id)
+  order by a.name;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS
+    title: EXISTS subquery
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#FUNCTIONS-COMPARISONS-IN-SCALAR
+    title: IN expression
+tags: ["anti join", "not exists", "not in", "null", "subquery"]
+mvp: false
+---
+
+<TlDr>`NOT EXISTS` keeps rows for which a subquery finds no match. With `NOT IN`, a NULL in the list can make a non-match `UNKNOWN`, which `WHERE` rejects.</TlDr>
+
+## What's in the data
+
+There are 6 authors in <T id="public.author">author</T>. Boris Pasternak is the only author without a book.
+
+There are 11 books in <T id="public.book">book</T>. Two have NULL in <C id="public.book.author_id">author_id</C>: Simple Python and Learning Python. These NULLs matter in this lesson.
+
+## NOT EXISTS: no books
+
+```sql run expect=rows:1
+select a.name
+from author a
+where not exists (select 1 from book b where b.author_id = a.author_id)
+order by a.name;
+```
+
+One row: Pasternak. Keep that count in mind.
+
+This reverses the `EXISTS` check from lesson 6.10. For an author with at least one matching book, `NOT EXISTS` is `FALSE` and the author is excluded. Without a match, it is `TRUE` and the author remains.
+
+`EXISTS` itself returns only `TRUE` or `FALSE`, even when the subquery contains NULLs. The subquery's condition still follows SQL's NULL rules.
+
+On the board, five authors find a book and are excluded. Pasternak has no match and remains. The count is 1 of 6.
+
+## NOT IN and NULL
+
+This looks like a shorter version:
+
+```sql run expect=rows:0
+select a.name
+from author a
+where a.author_id not in (select author_id from book)
+order by a.name;
+```
+
+Zero rows. Pasternak has no books but is absent. This is the trap.
+
+`NOT IN` is equivalent to `<> ALL`. The check compares the author_id with every value in the list and combines the comparisons with `AND`. The book subquery yields 11 values, including two NULLs.
+
+For Pasternak, the comparisons have this shape:
+
+`6 <> 1 AND 6 <> 2 AND ... AND 6 <> 5 AND 6 <> NULL`
+
+The non-NULL comparisons are `TRUE`; comparing with NULL yields `UNKNOWN`. `TRUE AND UNKNOWN` is `UNKNOWN`, which `WHERE` rejects.
+
+For authors who do have a match, `NOT IN` is `FALSE`: one equality makes the corresponding `<>` comparison false. Thus no author passes, but not every result is unknown.
+
+Count the NULLs:
+
+```sql run expect=rows:1
+select count(*) from book where author_id is null;
+```
+
+One row containing 2. Even one NULL in a nonempty list prevents a nonmatching non-NULL value from producing `TRUE` for `NOT IN`.
+
+## Fix the NOT IN example
+
+Remove NULL from the list:
+
+```sql run expect=rows:1
+select a.name
+from author a
+where a.author_id not in (
+  select author_id from book where author_id is not null
+)
+order by a.name;
+```
+
+Pasternak returns. Here the outer author_id is a non-NULL primary key. With a nullable outer expression, consider its NULL behavior separately; filtering the inner list alone does not make `NOT IN` identical to every `NOT EXISTS` check.
+
+This version works, but removing the inner NULL filter later would silently change the result.
+
+## Anti join through LEFT JOIN
+
+The corresponding left-join pattern:
+
+```sql run expect=rows:1
+select a.name
+from author a
+left join book b on b.author_id = a.author_id
+where b.book_id is null
+order by a.name;
+```
+
+One row: Pasternak. The join preserves all authors; authors without a book have NULL in the book columns. `WHERE` keeps those rows.
+
+Test the primary key `b.book_id`. A real book cannot have NULL there, so NULL signals no match. Testing `b.price is null` also returns Belyaev: The Island of Lost Ships is a matched book with no price.
+
+## Why use NOT EXISTS?
+
+`NOT EXISTS` expresses absence directly, returns true or false and lets you write the correlation and other match conditions together. It avoids the inner-list NULL trap of this `NOT IN` example. PostgreSQL may plan it as an anti join; compare execution plans for a particular workload rather than assuming a speed advantage.
+
+## What's missing and why
+
+- ❌ Pasternak in `NOT IN`: with no equal identifier and NULL in the list, his result is `UNKNOWN`.
+- ❌ Authors with books in `NOT IN`: an equal identifier makes their result `FALSE`.
+- ❌ Authors with books in `NOT EXISTS`: the subquery found a matching row.
+- ❌ Authors with books in the `LEFT JOIN` filtered on `b.book_id is null`: their matching book keys are filled in.
+- ❌ Belyaev in the primary-key anti join: he has books. A filter on `b.price is null` would include him because one matching book has no price.
+
+## Pitfalls
+
+<Callout kind="trap">
+Without correlation, `NOT EXISTS` checks the entire table, not the current author:
+
+```sql run expect=rows:0
+select a.name
+from author a
+where not exists (select 1 from book b)
+order by a.name;
+```
+
+Zero rows. The subquery does not reference `a`; it asks the same question for each author. Book has rows, so `NOT EXISTS` is false for all of them. This does not mean every author has a book.
+
+In the first query, `b.author_id = a.author_id` links the check to the current author, and Pasternak has no match.
+</Callout>
+
+<Callout kind="tip">
+For an anti join, `NOT EXISTS` makes the match condition explicit. With `NOT IN`, check NULL behavior on both sides. `LEFT JOIN ... WHERE right.pk IS NULL` is another way to express absence when the tested key cannot be NULL in a matched row.
+</Callout>
+
+## Check yourself
+
+1. How many authors remain if you add `and b.price > 1000` inside the correlated `NOT EXISTS`? Predict, then check.
+2. How many rows does `not in (select author_id from book where price > 1000)` return? Check the author_id values of those books.
+3. Why does `left join ... where b.price is null` return two authors, while `where b.book_id is null` returns one? Find the extra author.
+
+<Cheatsheet>
+- Anti join: left rows with no matching right row.
+- `not exists (select 1 ... where correlated)` returns true or false for the existence check.
+- With a NULL in a `NOT IN` list, a non-match can be unknown; an equal value still makes the result false.
+- Filtering NULL from the subquery helps, but a nullable outer expression has its own NULL behavior.
+- `left join ... where right.pk is null` finds unmatched rows when the key is non-NULL in real matches.
+- A nullable field such as `price` can be NULL even in a matched row.
+- `NOT EXISTS` without correlation checks the whole inner query, not each outer row's relationship.
+</Cheatsheet>
