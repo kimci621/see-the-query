@@ -1,0 +1,146 @@
+---
+id: relations
+title: "Table relationships: 1:N, N:M and 1:1"
+chapter: joins
+number: "6.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.author, public.book, public.order_item, public.orders]
+  layout:
+    author: { x: 0, y: 0 }
+    book: { x: 0, y: 320 }
+    orders: { x: 760, y: 0 }
+    order_item: { x: 760, y: 320 }
+initialQuery: |
+  select a.name, count(b.book_id) as books
+  from author a
+  left join book b on b.author_id = a.author_id
+  group by a.author_id, a.name
+  order by a.author_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-FK
+    title: Foreign keys
+  - url: https://www.postgresql.org/docs/current/tutorial-join.html
+    title: "Tutorial: joining tables"
+tags: [one-to-many, many-to-many, one-to-one, foreign key, junction table]
+mvp: false
+---
+
+<TlDr>Keys connect tables: a foreign key refers to a key in another table. The relationship describes how many rows can correspond on each side.</TlDr>
+
+## What's in the data
+
+The board has four tables: <T id="public.author">author</T>, <T id="public.book">book</T>, <T id="public.order_item">order_item</T> and <T id="public.orders">orders</T>. There are 6 authors, 11 books, 15 order items and 8 orders.
+
+The lines on the board represent foreign keys. Each line connects a referencing column to the key it references. In book, <C id="public.book.author_id">author_id</C> points to author. Order_item has two such lines: one to orders and one to book.
+
+Some rows have no counterpart. Simple Python and Learning Python have NULL for author_id. Boris Pasternak has no books. The Island of Lost Ships has never been ordered.
+
+## One to many
+
+An author can have many books; each book has at most one author. The author's identifier is stored in the book, not the other way around.
+
+```sql run expect=rows:9
+select b.title, a.name as author
+from book b
+join author a on a.author_id = b.author_id
+order by b.book_id;
+```
+
+Nine rows. Each book in the result has its author's name. Sholokhov has two rows, Pushkin has two and Pasternak has none.
+
+The same author identifier can appear in several book rows. This is **one to many**: one author row can correspond to many book rows.
+
+Now count books by author:
+
+```sql run expect=rows:6
+select a.name, count(b.book_id) as books
+from author a
+left join book b on b.author_id = a.author_id
+group by a.author_id, a.name
+order by a.author_id;
+```
+
+Six rows, one per author. Pasternak has 0. Use `count(b.book_id)`, not `count(*)`: the `LEFT JOIN` keeps Pasternak with NULL in the book columns, and `count(*)` would count that row as one book.
+
+`LEFT JOIN` is needed because not every author has a book. `INNER JOIN` would return five author groups and omit Pasternak.
+
+The book's side is optional too: author_id allows NULL, so a book can have no author. The foreign key does forbid an identifier absent from author. Postgres will reject a reference to author 99.
+
+## Many to many
+
+An order can contain many books, and a book can appear in many orders. One identifier column cannot represent all these pairs.
+
+Use a third table, a **junction table**. Here it is order_item. One order_item row means “this book in this order”. Qty holds the quantity; price holds the price at the time of the order.
+
+```sql run expect=rows:15
+select o.order_id, b.title
+from orders o
+join order_item oi on oi.order_id = o.order_id
+join book b on b.book_id = oi.book_id
+order by o.order_id, b.title;
+```
+
+Fifteen rows. Order 3 has three books; orders 1, 5, 6, 7 and 8 have two each. And Quiet Flows the Don appears in orders 1 and 7: one book, two link rows.
+
+The order_item primary key is composite: `(order_id, book_id)`. A book therefore cannot appear twice as separate rows in one order. Both columns are foreign keys: order_id references orders, and book_id references book.
+
+A junction table can hold more than two identifiers. Here qty and price describe the relationship itself, not the book or the order alone.
+
+## One to one
+
+In a one-to-one relationship, each row can correspond to at most one row on the other side. The bookstore has no separate email table: email is in customer. Its `UNIQUE` constraint makes each email identify at most one customer, while `NOT NULL` requires every customer to have one. This illustrates uniqueness within a table, rather than a relationship between two tables.
+
+Check the data for duplicates:
+
+```sql run expect=rows:0
+select email, count(*) as customers
+from customer
+group by email
+having count(*) > 1;
+```
+
+Zero rows. This checks the current data; the schema's `UNIQUE` constraint supplies the guarantee. A second row with the same email is rejected with error 23505.
+
+To model a one-to-one relationship across two tables, the second table can have a foreign key to customer with a `UNIQUE` constraint. That permits at most one matching row per customer; it does not require every customer to have one. Such a table can hold rare or large fields separately from the main row.
+
+## What's missing and why
+
+- ❌ Simple Python and Learning Python in the book-author join: author_id is NULL, so `INNER JOIN` finds no match.
+- ❌ Boris Pasternak in that join: no book references his identifier.
+- ❌ The Island of Lost Ships in the 15-row result: nobody ordered it, so there is no link row.
+- ❌ Duplicate emails in the check: there are none, so zero rows is the expected result.
+
+## Pitfalls
+
+<Callout kind="trap">
+Joining orders directly to book on their identifiers does not replace the junction table. Order and book identifiers are independent:
+
+```sql run expect=rows:8
+select o.order_id, b.title
+from orders o
+join book b on o.order_id = b.book_id
+order by o.order_id;
+```
+
+Eight rows appear, and some look plausible. But the matching numbers do not indicate an order item. Order 3 is paired with The Fate of a Man, although it contains Professor Dowell's Head, Captain Grant's Children and Journey to the Center of the Earth. The actual N:M links are in order_item.
+</Callout>
+
+<Callout kind="tip">
+Use foreign keys for references that need database enforcement. They reject a book with a nonexistent author when it is inserted, instead of leaving the error for a later report. A junction table needs foreign keys on both reference columns.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `select * from author a join book b on b.author_id = a.author_id` return? Predict, then check.
+2. How many books appear in more than one order? Query order_item with `group by book_id having count(*) > 1`.
+3. What happens if you insert a customer with `anna@example.com`, which Anna Smirnova already has?
+
+<Cheatsheet>
+- 1:N: the key is on the many side. One author can have many books; `book.author_id` refers to the author.
+- N:M: use a junction table with two foreign keys, such as `order_item (order_id, book_id)`.
+- For 1:1 across tables, a unique foreign key permits at most one matching row on the referenced side; participation can still be optional.
+- A foreign key rejects references to nonexistent rows, but allows NULL when the referencing column permits it.
+- `count(*)` counts rows after a `LEFT JOIN`; `count(col)` counts only non-NULL values.
+</Cheatsheet>
