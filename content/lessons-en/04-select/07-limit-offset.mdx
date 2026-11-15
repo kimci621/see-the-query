@@ -1,0 +1,209 @@
+---
+id: limit-offset
+title: LIMIT, OFFSET and pagination
+chapter: select
+number: "4.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, price from book order by price desc nulls last limit 3;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-limit.html
+    title: LIMIT and OFFSET
+  - url: https://www.postgresql.org/docs/current/sql-select.html#SQL-LIMIT
+    title: "SELECT reference: LIMIT"
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#ROW-WISE-COMPARISON
+    title: Row constructor comparisons
+course: ["11.21"]
+tags: [limit, offset, fetch first, with ties, pagination, pages, keyset]
+mvp: true
+---
+
+<TlDr>`LIMIT` keeps the first N rows; `OFFSET` skips M rows before that. Combined with an `ORDER BY` that gives a unique order, they divide results into pages.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books. Sort them by descending price, putting the missing price last with `NULLS LAST` (lesson 4.6): 3200, 2400, 1990, 890, 610, 610, 560, 420, 350, 350 and The Island of Lost Ships with no price.
+
+Two pairs tie: Journey to the Center of the Earth and Captain Grant's Children at 610, and The Fate of a Man and The Tale of the Fisherman and the Fish at 350. We'll divide the list into pages of 3 books.
+
+## The first three: LIMIT
+
+`LIMIT` operates after sorting (lesson 4.2):
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last limit 3;
+```
+
+Three rows: Learning Python (3200), Fluent Python (2400) and Simple Python (1990). On the board, a scissors line appears below the third row; the rows below fade and leave.
+
+Without `NULLS LAST`, The Island would come first: with `DESC`, a missing price sorts first by default.
+
+## The second page: OFFSET
+
+`OFFSET` skips rows from the start and `LIMIT` takes the next ones:
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last limit 3 offset 3;
+```
+
+Skip 3, take 3: And Quiet Flows the Don (890) and both books at 610. The board shows two scissors lines, above the fourth row and below the sixth.
+
+For page N with K rows, use `limit K offset (N - 1) * K`. Page three with 3 books uses `limit 3 offset 6`.
+
+## A tie at the page boundary
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last limit 3 offset 6;
+```
+
+Three rows: 560, 420 and one of the books at 350. Postgres does not promise which tied book comes first (lesson 4.6). The other goes to page four. If their order changes when the next page is fetched, one book may appear twice and the other not at all.
+
+Add a unique key at the end of `ORDER BY`. Each book has its own `book_id`:
+
+```sql run expect=rows:3
+select title, price, book_id from book order by price desc nulls last, book_id limit 3 offset 6;
+```
+
+For these unchanged data, page three is now deterministic: Professor Dowell's Head, The Captain's Daughter and The Fate of a Man (`book_id` 3). The Tale of the Fisherman and the Fish (`book_id` 5) goes to page four.
+
+## The last page can be shorter
+
+```sql run expect=rows:2
+select title, price from book order by price desc nulls last, book_id limit 3 offset 9;
+```
+
+Two rows: The Tale of the Fisherman and the Fish and The Island, which has no price. We asked for 3, but only 2 remain. What if we go past the end?
+
+```sql run expect=rows:0
+select title, price from book order by price desc nulls last, book_id limit 3 offset 20;
+```
+
+Zero rows, without an error: there is nothing after the eleventh book. On the board, all 11 rows fade. The result panel reports zero rows and the step where they disappeared.
+
+Page through the list in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="First page">
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last, book_id limit 3;
+```
+
+</Step>
+<Step caption="Second page: OFFSET skips three">
+
+```sql run expect=rows:3
+select title, price from book order by price desc nulls last, book_id limit 3 offset 3;
+```
+
+</Step>
+<Step caption="Fourth page: two remain">
+
+```sql run expect=rows:2
+select title, price from book order by price desc nulls last, book_id limit 3 offset 9;
+```
+
+</Step>
+<Step caption="Past the end: empty">
+
+```sql run expect=rows:0
+select title, price from book order by price desc nulls last, book_id limit 3 offset 20;
+```
+
+</Step>
+</Scene>
+
+## FETCH FIRST: the standard form
+
+Postgres accepts `LIMIT` as well as the SQL-standard `FETCH FIRST` form. The standard also writes a skip as `OFFSET 3 ROWS`:
+
+```sql run expect=rows:2
+select title, price from book order by price desc nulls last fetch first 2 rows only;
+```
+
+Two rows, as with `limit 2`. The board labels the step `LIMIT 2`.
+
+`FETCH FIRST` also offers `WITH TIES`: it includes rows tied with the last row by the sort keys:
+
+```sql run expect=rows:6
+select title, price from book order by price desc nulls last fetch first 5 rows with ties;
+```
+
+We asked for 5 and got 6. The two books at 610 share fifth place, so `WITH TIES` includes both. On the board, the scissors line is below the sixth row. Postgres requires `ORDER BY` with `WITH TIES` so it can determine ties.
+
+## Deep pages: OFFSET does extra work
+
+Postgres still computes the skipped rows before discarding them. `offset 100000` means it must skip one hundred thousand rows. The farther the page, the more work that can require.
+
+With **keyset pagination**, remember the last row's key and ask for rows after it. Page one ended at Simple Python for 1990, so look for cheaper books.
+
+First, a common mistake:
+
+```sql run expectError=42601
+select title, price from book order by price desc where price < 1990 limit 3;
+```
+
+Error `42601`: the original message says `syntax error at or near "where"`. The written order is fixed: `WHERE` goes before `ORDER BY`, with `LIMIT` at the end. The logical order differs (lesson 4.2).
+
+```sql run expect=rows:3
+select title, price from book where price < 1990 order by price desc limit 3;
+```
+
+The same three prices as page two with `OFFSET`: 890, 610 and 610. On the board, `WHERE` filters the rows and `LIMIT` cuts the result at the bottom.
+
+The Island has no price, so `price < 1990` is not `TRUE` for it. This keyset condition will never return it. Use a non-NULL key for this form, or handle missing values separately.
+
+<Callout kind="analogy">
+Imagine a thick book. `OFFSET` starts at the beginning and counts the pages again each time. A keyset cursor is like a bookmark: it tells you where you stopped.
+</Callout>
+
+With only 11 books, the speed difference is hard to notice. On a large table, an appropriate index can let Postgres seek to the key instead of skipping all earlier rows. Chapter 12 covers indexes.
+
+## What's missing and why
+
+- ❌ Eight books in the first example: `LIMIT 3` kept the first three after sorting.
+- ❌ The three most expensive books on page two: `OFFSET 3` skipped them.
+- ❌ The Tale of the Fisherman and the Fish on the third page with `book_id` as a tie-breaker: its ID is higher than the other book's, so it is on page four.
+- ❌ All books at `offset 20`: the list ends at row 11.
+- ❌ The Island in the keyset query: `price < 1990` is unknown for NULL.
+
+## Pitfalls
+
+<Callout kind="trap">
+`LIMIT` without `ORDER BY`:
+
+```sql run expect=rows:3
+select title, price from book limit 3;
+```
+
+Three rows return, but Postgres does not promise which. It considers `LIMIT` and `OFFSET` when planning, so different pages without a defined order can overlap or miss rows. Sort before dividing into pages.
+</Callout>
+
+<Callout kind="tip">
+A keyset using only price can skip a tie. Use a pair such as price and ID in the same direction: `order by price desc, book_id desc`. At 610, Captain Grant's Children (`book_id` 9) comes before Journey to the Center of the Earth (8). If a page ends at the former, `where price < 610` skips the latter. Compare both values instead: `where (price, book_id) < (610, 9) order by price desc, book_id desc limit 3` starts after that pair.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `order by price desc nulls last limit 5 offset 8` return? Count first, then run it.
+2. Write a query for page four with 2 books per page and `book_id` as a tie-breaker. Which books appear?
+3. Take page three using a keyset: books cheaper than 610, descending by price, `limit 3`. What is missing from the result?
+
+<Cheatsheet>
+- `limit n` returns at most n rows; `limit all` is like omitting `LIMIT`.
+- `offset m` skips m rows; `offset 0` is like omitting it. Without a limit, all later rows are returned.
+- Page N of K rows: `limit K offset (N - 1) * K`.
+- The last page can be shorter; past the end gives zero rows without an error.
+- `fetch first n rows only` is like `limit n`; `with ties` includes rows tied with the last one.
+- End `ORDER BY` with a unique key to resolve page boundaries.
+- For deep pages, a keyset can use `where key < last_key order by key desc limit n`. Account for ties and NULL values.
+
+```sql noexec
+select title, price from book
+order by price desc nulls last, book_id
+limit 3 offset 6;
+```
+</Cheatsheet>
