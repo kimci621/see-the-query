@@ -1,0 +1,205 @@
+---
+id: operators
+title: BETWEEN, IN, LIKE and IS DISTINCT FROM
+chapter: select
+number: "4.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.book, public.author]
+  layout:
+    book: { x: 0, y: 0 }
+    author: { x: 330, y: 360 }
+initialQuery: |
+  select title, price from book where price between 350 and 610;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-comparison.html
+    title: Comparison operators and BETWEEN
+  - url: https://www.postgresql.org/docs/current/functions-matching.html
+    title: LIKE, ILIKE and patterns
+tags: [between, in, like, ilike, "null", operators]
+mvp: false
+---
+
+<TlDr>`BETWEEN` tests a range, `IN` a list, `LIKE` a pattern, and `IS DISTINCT FROM` compares values even when one is NULL.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books. Prices range from 350 to 3200; The Island of Lost Ships has no price, so <C id="public.book.price">price</C> is NULL. There are six authors, and two books have no author.
+
+Three titles contain Python: Fluent Python, Simple Python and Learning Python. We'll use them to test patterns.
+
+## BETWEEN: a range including its boundaries
+
+An ordinary comparison on both sides is a little long:
+
+```sql run expect=rows:6
+select title, price from book
+where price >= 350 and price <= 610
+order by price, title;
+```
+
+It returns 6 rows. The shorter version gives the same result:
+
+```sql run expect=rows:6
+select title, price from book
+where price between 350 and 610
+order by price, title;
+```
+
+`BETWEEN` includes both boundaries. The Fate of a Man and The Tale of the Fisherman and the Fish, priced at 350, are included, as are Journey to the Center of the Earth and Captain Grant's Children at 610.
+
+On the board, `price` is highlighted. Rows in the range stay green and the others leave.
+
+To negate it, use `NOT BETWEEN`:
+
+```sql run expect=rows:6
+select title, price from book
+where price not between 500 and 1000
+order by price;
+```
+
+There are 6 rows: three below 500 and three above 1000. The Island of Lost Ships is missing: its price is NULL, which passes neither `BETWEEN` nor `NOT BETWEEN`.
+
+<Callout kind="trap">
+A boundary can be NULL, but comparisons with it are unknown:
+
+```sql run expect=rows:0
+select title from book where price between null and 100;
+```
+
+No rows pass. This condition is equivalent to `price >= NULL AND price <= 100`: the first comparison is unknown, so the whole condition cannot be `TRUE`. Depending on the other comparison it can be `FALSE` or unknown.
+</Callout>
+
+## IN: a list of values
+
+`IN` replaces a chain of `OR` conditions:
+
+```sql run expect=rows:6
+select title, author_id from book
+where author_id in (1, 3, 5)
+order by book_id;
+```
+
+Six books by Sholokhov, Pushkin and Verne pass. On the board, `IN` checks each row against the list, like several `OR` conditions.
+
+`NOT IN` works like `NOT (x IN (...))`:
+
+```sql run expect=rows:3
+select title, author_id from book
+where author_id not in (1, 3, 5)
+order by book_id;
+```
+
+Three books pass, by authors 2 and 4. Books without an author do not: `NULL NOT IN (1, 3, 5)` is unknown, and `WHERE` does not keep unknown results.
+
+<Callout kind="trap">
+If a `NOT IN` list contains NULL, no row can make that condition `TRUE`. The same applies to values returned by a subquery. Depending on the question, use `NOT EXISTS` or handle NULL explicitly.
+</Callout>
+
+## LIKE and ILIKE: patterns
+
+`LIKE` matches a string against a pattern. `%` means any sequence of characters, including none; `_` means exactly one character.
+
+```sql run expect=rows:1
+select title from book where title like 'Fluent%';
+```
+
+One book matches: Fluent Python. Simple Python and Learning Python do not start with `Fluent`. With this dataset's collation, `LIKE` also distinguishes letter case.
+
+```sql run expect=rows:3
+select title from book where title ilike '%python%';
+```
+
+`ILIKE` ignores case, so all three Python titles match. On the board, matching rows are highlighted one by one.
+
+<Callout kind="tip">
+A `LIKE` pattern beginning with `%` generally cannot use an ordinary B-tree index to narrow the search. On a large table, check the query plan. PostgreSQL also offers full-text search for words and other index types for pattern searches.
+</Callout>
+
+## IS DISTINCT FROM: comparing NULL
+
+Ordinary `=` with NULL gives unknown:
+
+```sql run expect=rows:0
+select title from book where price = null;
+```
+
+No rows pass. Even `NULL = NULL` is unknown, so this cannot find missing values.
+
+`IS DISTINCT FROM` asks whether two values differ and returns `TRUE` or `FALSE`, treating NULL as a comparable value:
+
+```sql run expect=rows:10
+select title from book where price is distinct from null
+order by title;
+```
+
+Ten books pass: all those with a price. The Island of Lost Ships does not, because its NULL is not distinct from NULL.
+
+The opposite check:
+
+```sql run expect=rows:1
+select title from book where price is not distinct from null;
+```
+
+One row: The Island of Lost Ships. With NULL on the right, this is equivalent to `price is null`.
+
+## Put them together
+
+Find inexpensive books by three authors:
+
+```sql run expect=rows:3
+select title, price from book
+where author_id in (1, 3, 5)
+  and price between 300 and 430
+order by price;
+```
+
+Three rows: The Fate of a Man and The Tale of the Fisherman and the Fish at 350, and The Captain's Daughter at 420. The board checks the combined condition and keeps rows that satisfy both parts.
+
+## What's missing and why
+
+- ❌ The Island of Lost Ships in `not between 500 and 1000`: its price is NULL, so the comparison is not `TRUE`.
+- ❌ Books without an author in `author_id not in (1, 3, 5)`: the result is unknown.
+- ❌ Simple Python and Learning Python in `like 'Fluent%'`: neither title starts with `Fluent`.
+- ❌ The Island of Lost Ships in `price is distinct from null`: its NULL is not distinct from NULL.
+
+## Pitfalls
+
+<Callout kind="trap">
+NULL in a `NOT IN` subquery can leave the result empty:
+
+```sql run expect=rows:0
+select name from author
+where author_id not in (select author_id from book);
+```
+
+The subquery includes NULL because two books have no author. Authors with a match get `FALSE`; authors without one get unknown. Neither passes. To find authors without books, use `NOT EXISTS` or filter NULL out of the subquery.
+</Callout>
+
+<Callout kind="trap">
+`LIKE` without wildcards matches the whole string:
+
+```sql run expect=rows:0
+select title from book where title like 'Python';
+```
+
+No title is exactly Python. For a substring, put `%` on both sides; for an exact match, ordinary `=` is enough.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `where price between 400 and 900` return? Count the prices, then check on the board.
+2. Which books match `where title like '%Python%'` without `ilike`? Predict, then run it.
+3. What does `where author_id not in (1, 3, 5, null)` return? Why does it differ from the list without NULL?
+
+<Cheatsheet>
+- `BETWEEN a AND b` includes both boundaries. A NULL boundary prevents a `TRUE` result.
+- `NOT BETWEEN` does not let a NULL input pass.
+- `IN (list)` behaves like a chain of `OR` comparisons.
+- `NOT IN` with NULL in the list yields no `TRUE` rows.
+- `LIKE`: `%` matches any sequence, `_` one character. Case sensitivity depends on collation.
+- `ILIKE` matches without regard to case.
+- `IS DISTINCT FROM` returns `TRUE` or `FALSE` even with NULL; `IS NOT DISTINCT FROM NULL` is equivalent to `IS NULL`.
+- `= NULL` is never `TRUE`.
+</Cheatsheet>
