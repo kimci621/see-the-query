@@ -1,0 +1,86 @@
+---
+id: comment-on
+title: COMMENT ON
+chapter: ddl
+number: "2.8"
+order: 9
+dataset: bookstore
+initialQuery: |
+  select book_id, title, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-comment.html
+    title: COMMENT
+course: ["11.24"]
+tags: [comment, comment on, schema documentation]
+---
+
+<TlDr>`COMMENT ON` adds a description to a table, column or another object. The comment is stored in the system catalog and can be read by anyone connected to the database.</TlDr>
+
+## What's in the data
+
+`book` has eleven books. The table has no comment yet: its description in the catalog is `NULL`.
+
+## Add a comment
+
+```sql run expect=rows:0
+comment on table book is 'Store book catalog';
+```
+
+A description appears next to `book` on the board. The preview rolls back, so the comment disappears with it. The description is stored in the system catalog; it is not a row or a constraint and does not change how queries work.
+
+To keep the comment in the database, apply the same command:
+
+```sql run apply expect=rows:0
+comment on table book is 'Store book catalog';
+```
+
+Applying saves the change without a scene. Subsequent queries to the catalog can read it.
+
+## Read a comment
+
+```sql run expect=rows:1
+select obj_description('book'::regclass) as comment;
+```
+
+`obj_description` takes a catalog object and returns its description. For a column, use `col_description`. In psql, `\d+ book` also shows comments.
+
+## Remove a comment
+
+```sql run expect=rows:0
+comment on table book is null;
+```
+
+The description disappears from the board: `NULL` removes it. The table and its data stay in place. The preview rollback restores the comment.
+
+## Why use comments?
+
+A comment stays in the database when developers change, close to the schema it describes. A useful description explains what the object contains and why, rather than repeating its name. For example, a comment on `price` could say which currency it uses; one on `status` could explain the allowed values.
+
+## What's missing and why
+
+- ❌ The comment is not in the rows of `book`: it lives in the catalog.
+- ❌ The description disappears during the `is null` preview, then returns when the preview rolls back.
+
+## Pitfalls
+
+<Callout kind="trap">
+The database does not check whether a comment is accurate. A typo or an outdated description stays there until someone fixes it. Use constraints for rules the database should enforce.
+</Callout>
+
+<Callout kind="tip">
+Comments are useful when a table or column name cannot tell the whole story: units, formats and data sources are good examples. They keep documentation close to the data.
+</Callout>
+
+## Check yourself
+
+1. Where is a table comment stored?
+2. What does `obj_description` return if there is no comment?
+3. How does `comment on table` differ from `alter table ... add constraint`?
+
+<Cheatsheet>
+- `comment on table book is '...'` adds a table description.
+- `comment on column book.price is '...'` adds a column description.
+- `is null` removes a comment.
+- `obj_description('book'::regclass)` reads a table comment.
+- `col_description('book'::regclass, 1)` reads a column comment by its number.
+</Cheatsheet>
