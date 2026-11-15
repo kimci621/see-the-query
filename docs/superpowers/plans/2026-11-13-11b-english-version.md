@@ -254,7 +254,7 @@
 
 **09-windows**
 
-- [ ] 9.1 `over-partition`: `content/lessons-en/09-windows/01-over-partition.mdx`
+- [x] 9.1 `over-partition`: `content/lessons-en/09-windows/01-over-partition.mdx`
 - [ ] 9.2 `ranking`: `content/lessons-en/09-windows/02-ranking.mdx`
 - [ ] 9.3 `lag-lead`: `content/lessons-en/09-windows/03-lag-lead.mdx`
 - [ ] 9.4 `window-frame`: `content/lessons-en/09-windows/04-window-frame.mdx`

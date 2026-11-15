@@ -1,0 +1,139 @@
+---
+id: over-partition
+title: "OVER() and PARTITION BY"
+chapter: windows
+number: "9.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.employee]
+  layout:
+    employee: { x: 0, y: 0 }
+initialQuery: |
+  select name, salary, avg(salary) over () as avg_all, avg(salary) over (partition by position) as avg_pos
+  from employee
+  order by employee_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/tutorial-window.html
+    title: "Tutorial: Window Functions"
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
+    title: Window function calls
+tags: [window functions, over, "partition by", window, avg, partitions]
+mvp: false
+---
+
+<TlDr>`OVER()` lets a window aggregate calculate a value for each row without collapsing the rows. `PARTITION BY` divides the input into groups for the window calculation.</TlDr>
+
+## The data
+
+<T id="public.employee">employee</T> has 8 employees. <C id="public.employee.position">position</C> has six values: Director, Sales Manager, Warehouse Manager, Manager, Warehouse Assistant and Intern.
+
+<C id="public.employee.salary">salary</C> ranges from 40000 to 300000. Natalia Lebedeva and Igor Novikov both earn 70000; that tie matters in lesson 9.2.
+
+## GROUP BY returns one row per group
+
+First calculate the average salary by position in the usual way:
+
+```sql run expect=rows:6
+select position, avg(salary) as avg_pos
+from employee
+group by position;
+```
+
+There are 6 rows for 8 employees. `GROUP BY` gathers rows by position and returns one summary row per group. The two Manager rows and the two Warehouse Assistant rows each become one summary row.
+
+## OVER() calculates without collapsing rows
+
+Now put the averages beside each employee:
+
+```sql run expect=rows:8
+select name, salary,
+  avg(salary) over () as avg_all,
+  avg(salary) over (partition by position) as avg_pos
+from employee
+order by employee_id;
+```
+
+There are 8 rows, one per employee. The window calculations do not collapse them.
+
+`avg(salary) over ()` calculates the average over all eight input rows. Each row has `avg_all` 137500: total salaries of 1,100,000 divided by 8.
+
+`avg(salary) over (partition by position)` calculates an average for each position:
+
+- Director: 300000;
+- Sales Manager: 180000;
+- Warehouse Manager: 160000;
+- Manager: 140000;
+- Warehouse Assistant: 70000;
+- Intern: 40000.
+
+Alexey Morozov and Dmitry Sokolov have the same position, so both get `avg_pos` 140000. Their salaries differ: 190000 and 90000. The average is calculated across the partition and shown alongside each of its rows.
+
+<Callout kind="analogy">
+Imagine a payroll sheet. `GROUP BY` replaces the individual entries with one total line per position. `OVER (PARTITION BY position)` keeps each name and adds a note with the average for that position.
+</Callout>
+
+## OVER() without PARTITION BY
+
+Without `PARTITION BY`, all input rows form one partition. Check the total:
+
+```sql run expect=rows:8
+select name, salary, sum(salary) over () as total
+from employee
+order by employee_id;
+```
+
+All eight rows have `total` 1100000. This is a total for the whole partition, not a running total: the window has no `ORDER BY`, and its default frame covers the partition.
+
+## How to read OVER
+
+The clauses inside `over (...)` describe the partition, ordering and, when specified, the window frame. `partition by position` groups rows by position; without it there is one partition. An `order by` inside the window defines its ordering, independently of the final output order.
+
+For an aggregate with the default frame, a window `ORDER BY` produces a running calculation through the current row and its peers. An explicit frame can change that behavior. Lesson 9.4 covers frames.
+
+Window functions operate on rows remaining after `WHERE`, `GROUP BY` and `HAVING`, before the final `ORDER BY` and `LIMIT`. A row filtered out by `WHERE` is not visible to them.
+
+## What is missing from the result
+
+- ❌ Separate Manager and Warehouse Assistant employee rows in the `group by position` result: each position became one summary row.
+- ❌ A reduction to 6 rows in the window query: all 8 input rows remain.
+- ❌ A running total in `sum(salary) over ()`: its default frame contains the whole partition, so every row gets 1100000.
+- ❌ Different `avg_all` values: this query uses the same whole-input average for all eight rows.
+
+## Traps
+
+<Callout kind="trap">
+Adding `ORDER BY` inside `OVER` changes the default frame for an aggregate:
+
+```sql run expect=rows:2
+select name, position, salary,
+  avg(salary) over (partition by position) as avg_pos,
+  avg(salary) over (partition by position order by salary) as running_avg
+from employee
+where position = 'Manager'
+order by salary;
+```
+
+Dmitry has `avg_pos` 140000 and `running_avg` 90000: the default frame at his row contains his salary. Alexey has 140000 in both columns because both salaries are in the frame at his row. If ordering values tie, the default frame includes peers with the same ordering value.
+
+For a whole-partition average, omit the window `order by` or specify a frame covering the whole partition. Lesson 9.4 explains the frame syntax.
+</Callout>
+
+<Callout kind="tip">
+A window is useful when each detail row needs a group result beside it: a share of a payroll, a difference from an average, or a comparison with a total. If you need only one result per group, `GROUP BY` may be enough.
+</Callout>
+
+## Check yourself
+
+1. Add `where salary > 100000` to the main query. How many rows remain, and what is the Manager's `avg_pos`? Answer first, then check.
+2. Remove `partition by position` from `avg_pos`. What value appears on all eight rows?
+3. Replace `avg` with `count(*)` in the position-partitioned window. How many rows get 2?
+
+<Cheatsheet>
+- `over ()`: one partition over the query's input rows; the rows remain.
+- `over (partition by position)`: a partition for each position.
+- `PARTITION BY` does not collapse rows; `GROUP BY` returns one row per group.
+- Without a window `ORDER BY`, the default frame covers the partition.
+- With a window `ORDER BY`, the default frame reaches the current row and its peers. An explicit frame can change it.
+- Window functions see the rows remaining after `WHERE`, `GROUP BY` and `HAVING`.
+</Cheatsheet>
