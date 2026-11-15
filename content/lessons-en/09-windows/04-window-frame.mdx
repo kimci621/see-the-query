@@ -1,0 +1,166 @@
+---
+id: window-frame
+title: "Running totals and window frames"
+chapter: windows
+number: "9.4"
+order: 4
+dataset: events
+board:
+  tables: [public.event, public.orders]
+  layout:
+    orders: { x: 0, y: 0 }
+    event: { x: 620, y: 0 }
+initialQuery: |
+  select order_id, kind, amount, sum(amount) over (order by happened_at) as total
+  from event
+  where kind = 'paid'
+  order by happened_at;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
+    title: Window function calls
+  - url: https://www.postgresql.org/docs/current/functions-window.html
+    title: Window functions
+tags: [window functions, window frame, "running total", rows, range, cumulative total]
+mvp: false
+---
+
+<TlDr>For an aggregate, the window frame determines which rows contribute to each result. With an ordered window, the default frame produces a running calculation through the current row's peers.</TlDr>
+
+## The data
+
+<T id="public.event">event</T> has 21 events for 8 orders. Seven are payments: their <C id="public.event.kind">kind</C> is `paid`, and <C id="public.event.amount">amount</C> ranges from 1400 to 4390.
+
+The seven payments total 17430, the final running total below.
+
+Order 3's payment and cancellation share the timestamp `2024-04-02 23:55:00+03`. This pair shows the difference between the `ROWS` and `RANGE` frames in the examples. Order 4 was cancelled without a payment.
+
+## Running total
+
+```sql run expect=rows:7
+select order_id, kind, amount,
+  sum(amount) over (order by happened_at) as total
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+There are 7 rows. The `total` grows across these payments:
+
+- order 1: 1730;
+- order 2: 4130;
+- order 3: 5910;
+- order 5: 7310;
+- order 6: 11700;
+- order 7: 13810;
+- order 8: 17430.
+
+The first row has 1730; the last has 17430 because its frame includes all seven payments. With a window `ORDER BY` and no explicit frame, PostgreSQL uses `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`, including the current row's peers. These payment timestamps are distinct.
+
+## The whole partition without a running total
+
+Remove the window `order by`:
+
+```sql run expect=rows:7
+select order_id, amount, sum(amount) over () as total
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+All seven rows have `total` 17430. Without a window `order by`, the default frame covers the entire partition. The final query `order by` only controls the output order.
+
+`sum(amount) over ()` and the running sum end at the same total here, but their earlier values differ.
+
+## ROWS: count individual rows
+
+For order 3, count how many rows are in the frame at each step:
+
+```sql run expect=rows:3
+select kind, happened_at,
+  count(*) over (order by happened_at rows between unbounded preceding and current row) as rows_cnt
+from event
+where order_id = 3
+order by happened_at;
+```
+
+There are 3 rows: `created`, `paid` and `cancelled`. This `ROWS` frame gives successive counts 1, 2 and 3.
+
+`paid` and `cancelled` have the same timestamp. The query does not specify which gets 2 and which gets 3; their order can change. Add a unique tie-breaker to the window order if the assignment matters.
+
+## RANGE: include peers
+
+Use `RANGE` for the same bounds:
+
+```sql run expect=rows:3
+select kind, happened_at,
+  count(*) over (order by happened_at range between unbounded preceding and current row) as range_cnt
+from event
+where order_id = 3
+order by happened_at;
+```
+
+The counts are 1, 3 and 3. For this `RANGE` frame, `CURRENT ROW` includes all peers with the same ordering value. At `23:55`, both events with that timestamp are in the frame, so each gets 3.
+
+## A moving window of three payments
+
+Limit the frame at both ends. Sum the current payment and up to two preceding payments:
+
+```sql run expect=rows:7
+select order_id, amount,
+  sum(amount) over (order by happened_at rows between 2 preceding and current row) as last3
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+The last value is 10120: 4390, 2110 and 3620, the final three payments. At order 5, the frame holds 2400, 1780 and 1400, totaling 5580. The first two frames have fewer than three rows and give 1730 and 4130.
+
+<Callout kind="analogy">
+Think of the frame as a ruler over a page. This `ROWS` frame counts positions in the ordered rows. The `RANGE` frame above includes all rows that share the current timestamp, so two events in the same second are counted together.
+</Callout>
+
+## What is missing from the result
+
+- ❌ A total of 17430 on the first payment in the running sum: its frame contains only that payment, so the total is 1730.
+- ❌ A fixed assignment of `ROWS` counts 2 and 3 to `paid` and `cancelled`: their ordering values tie.
+- ❌ A `RANGE` count of 2 for `paid`: its peer with the same timestamp is included, so the count is 3.
+- ❌ Order 4 among the payments: it has no `paid` event, and `WHERE` filters it out before the window.
+- ❌ A running total in `sum(amount) over ()`: its default frame covers the whole partition.
+- ❌ A last moving sum of 17430: that frame covers only the last three payments, totaling 10120.
+
+## Traps
+
+<Callout kind="trap">
+This frame places a following bound before a preceding bound, which PostgreSQL rejects:
+
+```sql run expectError=42P20
+select order_id, sum(amount) over (
+  order by happened_at rows between 1 following and 1 preceding
+) as total
+from event
+where kind = 'paid'
+order by happened_at;
+```
+
+PostgreSQL reports code `42P20`: `frame starting from following row cannot have preceding rows`. The lesson editor currently flags this query as incomplete before sending it to PostgreSQL. A frame around the current row can use `rows between 1 preceding and 1 following`; a frame from the current row onward can use `rows between current row and unbounded following`.
+</Callout>
+
+<Callout kind="tip">
+With an ordered window, the default frame uses `RANGE`, not `ROWS`. If you need individual row positions, specify `ROWS`. Add a unique key to the window ordering when tied values must be ordered consistently.
+</Callout>
+
+## Check yourself
+
+1. What is the running `total` at order 5? Work it out from the payment amounts.
+2. Which payments make up the final moving sum of 10120?
+3. For order 3, does `count(*) over (order by happened_at)` give 1, 2, 3 or 1, 3, 3?
+
+<Cheatsheet>
+- `sum(x) over (order by t)`: an ordered aggregate with the default `range ... current row` frame, including peers.
+- `sum(x) over ()`: the entire partition under the default frame.
+- `ROWS` bounds count row positions; tied ordering values need a tie-breaker for stable positions.
+- In the shown `RANGE ... CURRENT ROW` frame, all peers at the current ordering value are included.
+- `rows between 2 preceding and current row`: up to three rows.
+- `rows between unbounded preceding and unbounded following`: the whole partition.
+- Some frame-bound combinations are invalid, including a following start with a preceding end.
+</Cheatsheet>
