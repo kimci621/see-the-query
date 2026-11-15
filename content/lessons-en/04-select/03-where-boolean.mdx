@@ -1,0 +1,168 @@
+---
+id: where-boolean
+title: WHERE and Boolean logic
+chapter: select
+number: "4.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, price from book where price > 500;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+    title: The WHERE clause
+  - url: https://www.postgresql.org/docs/current/functions-logical.html
+    title: Logical operators
+  - url: https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-PRECEDENCE
+    title: Operator precedence
+course: ["11.17", "11.18"]
+tags: [where, and, or, not, parentheses, precedence, filter]
+mvp: true
+---
+
+<TlDr>`WHERE` keeps rows for which the condition is true. `AND`, `OR` and `NOT` combine conditions; parentheses control how they are grouped.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books. <C id="public.book.category_id">category_id</C> stores the category: 3 is science fiction and 4 is classics. There are four books in each category.
+
+Two rows are special. The Island of Lost Ships has no price: its <C id="public.book.price">price</C> is `NULL`. Simple Python has no category. We'll meet them again below.
+
+## One condition
+
+`WHERE` checks a condition for each row. If the result is `TRUE`, the row stays; if it is `FALSE`, the row goes.
+
+```sql run expect=rows:7
+select title, price from book where price > 500;
+```
+
+The query returns 7 rows. Remember that number. On the board, a scanner passes over the rows and highlights `price`, the column in the condition. Passing rows turn green and failing rows red. The caption says 7 of 11 rows remain, with 1 `UNKNOWN`.
+
+The unknown result belongs to The Island of Lost Ships. Its price is missing, so there is no yes-or-no answer to whether it is above 500. The result is **`UNKNOWN`**. The row is gray, marked `UNKNOWN`, and also leaves: `WHERE` keeps only `TRUE`.
+
+## AND: both conditions
+
+**`AND`** is `TRUE` only when both parts are `TRUE`. Find expensive science fiction:
+
+```sql run expect=rows:3
+select title, price, category_id from book where price > 500 and category_id = 3;
+```
+
+Of the 7 books above 500, 3 are science fiction: Professor Dowell's Head at 560, Journey to the Center of the Earth and Captain Grant's Children at 610 each. The scanner passes over the rows once: the `AND` condition is one expression. The counter shows 11 → 3.
+
+The caption reports 2 `UNKNOWN` results. Alongside The Island of Lost Ships is Simple Python. Its price of 1990 makes the first part `TRUE`, but its category is missing. `TRUE` and unknown together give unknown.
+
+## OR: at least one
+
+**`OR`** is `TRUE` when at least one part is `TRUE`. Find thin books or very expensive ones:
+
+```sql run expect=rows:4
+select title, price, pages from book where pages < 100 or price > 2000;
+```
+
+There are 4 rows. Two are thin: The Fate of a Man (64 pages) and The Tale of the Fisherman and the Fish (32). Two are expensive: Fluent Python (2400) and Learning Python (3200). A book matching both conditions would pass too: `OR` does not mean one or the other exclusively.
+
+The Island of Lost Ships is gray again. It has 192 pages, so the first part is `FALSE`; the second is unknown. That combination gives unknown for `OR`.
+
+## NOT: the opposite
+
+**`NOT`** flips `TRUE` to `FALSE` and `FALSE` to `TRUE`. Find everything except classics:
+
+```sql run expect=rows:6
+select title, category_id from book where not (category_id = 4);
+```
+
+There are 11 books and 4 classics. You might expect 7 rows, but the query returns 6. Simple Python has no category, so `category_id = 4` is unknown, not `FALSE`. `NOT` of unknown is still unknown, and the row leaves. The caption reports 1 `UNKNOWN`. Lesson 4.5 shows how to handle it.
+
+## Precedence: AND binds more tightly than OR
+
+When `AND` and `OR` appear without parentheses, Postgres groups the parts around `AND` first. The precedence is `NOT`, then `AND`, then `OR`. These queries differ by one pair of parentheses:
+
+```sql run expect=rows:8
+select title, price, pages from book where price > 500 or price is null and pages < 200;
+```
+
+```sql run expect=rows:1
+select title, price, pages from book where (price > 500 or price is null) and pages < 200;
+```
+
+`price is null` checks whether the price is missing. It returns `TRUE` or `FALSE`, never unknown.
+
+The first query means “above 500 OR (no price AND fewer than 200 pages)”. Seven books cost more than 500; The Island of Lost Ships has no price and has 192 pages. That makes 8.
+
+The second means “(above 500 OR no price) AND fewer than 200 pages”. The same 8 books pass the parenthesized part, but only The Island of Lost Ships is under 200 pages. The result is 1.
+
+Each query has one `WHERE` step on the board, and neither produces an `UNKNOWN` verdict. The verdicts differ: the first has 8 green rows, the second only one.
+
+<Callout kind="analogy">
+A club guard is told to admit guests on the list or those who have a ticket and are at least 18. A person might ask whether the age limit applies to everyone. Postgres groups the parts around `AND`: the ticket and age go together, while someone on the list passes independently. Use parentheses for a different rule.
+</Callout>
+
+Try the lesson's numbers in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="Above 500: 7 rows">
+
+```sql run expect=rows:7
+select title, price from book where price > 500;
+```
+
+</Step>
+<Step caption="And science fiction: 3 rows">
+
+```sql run expect=rows:3
+select title, price, category_id from book where price > 500 and category_id = 3;
+```
+
+</Step>
+<Step caption="Parentheses change the meaning: 1 row">
+
+```sql run expect=rows:1
+select title, price, pages from book where (price > 500 or price is null) and pages < 200;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+For `where price > 500`:
+
+- ❌ The Fate of a Man and The Tale of the Fisherman and the Fish (350 each), and The Captain's Daughter (420): the condition is `FALSE`.
+- ❌ The Island of Lost Ships: its missing price makes the condition unknown, and `WHERE` keeps only `TRUE`.
+
+For `where not (category_id = 4)`:
+
+- ❌ Four classics: `category_id = 4` is `TRUE`, which `NOT` turns into `FALSE`.
+- ❌ Simple Python: its category is missing, and `NOT` does not turn unknown into `TRUE`.
+
+## Pitfalls
+
+<Callout kind="trap">
+SQL uses one equals sign, `=`, for equality. The `==` used by JavaScript or Python does not work here:
+
+```sql run expectError=42883
+select title from book where price == 890;
+```
+
+The error card reports no `==` operator, code `42883`. The original message is `operator does not exist: numeric == integer`. PostgreSQL allows custom operators, so it looks for an operator named `==` for these types and finds none. Write `price = 890`.
+</Callout>
+
+<Callout kind="tip">
+When mixing `AND` and `OR`, use parentheses even if the default precedence gives the right result. The next person reading the query will not need to recall the precedence table.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `select title from book where price > 500 and pages > 500` return? Check on the board.
+2. In the `OR` example, change `pages < 100` to `pages < 60`. How many rows remain?
+3. Write a condition for science fiction (category 3) priced at most 600. How many rows pass, and why is The Island of Lost Ships missing?
+
+<Cheatsheet>
+- `where condition`: only `TRUE` rows stay; `FALSE` and unknown (`NULL`) leave.
+- `AND` is `TRUE` when both parts are true; `OR` when at least one is true. `NOT` flips true and false.
+- Precedence: `NOT`, then `AND`, then `OR`. Parentheses control grouping.
+- `NOT` of unknown is still unknown, so it passes neither `WHERE x` nor `WHERE NOT x`.
+- Equality uses `=`; `==` gives `42883` for the types in this example.
+</Cheatsheet>
