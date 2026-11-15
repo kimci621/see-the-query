@@ -1,0 +1,213 @@
+---
+id: having
+title: HAVING vs WHERE
+chapter: aggregation
+number: "7.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.orders, public.review, public.book]
+  layout:
+    orders: { x: 0, y: 0 }
+    review: { x: 0, y: 380 }
+    book: { x: 760, y: 380 }
+initialQuery: |
+  select status, count(*) from orders group by status having count(*) > 1;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY and HAVING
+  - url: https://www.postgresql.org/docs/current/tutorial-agg.html
+    title: "Tutorial: Aggregate Functions"
+course: ["11.55"]
+tags: [having, where, group by, group filter, aggregate]
+mvp: true
+---
+
+<TlDr>`WHERE` filters input rows before grouping; `HAVING` filters groups afterward. Use `HAVING` for “statuses with more than one order”.</TlDr>
+
+## The data
+
+<T id="public.orders">orders</T> has 8 orders: 4 paid, 2 new, 1 shipped and 1 cancelled. Five have a <C id="public.orders.created_at">created_at</C> on or after April 1, 2024: 2 paid, 2 new and 1 cancelled.
+
+<T id="public.review">review</T> has 10 reviews for 7 books, with <C id="public.review.rating">rating</C> from 1 to 5. And Quiet Flows the Don, Fluent Python and Simple Python have two reviews each; the others have one. <T id="public.book">book</T> has 11 books, and Simple Python has no category.
+
+## WHERE cannot use this aggregate
+
+We need statuses with more than one order. A first attempt might be:
+
+```sql run expectError=42803
+select status, count(*) from orders where count(*) > 1 group by status;
+```
+
+The “Aggregate in WHERE” card shows code `42803`, as in lesson 7.1. In the logical order from lesson 4.2, `WHERE` comes before `GROUP BY`. When it checks input rows, the groups have not been formed yet. A separate subquery can calculate an aggregate for a `WHERE` condition, but this query tries to use the aggregate at the same query level.
+
+In lesson 7.1, sorting helped find one extreme value. Here sorting alone will not filter out groups below the threshold.
+
+## HAVING filters groups
+
+**`HAVING`** tests groups after they are formed. First, all statuses:
+
+```sql run expect=rows:4
+select status, count(*) from orders group by status;
+```
+
+There are 4 groups. Now add `HAVING`:
+
+```sql run expect=rows:2
+select status, count(*) from orders group by status having count(*) > 1;
+```
+
+There are 2 groups: paid with four orders and new with two. Shipped and cancelled have one order each, so they do not pass the threshold.
+
+The player shows the logical steps `FROM`, `GROUP BY`, `HAVING`, `SELECT`. At `HAVING`, the filter operates on the grouped rows. The caption says “HAVING: 2 of 4 groups remain”.
+
+<Callout kind="analogy">
+Return to the post office from lesson 7.2. `WHERE` is at the counter, deciding which letters enter the sorting process. `HAVING` works after the letters have been sorted into slots: only slots with more than one letter appear in the report.
+</Callout>
+
+## HAVING without GROUP BY
+
+In the aggregate examples without `GROUP BY` or `HAVING` in lesson 7.1, the result had one row. Without `GROUP BY`, the input forms a single group, and `HAVING` can discard it:
+
+```sql run expect=rows:0
+select count(*) from book having count(*) > 100;
+```
+
+The result has no rows. There are 11 books, so the single group fails the condition. Change `> 100` to `> 10` and the row with 11 returns. A later `LIMIT` or `OFFSET` can also affect the final row count.
+
+## WHERE and HAVING together
+
+Both filters can appear in one query. They act at different stages: `WHERE`, then `GROUP BY`, then `HAVING`. Take orders from April onward:
+
+```sql run expect=rows:3
+select status, count(*) from orders
+where created_at >= '2024-04-01'
+group by status;
+```
+
+There are 3 groups: paid 2, new 2 and cancelled 1. Shipped disappeared entirely because its only order was in March. Add `HAVING`:
+
+```sql run expect=rows:2
+select status, count(*) from orders
+where created_at >= '2024-04-01'
+group by status
+having count(*) > 1;
+```
+
+Again there are 2 groups, paid and new. But paid now has 2 orders instead of 4: only its two April orders reached the grouping step. The player places `WHERE` before `GROUP BY` and `HAVING` after it.
+
+## A condition on a grouping column
+
+`HAVING` can also test a group key:
+
+```sql run expect=rows:3
+select status, count(*) from orders group by status having status <> 'cancelled';
+```
+
+There are 3 rows, all statuses except cancelled. Here the same condition can be applied to the input rows with `WHERE`:
+
+```sql run expect=rows:3
+select status, count(*) from orders where status <> 'cancelled' group by status;
+```
+
+The result is the same. Writing this condition in `WHERE` makes it clear that those rows do not need to be grouped. PostgreSQL may also move a suitable condition from `HAVING` during planning. Use `HAVING` for conditions that need group results.
+
+`HAVING` follows the same grouping rules as `SELECT`: group keys and aggregates are allowed, as are columns functionally dependent on a grouped primary key. Other ungrouped columns cause an error:
+
+```sql run expectError=42803
+select status, count(*) from orders group by status having customer_id = 1;
+```
+
+The “Column outside GROUP BY” card shows code `42803`: `customer_id` is neither grouped nor aggregated. The paid group has four orders from customers 1, 2, 5 and 1. The group does not have a single customer ID to compare.
+
+## Expensive categories
+
+Take the average price per category from lesson 7.2, keeping only averages over 1000:
+
+```sql run expect=rows:2
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id
+having avg(price) > 1000;
+```
+
+There are 2 rows: category 6, Python, with an average of 2800.00, and the `NULL` category with one book, Simple Python, at 1990.00. Classics (502.50) and Science fiction (593.33) do not pass. `SELECT` rounds the average, while `HAVING` compares the unrounded `avg(price)`: the aggregate in `HAVING` need not match the expression shown in `SELECT`.
+
+## Highly rated books
+
+Books with an average rating of 4.5 or higher:
+
+```sql run expect=rows:4
+select book_id, avg(rating) from review group by book_id having avg(rating) >= 4.5;
+```
+
+There are 4 books: And Quiet Flows the Don and Fluent Python have ratings 5 and 4; The Fate of a Man and Professor Dowell's Head each have one 5. Simple Python has 2 and 4, an average of 3, so it does not pass. The 7 review groups become 4 after `HAVING`: book IDs 1, 2, 3 and 6.
+
+Try the main examples in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="All statuses: 4 groups">
+
+```sql run expect=rows:4
+select status, count(*) from orders group by status;
+```
+
+</Step>
+<Step caption="HAVING: statuses with more than one order, 2 groups">
+
+```sql run expect=rows:2
+select status, count(*) from orders group by status having count(*) > 1;
+```
+
+</Step>
+<Step caption="WHERE on date, then HAVING: still 2 groups, but fewer orders">
+
+```sql run expect=rows:2
+select status, count(*) from orders
+where created_at >= '2024-04-01'
+group by status
+having count(*) > 1;
+```
+
+</Step>
+</Scene>
+
+## What is missing from the result
+
+- ❌ Shipped and cancelled with `having count(*) > 1`: one order each, below the threshold.
+- ❌ Shipped in the queries from April onward: its order was in March, so `WHERE` removed it before grouping.
+- ❌ The count 4 for paid in the query with `WHERE`: only 2 April orders reached that group.
+- ❌ The book-count row with `having count(*) > 100`: the single group failed the condition.
+- ❌ Simple Python, Journey to the Center of the Earth and Captain Grant's Children in the rating query: their averages are 3, 4 and 3, below 4.5.
+
+## Traps
+
+<Callout kind="trap">
+A `SELECT` alias cannot be used as a `HAVING` alias:
+
+```sql run expectError=42703
+select status, count(*) as cnt from orders group by status having cnt > 1;
+```
+
+The result is code `42703`: `cnt` is not an input column, and `HAVING` cannot reference that output alias. `GROUP BY` accepts an output alias in PostgreSQL (lesson 7.2), but `HAVING` does not. Repeat the expression: `having count(*) > 1`.
+</Callout>
+
+<Callout kind="tip">
+For a report over a large table, use `WHERE` to restrict input rows by period or status when that matches the report's purpose. Fewer rows then need to be grouped. Apply a threshold on the resulting groups with `HAVING`.
+</Callout>
+
+## Check yourself
+
+1. Raise the rating threshold to `>= 4.75`. How many books remain? Answer first, then check.
+2. Which books have more than one review? Query `review` with `having count(*) > 1`.
+3. How many books remain if the rating query uses `having avg(rating) > 3`? Work it out from the averages, then check.
+
+<Cheatsheet>
+- `WHERE` filters rows before `GROUP BY`. A same-level aggregate in `WHERE` causes error `42803`.
+- `HAVING` filters groups after `GROUP BY` and can use aggregates.
+- Logical order: `FROM` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY` → `LIMIT`.
+- `HAVING` accepts group keys and aggregates, and PostgreSQL also permits columns dependent on a grouped primary key. Other ungrouped columns cause `42803`.
+- `HAVING` cannot reference a `SELECT` alias: repeat the expression. An unknown input name gives `42703`.
+- Without `GROUP BY`, `HAVING` tests one group; it keeps or discards that group.
+- Use `WHERE` for a condition on input rows when that matches the result you need.
+</Cheatsheet>
