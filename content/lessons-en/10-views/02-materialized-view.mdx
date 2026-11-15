@@ -1,0 +1,134 @@
+---
+id: materialized-view
+title: MATERIALIZED VIEW and REFRESH
+chapter: views
+number: "10.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-creatematerializedview.html
+    title: CREATE MATERIALIZED VIEW
+  - url: https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html
+    title: REFRESH MATERIALIZED VIEW
+  - url: https://www.postgresql.org/docs/current/rules-materializedviews.html
+    title: Materialized views
+course: ["12.6"]
+tags: [materialized view, refresh, snapshot, index]
+---
+
+<TlDr>A MATERIALIZED VIEW stores a query result. After source data changes, use `REFRESH` to update the stored result.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has eleven books, three priced above 1000. Create a materialized view of expensive books. Run the examples in order.
+
+```sql apply expect=rows:0
+create materialized view expensive_mv as select book_id, title, price from book where price > 1000;
+```
+
+For this command, PostgreSQL runs the query and stores its result. The board shows the <T id="public.expensive_mv">expensive_mv</T> snapshot connected to its source. “Up to date” means the stored rows currently match the query result.
+
+<Callout kind="analogy">
+Imagine a printed price list. You can read it without searching the catalog again, but catalog changes do not appear on the paper automatically. To get new prices, print the list again.
+</Callout>
+
+## Read the snapshot
+
+```sql run expect=rows:3
+select book_id, title from expensive_mv order by book_id;
+```
+
+These are books 2, 10 and 11. The query reads the stored rows rather than rerunning the view definition.
+
+```sql run expect=rows:1
+select count(*) as n from expensive_mv;
+```
+
+The count is 3. `count(*)` returns one row containing the number, not three rows.
+
+## Change the source
+
+```sql apply expect=rows:1
+update book set price = 1500 where book_id = 6 returning title, price;
+```
+
+Professor Dowell's Head now costs 1500 in the table. There are four expensive books in the source:
+
+```sql run expect=rows:1
+select count(*) as n from book where price > 1000;
+```
+
+The board shows “1 difference” on the snapshot because the current query finds one additional row. If the snapshot is out of view, select its name above. The stored rows themselves have not changed.
+
+## Trap: a stale snapshot
+
+<Callout kind="trap">
+Changing the source table does not automatically refresh a materialized view:
+
+```sql run expect=rows:1
+select count(*) as snapshot_count from expensive_mv;
+```
+
+The snapshot still has 3 rows, although 4 books now pass the condition in the source. A reader of the snapshot alone will not see the new price yet.
+</Callout>
+
+## Refresh the snapshot
+
+```sql apply expect=rows:0
+refresh materialized view expensive_mv;
+```
+
+`REFRESH` reruns the definition and replaces the stored contents. The board shows “Up to date” again.
+
+```sql run expect=rows:1
+select count(*) as refreshed_count from expensive_mv;
+```
+
+The snapshot now has 4 rows. The board's comparison counts unmatched rows on both sides: when an existing row changes, its old and new versions count as two differences. Some types cannot be compared this way, so the label may be absent.
+
+## Indexes and concurrent reads
+
+You can create an index on a materialized view:
+
+```sql apply expect=rows:0
+create index expensive_mv_price_idx on expensive_mv (price);
+```
+
+It may help queries on price; inspect the plan for the particular query.
+
+A normal `REFRESH` can block concurrent reads of the snapshot. `REFRESH ... CONCURRENTLY` allows those reads, but requires an already populated view and a qualifying `UNIQUE` index using only column names and covering all rows, with no `WHERE` clause. For example:
+
+```sql noexec
+create unique index expensive_mv_id_idx on expensive_mv (book_id);
+refresh materialized view concurrently expensive_mv;
+```
+
+This is syntax for a separate database: it contains two commands, while the lesson button applies one at a time. Even with `CONCURRENTLY`, only one `REFRESH` can run on a given materialized view at once.
+
+## What is missing from the result
+
+- ❌ Book 6 in the original snapshot: its price was 560 when the view was created.
+- ❌ A fourth row immediately after the `UPDATE`: the snapshot does not refresh automatically.
+- ❌ A guarantee of continuous freshness from “Up to date”: the label reflects the comparison when the board was updated.
+
+<Callout kind="tip">
+A materialized snapshot can help when the result is read often and some refresh delay is acceptable. An ordinary view is useful when each read needs source data visible to that query. Measure refresh cost and choose a schedule for your data.
+</Callout>
+
+## Check yourself
+
+1. How many rows are in the snapshot after changing the price but before `REFRESH`?
+2. What must be added for `REFRESH ... CONCURRENTLY`?
+3. Why can changing one row produce two differences on the board?
+
+<Cheatsheet>
+- `CREATE MATERIALIZED VIEW ... AS SELECT ...` stores the query and, by default, its result.
+- Source-table changes do not update the snapshot automatically.
+- `REFRESH MATERIALIZED VIEW` recomputes the stored result.
+- `CONCURRENTLY` permits concurrent reads when its requirements, including a qualifying unique index, are met.
+- You can create an index on materialized-view columns.
+</Cheatsheet>
