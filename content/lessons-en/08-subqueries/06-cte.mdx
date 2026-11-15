@@ -1,0 +1,120 @@
+---
+id: cte
+title: CTE and WITH
+chapter: subqueries
+number: "8.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.orders]
+  layout:
+    orders: { x: 0, y: 0 }
+initialQuery: |
+  with recent as (
+    select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
+  )
+  select order_id, status from recent order by order_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-with.html
+    title: WITH queries (common table expressions)
+tags: [cte, with, "common table expression", readability]
+mvp: false
+---
+
+<TlDr>`WITH` names an auxiliary query. You can then use its result in the main statement like a table.</TlDr>
+
+## The data
+
+<T id="public.orders">orders</T> has 8 orders. By <C id="public.orders.created_at">created_at</C>, two were placed on or after May 1, 2024 in Moscow: order 7 is paid and order 8 is new. Order 7 was created at 00:10 Moscow time. The boundary below includes the explicit UTC+3 offset so it includes that order regardless of the session time zone.
+
+## Name an intermediate result
+
+```sql run expect=rows:2
+with recent as (
+  select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
+)
+select order_id, status from recent order by order_id;
+```
+
+There are 2 rows: orders 7 and 8. Without `WITH`, you could put the filter directly in this query or wrap it in a `FROM` subquery. With `WITH`, the selection has a name, `recent`, which can be referenced elsewhere in the statement.
+
+The board represents `recent` as a derived table with two rows. It is not a permanent database table: the CTE belongs to this statement. The main `SELECT` reads its output by name.
+
+## A second CTE uses the first
+
+List multiple CTEs after `WITH`, separated by commas. A later CTE can refer to an earlier one:
+
+```sql run expect=rows:1
+with recent as (
+  select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
+),
+paid_recent as (
+  select * from recent where status = 'paid'
+)
+select order_id, status from paid_recent order by order_id;
+```
+
+There is 1 row: order 7. `paid_recent` reads `recent` and filters by status, leaving one of its two rows.
+
+In this non-recursive `WITH`, order matters: `recent` cannot refer to the later `paid_recent`. `WITH RECURSIVE` has different visibility rules, covered in the next lesson.
+
+## CTE and grouping
+
+CTEs can divide a query into readable steps. First select the orders, then count their statuses:
+
+```sql run expect=rows:2
+with recent as (
+  select * from orders where created_at >= '2024-05-01 00:00:00+03'::timestamptz
+),
+by_status as (
+  select status, count(*) as cnt from recent group by status
+)
+select status, cnt from by_status order by status;
+```
+
+There are 2 rows: new with 1 order and paid with 1. `recent` selects two orders, `by_status` groups them, and the main `SELECT` returns the counts. The query retains the same structure even if there are many more recent orders.
+
+## Defined once
+
+The query defines `recent` in one place. Changing its condition changes what all references mean. The board shows CTE results as separate tables to explain the logical steps.
+
+In PostgreSQL 12 and later, a non-recursive, side-effect-free `SELECT` CTE referenced once can be folded into the parent query. With multiple references it is normally evaluated separately by default. The actual plan may therefore differ from the board's illustration. Lesson 8.8 covers `MATERIALIZED` and `NOT MATERIALIZED`.
+
+## Traps
+
+<Callout kind="trap">
+A CTE exists within one statement. The next statement starts without it:
+
+```sql run expectError=42P01
+select * from recent;
+```
+
+Code `42P01`: `relation "recent" does not exist`. `recent` was defined in the previous statement and is no longer in scope. At one query level, use one `WITH` clause and separate its CTEs with commas.
+</Callout>
+
+<Callout kind="note">
+A CTE can shadow a table with the same unqualified name in the main query. In an ordinary non-recursive CTE's own body, that name can still refer to the underlying table. A schema-qualified name such as `public.orders` selects the table. Avoid reusing table names unless there is a reason.
+</Callout>
+
+## What is missing from the result
+
+- ❌ Orders 1-6 in `recent`: they were created before May 1 in UTC+3.
+- ❌ Order 8 in `paid_recent`: its status is new, not paid.
+- ❌ The other six orders in `by_status`: they did not enter `recent`.
+- ❌ `recent` in the next statement: its scope ended with its statement.
+- ❌ A separate row for order 7 in `by_status`: it contributes to the paid group.
+
+## Check yourself
+
+1. How many rows does `with recent as (...) select count(*) from recent` return, and what is the count? Answer first, then check.
+2. Change the boundary date to `2024-04-01`, keeping the `+03` offset. How many orders enter `recent`?
+3. Add a third CTE, `cancelled as (select * from recent where status = 'cancelled')`. How many rows does it return?
+
+<Cheatsheet>
+- `with name as (select ...) select ...`: define and use a CTE.
+- A CTE belongs to one statement.
+- Separate multiple CTEs with commas. In an ordinary `WITH`, later CTEs can refer to earlier ones.
+- Use a CTE in `FROM` or `JOIN`, and its columns in clauses such as `WHERE`, `GROUP BY` and `ORDER BY`.
+- Define a condition once to reuse it by name.
+- PostgreSQL may fold a suitable CTE into its parent query. Lesson 8.8 covers materialization controls.
+</Cheatsheet>
