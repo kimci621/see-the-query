@@ -1,0 +1,217 @@
+---
+id: inner-join
+title: INNER JOIN, ON and USING
+chapter: joins
+number: "6.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select b.title, a.name
+  from book b
+  join author a on a.author_id = b.author_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-TABLE-ALIASES
+    title: Table and column aliases
+course: ["11.38"]
+tags: [join, inner join, on, using, table alias]
+mvp: true
+---
+
+<TlDr>`INNER JOIN` combines rows from two tables into pairs that satisfy an `ON` condition. Only rows with a match appear in the result.</TlDr>
+
+## What's in the data
+
+The board has two tables: 11 books in <T id="public.book">book</T> and 6 authors in <T id="public.author">author</T>. <C id="public.book.author_id">book.author_id</C> holds an author identifier from <C id="public.author.author_id">author.author_id</C>; a line connects them on the board.
+
+Simple Python and Learning Python have no author: their `author_id` is `NULL`. Boris Pasternak has no books.
+
+## Why join tables?
+
+A book stores its author's identifier, not the name. The name is stored once in the author table. Correcting a typo there changes the name seen with all that author's books. To show a book beside its author's name, join the tables in a query.
+
+First, look at the authors and their identifiers:
+
+```sql run expect=rows:6
+select * from author;
+```
+
+Six rows. Sholokhov is 1, Pushkin is 3 and Pasternak is 6.
+
+## The first join
+
+```sql run expect=rows:9
+select b.title, a.name
+from book b
+join author a on a.author_id = b.author_id;
+```
+
+The result has 9 rows. Keep that number in mind.
+
+Think of `JOIN` as considering pairs: one row from <T id="public.book">book</T> and one from <T id="public.author">author</T>. When the condition after `ON` is `TRUE`, the pair becomes one combined row. `JOIN` without a qualifier means **`INNER JOIN`**. You can write `INNER` or omit it; the board labels the step `INNER JOIN` either way.
+
+On the board, the tables move together and both `author_id` columns are highlighted. Lines connect matching pairs, then the rows combine into one table: book columns on the left, author columns on the right. The join step reports 9 pairs. `SELECT` keeps only title and name.
+
+<Callout kind="analogy">
+A courier has parcels labeled with apartment numbers and a list of residents. For every delivered parcel, the delivery list pairs the parcel with its recipient. A parcel without a number and a resident without a parcel are absent from the list. A resident with two parcels appears twice.
+</Callout>
+
+## Table aliases: b and a
+
+The query gives its tables short names: `book b`, `author a`. These are **table aliases**, like the column aliases in lesson 4.1. Use them to qualify columns: `b.title`, `a.name`. Without aliases, you would write `book.title` and `author.name`. When joining a table to itself, as in lesson 6.6, aliases distinguish its instances.
+
+An alias replaces the table's original name in the query. The old name no longer works:
+
+```sql run expectError=42P01
+select book.title from book b join author a on a.author_id = b.author_id;
+```
+
+The error card points out that book is called `b` here, with code `42P01`. The original PostgreSQL message says `invalid reference to FROM-clause entry for table "book"`. Once aliased as `b`, use `b` to refer to this table instance.
+
+## Rows without a match
+
+There are 11 books but only 9 joined rows. The two missing books have no author. Their `author_id` is `NULL`; an ordinary comparison with NULL does not produce `TRUE` (lesson 4.5). The `ON` condition finds no match for them.
+
+Boris Pasternak is also absent: no book references author 6.
+
+On the board, unmatched rows are marked before the tables merge and do not enter the joined result.
+
+## One row, two pairs
+
+A join can also repeat a row. Mikhail Sholokhov has two books:
+
+```sql run expect=rows:2
+select a.name, b.title
+from author a
+join book b on b.author_id = a.author_id
+where a.name = 'Mikhail Sholokhov';
+```
+
+Two rows: And Quiet Flows the Don and The Fate of a Man. There is one author, but his row participates in two pairs. At the `JOIN` step, such rows show a `×2` badge. Pushkin, Belyaev and Jules Verne have two books each as well. Then `WHERE` keeps Sholokhov (lesson 4.2 places `WHERE` after `JOIN`).
+
+Each pair produces a row. A join does not add or collapse the matches.
+
+Here `author` comes first and `book` second. For an `INNER JOIN` with the same condition, swapping them preserves the matching pairs, though it changes column order in `select *`. Result row order is not guaranteed without `ORDER BY`.
+
+## USING for matching column names
+
+The key is called `author_id` in both tables, so the condition can be written more briefly with `USING`:
+
+```sql run expect=rows:9
+select b.title, a.name
+from book b
+join author a using (author_id);
+```
+
+The same 9 rows. The condition is equivalent to `on b.author_id = a.author_id`. The board labels the join with `USING (author_id)`.
+
+The difference is visible with a star:
+
+```sql run expect=rows:9
+select * from book b join author a using (author_id);
+```
+
+The output has one `author_id` column, first, followed by the other book columns and then the other author columns. There are 12 columns. With `ON`, there would be 13, including both `author_id` columns. `USING` merges the named join columns in the joined output.
+
+## Other conditions in ON
+
+`ON` can contain other Boolean conditions too. Keep only authors from Russia:
+
+```sql run expect=rows:6
+select b.title, a.name
+from book b
+join author a on b.author_id = a.author_id and a.country = 'Russia';
+```
+
+Six rows: two books each by Sholokhov, Pushkin and Belyaev. Fluent Python's author is from Brazil; Jules Verne's two books have a French author. Their keys match, but the country condition is false.
+
+For an `INNER JOIN`, placing this condition in `ON` or `WHERE` gives the same result. This differs for a `LEFT JOIN`, covered in lesson 6.3.
+
+Walk through the lesson's counts in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="Authors: 6 rows">
+
+```sql run expect=rows:6
+select * from author;
+```
+
+</Step>
+<Step caption="INNER JOIN: 9 pairs; unmatched books and authors are excluded">
+
+```sql run expect=rows:9
+select b.title, a.name
+from book b
+join author a on a.author_id = b.author_id;
+```
+
+</Step>
+<Step caption="Russia condition in ON: 6 rows">
+
+```sql run expect=rows:6
+select b.title, a.name
+from book b
+join author a on b.author_id = a.author_id and a.country = 'Russia';
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+In the 9-row book-author join:
+
+- ❌ Simple Python and Learning Python: `author_id` is NULL, so `ON` never returns `TRUE` for them.
+- ❌ Boris Pasternak: no book references him.
+
+With the Russia condition, the 6-row result also excludes:
+
+- ❌ Fluent Python: its author is from Brazil.
+- ❌ Journey to the Center of the Earth and Captain Grant's Children: their author is from France.
+
+## Pitfalls
+
+<Callout kind="trap">
+Leave out the join condition and the query will not run:
+
+```sql run expectError=42601
+select b.title, a.name from book b join author a;
+```
+
+Postgres reports a syntax error, `42601`: after `JOIN` it expected `ON` or `USING`. To get every possible pair, use `CROSS JOIN` (lesson 6.5).
+</Callout>
+
+<Callout kind="trap">
+Both tables have an `author_id`. Without a qualifier, Postgres cannot tell which you mean:
+
+```sql run expectError=42702
+select author_id from book b join author a on b.author_id = a.author_id;
+```
+
+The error is `42702`. Specify `a.author_id` or `b.author_id`. With `USING`, the joined output has one unqualified `author_id` column.
+</Callout>
+
+<Callout kind="tip">
+Qualify columns in joins even if their names are unique today. If another table later gains a column with the same name, an unqualified reference can fail with `42702`.
+</Callout>
+
+## Check yourself
+
+1. Replace `'Russia'` with `'France'` in the condition. How many rows are returned?
+2. Join books to authors and use `WHERE` to keep books priced over 1000. There are three expensive books; how many rows appear, and why?
+3. How many rows match `a.born_year < 1900`? Boris Pasternak was born in 1890. Predict, then check.
+
+<Cheatsheet>
+- `from t1 join t2 on condition`: row pairs for which the condition is `TRUE`. `JOIN` means `INNER JOIN` by default.
+- Rows without a match are omitted. NULL in a key does not match through ordinary equality.
+- A row with N matches produces N joined rows.
+- `using (col)` compares the named columns and produces one unqualified `col` in the joined output.
+- A table alias replaces the original name for that instance: `book b`, then `b.title`. The old name gives `42P01`.
+- A qualified join without `ON` or `USING` gives `42601`; an ambiguous column reference gives `42702`.
+</Cheatsheet>

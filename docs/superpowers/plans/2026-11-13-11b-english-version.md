@@ -220,7 +220,7 @@
 **06-joins**
 
 - [x] 6.1 `relations`: `content/lessons-en/06-joins/01-relations.mdx`
-- [ ] 6.2 `inner-join`: `content/lessons-en/06-joins/02-inner-join.mdx`
+- [x] 6.2 `inner-join`: `content/lessons-en/06-joins/02-inner-join.mdx`
 - [ ] 6.3 `left-right-join`: `content/lessons-en/06-joins/03-left-right-join.mdx`
 - [ ] 6.4 `full-join`: `content/lessons-en/06-joins/04-full-join.mdx`
 - [ ] 6.5 `cross-join`: `content/lessons-en/06-joins/05-cross-join.mdx`
