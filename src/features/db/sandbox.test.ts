@@ -277,6 +277,29 @@ describe('sandbox: применить, отменить, сбросить', () =
   const add = `insert into author (name) values ('Лев Толстой') returning author_id`;
 
   it(
+    'превью сохраняет начальное значение и состояние setval с is_called=false',
+    async () => {
+      const { sandbox } = await bookstore();
+      await sandbox.apply('create sequence custom_seq start with 42');
+      await sandbox.preview((db) => db.query("select nextval('custom_seq')"));
+      expect((await sandbox.client().query("select nextval('custom_seq')")).rows).toEqual([[42]]);
+      await sandbox.apply("select setval('custom_seq', 77, false)");
+      await sandbox.preview((db) => db.query("select nextval('custom_seq')"));
+      expect((await sandbox.client().query("select nextval('custom_seq')")).rows).toEqual([[77]]);
+    },
+    T,
+  );
+
+  it('восстанавливает setval с is_called=false после неудачной команды', async () => {
+    const { sandbox } = await bookstore();
+    await sandbox.apply('create sequence custom_seq start with 42');
+    await expect(sandbox.apply("select setval('custom_seq', 77, false); select 1/0")).rejects.toThrow();
+    const restored = createSandbox(mortalClient);
+    await restored.loadLesson('bookstore', [...sandbox.journal()], 'ru', [...sandbox.sequenceCheckpoints()]);
+    expect((await restored.client().query("select nextval('custom_seq')")).rows).toEqual([[77]]);
+  }, 40000);
+
+  it(
     'apply пишет в журнал только успешное',
     async () => {
       const { sandbox, events } = await bookstore();

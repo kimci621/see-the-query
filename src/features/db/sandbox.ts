@@ -5,7 +5,12 @@ import { type DbClient, DbException, type QueryResult, SANDBOX_CRASHED, SANDBOX_
 
 export interface SequenceCheckpoint {
   at: number;
-  values: Record<string, string | null>;
+  values: Record<string, SequenceState | string | null>;
+}
+
+interface SequenceState {
+  lastValue: string;
+  isCalled: boolean;
 }
 
 export interface Sandbox {
@@ -54,29 +59,43 @@ async function xactId(db: DbClient): Promise<string | null> {
 
 // Последовательности не откатываются вместе с транзакцией: снимаем их до превью и возвращаем после
 const SEQ_STATE = `
-  select pg_catalog.format('%I.%I', n.nspname, c.relname), pg_catalog.pg_sequence_last_value(s.seqrelid)::text
+  select pg_catalog.format('%I.%I', n.nspname, c.relname)
   from pg_catalog.pg_sequence s
   join pg_catalog.pg_class c on c.oid = s.seqrelid
   join pg_catalog.pg_namespace n on n.oid = c.relnamespace
   order by 1
 `;
 
-async function sequenceState(db: DbClient): Promise<Map<string, string | null>> {
+async function sequenceState(db: DbClient): Promise<Map<string, SequenceState>> {
   const { rows } = await db.query(SEQ_STATE);
-  return new Map(rows.map((r) => [String(r[0]), r[1] === null ? null : String(r[1])]));
+  const states = new Map<string, SequenceState>();
+  for (const [name] of rows) {
+    const seq = String(name);
+    const state = await db.query(`select last_value::text, is_called from ${seq}`);
+    states.set(seq, { lastValue: String(state.rows[0][0]), isCalled: state.rows[0][1] === true });
+  }
+  return states;
 }
 
-// ponytail: для is_called=false предполагается START WITH 1; для других начальных значений или
-// setval(..., false) нужно отдельно читать last_value и is_called у каждой последовательности.
-async function setSequence(db: DbClient, seq: string, value: string | null): Promise<void> {
-  if (value === null) await db.query('select pg_catalog.setval($1::regclass, 1, false)', [seq]);
-  else await db.query('select pg_catalog.setval($1::regclass, $2::bigint, true)', [seq, value]);
+async function setSequence(db: DbClient, seq: string, value: SequenceState | string | null): Promise<void> {
+  const state =
+    typeof value === 'object' && value !== null
+      ? value
+      : { lastValue: value ?? '1', isCalled: value !== null };
+  await db.query('select pg_catalog.setval($1::regclass, $2::bigint, $3::boolean)', [
+    seq,
+    state.lastValue,
+    state.isCalled,
+  ]);
 }
 
-async function restoreSequences(db: DbClient, before: Map<string, string | null>): Promise<void> {
+const sameSequence = (a: SequenceState | undefined, b: SequenceState) =>
+  a?.lastValue === b.lastValue && a.isCalled === b.isCalled;
+
+async function restoreSequences(db: DbClient, before: Map<string, SequenceState>): Promise<void> {
   const after = await sequenceState(db);
   for (const [seq, value] of before) {
-    if (!after.has(seq) || after.get(seq) === value) continue;
+    if (!after.has(seq) || sameSequence(after.get(seq), value)) continue;
     await setSequence(db, seq, value);
   }
 }
@@ -325,7 +344,7 @@ export function createSandbox(factory: (dataDir?: Blob) => Promise<DbClient>): S
           if (!isDeath(e)) {
             const after = await sequenceState(db);
             const values = Object.fromEntries(
-              [...after].filter(([seq, value]) => before.has(seq) && before.get(seq) !== value),
+              [...after].filter(([seq, value]) => before.has(seq) && !sameSequence(before.get(seq), value)),
             );
             if (Object.keys(values).length) {
               const at = journal.length;
