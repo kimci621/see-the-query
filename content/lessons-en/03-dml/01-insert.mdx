@@ -1,0 +1,129 @@
+---
+id: insert
+title: INSERT
+chapter: dml
+number: "3.1"
+order: 1
+dataset: bookstore
+initialQuery: |
+  select author_id, name, country, born_year from author order by author_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/dml-insert.html
+    title: Inserting data
+  - url: https://www.postgresql.org/docs/18/sql-insert.html
+    title: INSERT
+course: ["11.14"]
+tags: [insert, values, default, identity, returning]
+---
+
+<TlDr>`INSERT` adds rows to a table. List the columns by name and give their values in the same order. Postgres fills the remaining columns with their defaults.</TlDr>
+
+## What's in the data
+
+`author` has six authors, numbered 1 through 6. The default `customer` bonus is zero. In `book`, the `author_id` foreign key references `author`, so a book with a nonexistent author cannot be inserted.
+
+## One row
+
+```sql run expect=rows:1
+insert into author (name, country, born_year) values ('Leo Tolstoy', 'Russia', 1828) returning author_id;
+```
+
+A new row flies into `author` on the board. Postgres supplies `author_id`: the column is declared `generated always as identity`. The scene shows the sequence counter and a `default` badge on the number.
+
+`RETURNING author_id` returns the new row's ID. Without `RETURNING`, the result panel shows only `INSERT: 1`.
+
+## Several rows
+
+```sql run expect=rows:2
+insert into author (name, country, born_year)
+values ('Ivan Bunin', 'Russia', 1870), ('Erich Maria Remarque', 'Germany', 1898)
+returning author_id;
+```
+
+One `INSERT` adds both rows in one command. They fly in together, and the counter advances by two. Sending one command instead of two reduces round trips; constraints still apply to the inserted rows.
+
+## Column order
+
+You can list columns in any order, as long as the values follow that same order:
+
+```sql run expect=rows:1
+insert into author (country, name) values ('France', 'Antoine de Saint-Exupery') returning author_id;
+```
+
+The sequence supplies `author_id` again. `born_year` is `NULL`: we omitted the column, it has no default and it has no `NOT NULL` constraint.
+
+If a column has a `DEFAULT`, Postgres uses it:
+
+```sql run expect=rows:1
+insert into customer (name, email, created_at) values ('Nina Sokolova', 'nina@example.com', now()) returning customer_id, bonus;
+```
+
+`bonus` gets zero from `DEFAULT 0`. The board marks the cell as a default value.
+
+## Insert errors
+
+A row cannot be inserted if it violates a constraint. Without a name:
+
+```sql run expectError=23502
+insert into author (country) values ('Russia');
+```
+
+A reference to a nonexistent author:
+
+```sql run expectError=23503
+insert into book (title, author_id) values ('The Ghost Book', 999);
+```
+
+On the board, a red arrow points to `author`: there is no author with ID 999. A duplicate email:
+
+```sql run expectError=23505
+insert into customer (name, email, created_at) values ('Another Anna', 'anna@example.com', now());
+```
+
+Postgres shows the conflicting row. Each failed statement is rolled back in full; it does not leave a partially inserted row.
+
+## Insert a SELECT result
+
+```sql run expect=rows:2
+insert into author (name, country, born_year)
+select name, country, born_year from author where author_id <= 2
+returning author_id;
+```
+
+A dotted `SELECT` table appears on the board and two rows fly from it into `author`. Columns are matched by position: the first `SELECT` column goes into the first column in the `INSERT` list. Their counts must match; their names can differ.
+
+## What's missing and why
+
+- ❌ There is no author without a name: `NOT NULL` stopped the insert.
+- ❌ There is no ghost book: the foreign key could not find author 999.
+- ❌ There is no second Anna with that email: `UNIQUE` rejected it.
+- ❌ The preview inserts are not in the database afterwards: they were rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+Without a column list, Postgres matches values to columns in table order. A later schema change can make the query fail or put values in the wrong columns. List the columns explicitly:
+
+```sql noexec
+insert into author (name, country, born_year) values ('Alex', 'Russia', 1900);
+```
+</Callout>
+
+<Callout kind="tip">
+For bulk loading, consider `COPY` instead of thousands of `INSERT` statements. For one or two rows, `INSERT ... VALUES` is enough; `RETURNING` avoids a separate `SELECT` for the generated ID.
+</Callout>
+
+## Check yourself
+
+1. How many rows does an `INSERT` with two `VALUES` rows and `RETURNING` return?
+2. What value does an omitted column receive?
+3. Why was the book with `author_id = 999` rejected?
+
+<Cheatsheet>
+- `insert into t (columns) values (values);`
+- Values follow the order of the columns in the list.
+- Omitted columns receive their `DEFAULT` or `NULL`.
+- `RETURNING` returns values from inserted rows.
+- `INSERT ... SELECT` inserts the query result.
+- A `NOT NULL`, `UNIQUE` or foreign-key violation cancels the insert.
+</Cheatsheet>
