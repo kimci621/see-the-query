@@ -1,0 +1,94 @@
+---
+id: delete
+title: DELETE, DELETE ... USING and TRUNCATE
+chapter: dml
+number: "3.4"
+order: 4
+dataset: bookstore
+initialQuery: |
+  select review_id, book_id, rating, body from review order by review_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/dml-delete.html
+    title: Deleting data
+  - url: https://www.postgresql.org/docs/18/sql-delete.html
+    title: DELETE
+  - url: https://www.postgresql.org/docs/18/sql-truncate.html
+    title: TRUNCATE
+course: ["11.22"]
+tags: [delete, using, truncate, where]
+---
+
+<TlDr>`DELETE` removes rows that match a condition. `DELETE ... USING` can use another table to find them; `TRUNCATE` clears a whole table quickly.</TlDr>
+
+## What's in the data
+
+`review` has ten reviews. Two have ratings below four: reviews 5 and 7. Books in category 6, Python, have two reviews.
+
+## DELETE with WHERE
+
+```sql run expect=rows:2
+delete from review where rating < 4 returning review_id, rating;
+```
+
+On the board, `WHERE` selects the rows rated 3 and 2. They turn red, are crossed out and disappear; the other rows remain. `RETURNING` shows which rows were deleted.
+
+The condition is checked before deletion. With `where review_id = 5`, one row is deleted regardless of its rating.
+
+## DELETE ... USING
+
+Sometimes the condition needs a column from another table. You can use `USING`:
+
+```sql run expect=rows:2
+delete from review r
+using book b
+where r.book_id = b.book_id and b.category_id = 6
+returning r.review_id, b.title;
+```
+
+`USING` adds a table to the query, much like `FROM` in `SELECT`. On the board, Postgres reads `review` and `book`, joins them to find reviews of books in category 6, then deletes those reviews. A subquery or a separate lookup of book IDs could also supply the condition.
+
+## Compare TRUNCATE
+
+```sql run expect=rows:0
+truncate review;
+```
+
+All ten rows fade at once. `DELETE` processes rows and checks the condition; `TRUNCATE` clears the whole table without scanning the rows. It is faster on large tables, but has no `WHERE` and takes a stronger lock.
+
+`DELETE` reports the number of rows deleted. `TRUNCATE` does not return rows or process them one by one.
+
+## What's missing and why
+
+- ❌ The two reviews rated below 4 are absent after `DELETE`: they matched `WHERE`.
+- ❌ Reviews of books in category 6 are absent after `DELETE ... USING`: the join found them.
+- ❌ No reviews remain after `TRUNCATE`: it cleared the table.
+- ❌ The database has none of these changes after preview: the deletions rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+`DELETE` without `WHERE` removes every row individually. Unlike `TRUNCATE`, it fires `ON DELETE` triggers and logs individual row deletions. Both commands can be rolled back in PostgreSQL, but a large `DELETE` can take time and generate a lot of log data. Check your condition with `SELECT` first:
+
+```sql noexec
+select review_id, rating from review where rating < 4;
+```
+</Callout>
+
+<Callout kind="tip">
+After a large `DELETE`, disk space is not immediately reclaimed. Once old row versions are no longer needed, ordinary `VACUUM` makes their space available for reuse, but usually does not return it to the operating system. `VACUUM FULL` can shrink the file, but needs extra space and blocks access to the table while it runs.
+</Callout>
+
+## Check yourself
+
+1. How many reviews does `DELETE FROM review WHERE rating < 4` remove?
+2. Why does `DELETE ... USING` need a second table in this example?
+3. How does `TRUNCATE review` differ from `DELETE FROM review`?
+
+<Cheatsheet>
+- `delete from t where condition;`
+- `DELETE` reports the number of deleted rows.
+- `DELETE ... USING` adds a table for the condition, like `FROM`.
+- Without `WHERE`, every row in the table is deleted.
+- `TRUNCATE` clears the whole table and has no `WHERE`.
+- Both commands are transactional in PostgreSQL; `TRUNCATE` is faster and takes a stronger lock.
+</Cheatsheet>
