@@ -1,0 +1,90 @@
+---
+id: merge
+title: MERGE
+chapter: dml
+number: "3.6"
+order: 6
+dataset: bookstore
+initialQuery: |
+  select book_id, title, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-merge.html
+    title: MERGE
+course: ["11.14"]
+tags: [merge, upsert, synchronization, branches]
+---
+
+<TlDr>`MERGE` matches a source to a target and chooses an action for each candidate row: update, insert, delete or do nothing.</TlDr>
+
+## What's in the data
+
+`book` has eleven books numbered 1 through 11. Book 1, And Quiet Flows the Don, costs 890.00. `review` has ten reviews: book 2 has two and book 11 has none.
+
+## Synchronize in one statement
+
+```sql run expect=rows:2
+merge into book b
+using (values (1, 700.00), (12, 100.00)) as s(id, price)
+on b.book_id = s.id
+when matched then update set price = s.price
+when not matched then insert (title, price) values ('New book', s.price);
+```
+
+The source has two rows: book 1 with a new price of 700 and a row with key 12, which has no match in the target. For row 1, `WHEN MATCHED` changes the price to 700. For row 12, `WHEN NOT MATCHED` inserts New book with the next generated ID.
+
+On the board, the updated and inserted rows are marked with their actions and colors. `MERGE` reports two affected rows: one updated and one inserted.
+
+## The DELETE action
+
+```sql run expect=rows:2
+merge into review r
+using (values (2), (11)) as s(book_id)
+on r.book_id = s.book_id
+when matched then delete
+returning r.review_id, r.book_id;
+```
+
+`WHEN MATCHED THEN DELETE` removes target rows that have a match in the source. Book 2 has two reviews and book 11 has none, so two reviews are deleted. On the board, they are crossed out as in an ordinary `DELETE`.
+
+## MERGE and ON CONFLICT
+
+`INSERT ... ON CONFLICT` can insert multiple rows and handles conflicts against an eligible unique key. `MERGE` joins a source to a target and can choose among insert, update and delete actions. That makes it useful for synchronization: a batch can carry several kinds of change in one statement.
+
+`MERGE` also has `WHEN NOT MATCHED BY SOURCE` for target rows with no source match. That branch can update, delete or leave those rows unchanged. In this lesson it is not animated; queries using it are shown in `final-only` mode.
+
+## What's missing and why
+
+- ❌ The old price of 890 for book 1 is gone in the first scene: `MATCHED UPDATE` changed it to 700.
+- ❌ New book was not there before the query: `NOT MATCHED INSERT` created it.
+- ❌ The two reviews of book 2 are absent after the second command: `MATCHED DELETE` removed them.
+- ❌ The database has none of these changes after preview: `MERGE` rolled back.
+
+## Pitfalls
+
+<Callout kind="trap">
+If two source rows match the same target row and both try to update or delete it, `MERGE` fails. Make sure the source produces at most one change for each target row:
+
+```sql noexec
+using (values (1, 700.00), (1, 800.00)) as s(id, price)
+```
+</Callout>
+
+<Callout kind="tip">
+`MERGE` does not replace `ON CONFLICT` in every case. For a simple insert-or-update on a unique key, `ON CONFLICT` is concise and provides an atomic insert-or-update outcome under concurrency. `MERGE` can express a synchronization that also needs deletes.
+</Callout>
+
+## Check yourself
+
+1. How many rows does the first `MERGE` report as affected?
+2. Which action runs for source key 12?
+3. Why can two source rows with the same key make `MERGE` fail?
+
+<Cheatsheet>
+- `merge into target using source on condition`
+- `when matched then update set ...`
+- `when matched then delete`
+- `when not matched then insert ...`
+- The first applicable `WHEN` clause chooses the action for each candidate change row.
+- `WHEN NOT MATCHED BY SOURCE` handles target rows without a source match.
+- `MERGE` reports the number of rows changed; `RETURNING` can return their values.
+</Cheatsheet>
