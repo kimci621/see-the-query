@@ -262,7 +262,7 @@
 
 **10-views**
 
-- [ ] 10.1 `view`: `content/lessons-en/10-views/01-view.mdx`
+- [x] 10.1 `view`: `content/lessons-en/10-views/01-view.mdx`
 - [ ] 10.2 `materialized-view`: `content/lessons-en/10-views/02-materialized-view.mdx`
 
 **11-transactions**

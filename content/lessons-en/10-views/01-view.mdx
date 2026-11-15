@@ -1,0 +1,125 @@
+---
+id: view
+title: VIEW
+chapter: views
+number: "10.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-createview.html
+    title: CREATE VIEW
+  - url: https://www.postgresql.org/docs/current/tutorial-views.html
+    title: Views
+course: ["12.6"]
+tags: [view, views, create view]
+---
+
+<TlDr>A VIEW saves a query under a name. When a view is queried, PostgreSQL uses its definition and the source data visible to that query.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has eleven books, three priced above 1000. Create a view of those books. Run the examples below in order.
+
+```sql apply expect=rows:0
+create view expensive_book as select book_id, title, price from book where price > 1000;
+```
+
+Apply saves the view in the lesson database. The board shows `expensive_book`, its query and its connection to `book`. Resetting the database removes the view.
+
+<Callout kind="analogy">
+Think of a bookmark for a saved catalog search. It stores the search condition, not a separate copy of the books. Open it later and you see the catalog data available at that time.
+</Callout>
+
+## Read the view
+
+{/* final-only: у представления нет ctid для пошаговой трассы */}
+```sql run expect=rows:3 trace=final-only
+select * from expensive_book order by book_id;
+```
+
+The result has books 2, 10 and 11. A view can be used in `FROM` as a row source. The board shows its definition and connection to the table. Step-by-step tracing of a view read is not available yet, so the result appears in the result panel.
+
+{/* final-only: у представления нет ctid для пошаговой трассы */}
+```sql run expect=rows:2 trace=final-only
+select book_id, title from expensive_book where price > 2000 order by book_id;
+```
+
+The extra filter leaves two books: 2 and 11. PostgreSQL can transform the query during planning, so use the execution plan to inspect base-table access instead of counting view references.
+
+## Where the definition is stored
+
+{/* final-only: pg_views это системное представление */}
+```sql run expect=rows:1 trace=final-only
+select schemaname, viewname from pg_views where viewname = 'expensive_book';
+```
+
+The `pg_views` catalog view has a row with the view's name and schema. Its definition is available in the `definition` column or through `pg_get_viewdef`.
+
+## Change the source data
+
+```sql apply expect=rows:1
+update book set price = 1500 where book_id = 6 returning title, price;
+```
+
+Apply changes the price of Professor Dowell's Head in the table. The book now also passes the view's condition:
+
+{/* final-only: у представления нет ctid для пошаговой трассы */}
+```sql run expect=rows:1 trace=final-only
+select count(*) as n from expensive_book;
+```
+
+The count is 4. An ordinary view does not store a separate snapshot of those rows: a later read uses the source data visible to that query.
+
+## When a view helps
+
+A view names a frequently used selection and can preserve a familiar interface as underlying tables change. Views can also restrict access to selected data when permissions are configured correctly. A complex query does not automatically become cheap inside a view; use `EXPLAIN` to inspect the plan.
+
+## What is missing from the result
+
+- ❌ Books priced at or below 1000: the condition uses strict `> 1000`.
+- ❌ A fourth book before applying the `UPDATE`: its old price is 560.
+- ❌ A separate copy of the rows in an ordinary view: its query definition is saved instead.
+
+## Traps
+
+<Callout kind="trap">
+`SELECT *` in a view definition is expanded when the view is created. A column added to the source table later does not appear in the view automatically. Try it with a separate view:
+
+```sql apply expect=rows:0
+create view all_books as select * from book;
+```
+
+```sql apply expect=rows:0
+alter table book add column extra_note text;
+```
+
+{/* final-only: information_schema.columns это системное представление */}
+```sql run expect=rows:1 trace=final-only
+select count(*) as n from information_schema.columns
+where table_schema = 'public' and table_name = 'all_books' and column_name = 'extra_note';
+```
+
+The count is 0: the column was added to `book`, not to `all_books`. Use Reset to restore the original lesson data.
+</Callout>
+
+<Callout kind="tip">
+List the required columns explicitly. That makes the interface between a view and its consumers easier to see. `DROP VIEW` removes the view; the underlying table remains.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `expensive_book` return before and after the price update?
+2. Why does a column added to `book` not appear in the earlier `all_books` view?
+3. Where can you find a view's definition?
+
+<Cheatsheet>
+- `CREATE VIEW name AS SELECT ...` saves a query under a name.
+- An ordinary view does not store a separate snapshot of its result.
+- A `SELECT` from a view can add its own conditions.
+- `pg_views` and `pg_get_viewdef` show view definitions.
+- `SELECT *` in a view definition fixes its column list when the view is created.
+</Cheatsheet>
