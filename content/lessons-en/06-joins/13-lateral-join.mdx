@@ -1,0 +1,185 @@
+---
+id: lateral-join
+title: "JOIN LATERAL: a subquery for each row"
+chapter: joins
+number: "6.13"
+order: 13
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name, t.title
+  from author a,
+       lateral (
+         select title from book b
+         where b.author_id = a.author_id
+         order by price desc nulls last, book_id
+         limit 1
+       ) t
+  order by a.name;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-LATERAL
+    title: LATERAL subqueries
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+tags: ["lateral", "join lateral", "correlated subquery", "top n per group", "subquery"]
+mvp: false
+---
+
+<TlDr>`LATERAL` lets a subquery refer to a row from an input to its left. This makes queries such as “the most expensive book for each author” possible.</TlDr>
+
+## What's in the data
+
+There are 6 authors in <T id="public.author">author</T>. Sholokhov, Pushkin, Belyaev and Verne have two books each; Ramalho has one; Pasternak has none.
+
+Belyaev's The Island of Lost Ships has a NULL price. Jules Verne has two books at 610: Journey to the Center of the Earth and Captain Grant's Children. Both details matter when selecting the most expensive book.
+
+## A FROM subquery cannot see its neighbor
+
+Try finding the most expensive book per author with an ordinary subquery:
+
+```sql run expectError=42P01
+select a.name, t.title
+from author a,
+     (select title from book b
+      where b.author_id = a.author_id
+      order by price desc nulls last
+      limit 1) t;
+```
+
+Error `42P01`: `invalid reference to FROM-clause entry for table "a"`. Without `LATERAL`, this subquery in `FROM` cannot reference the `author a` input to its left.
+
+## LATERAL can look left
+
+Add one word:
+
+```sql run expect=rows:5
+select a.name, t.title
+from author a,
+     lateral (
+       select title from book b
+       where b.author_id = a.author_id
+       order by price desc nulls last, book_id
+       limit 1
+     ) t
+order by a.name;
+```
+
+Five rows. Pasternak is absent: his subquery returns no row, and the comma combines inputs as an inner cross join.
+
+`LATERAL` permits the subquery to reference preceding inputs. Logically, it evaluates the subquery with each author's `author_id` and joins the resulting rows to that author. The planner chooses the physical execution plan.
+
+Inside the subquery, select that author's books, sort by price descending and take the first. `nulls last` puts The Island of Lost Ships after priced books; otherwise the missing price would come first. The second key, `book_id`, breaks Verne's tie at 610: Journey to the Center of the Earth is selected.
+
+On the board, the six author rows feed a per-author subquery view with a filter, sort and `LIMIT 1`. The first three authors are shown in detail; the result has 5 rows.
+
+## More than one row per author
+
+`LATERAL` need not return exactly one row. Ask for two books:
+
+```sql run expect=rows:9
+select a.name, t.title
+from author a,
+     lateral (
+       select title from book b
+       where b.author_id = a.author_id
+       order by price desc nulls last, book_id
+       limit 2
+     ) t
+order by a.name, t.title;
+```
+
+Nine rows: 2 + 1 + 2 + 2 + 2. Ramalho has only one book; Pasternak is absent again.
+
+This is a **top N per group** pattern. The subquery is evaluated in the context of each outer author, and its rows repeat the author as in an ordinary join.
+
+## A subquery that returns a count
+
+Ask for a count instead of a book:
+
+```sql run expect=rows:6
+select a.name, t.cnt
+from author a,
+     lateral (
+       select count(*) as cnt from book b
+       where b.author_id = a.author_id
+     ) t
+order by a.name;
+```
+
+Six rows. Pasternak returns with `cnt` equal to 0.
+
+This aggregate query has no `GROUP BY` or filter on its aggregate result, so it returns one row even when no books match. The comma join can therefore pair that row with Pasternak. In the book query, the subquery returned zero rows for him.
+
+## LEFT JOIN LATERAL
+
+To keep all authors even when no book is found, use `left join lateral`:
+
+```sql noexec
+select a.name, t.title
+from author a
+left join lateral (
+  select title from book b
+  where b.author_id = a.author_id
+  order by price desc nulls last, book_id
+  limit 1
+) t on true;
+```
+
+`ON true` supplies the `LEFT JOIN` condition; the subquery already filters by author. Pasternak gets a row with NULL in `title`, for 6 rows total.
+
+## What's missing and why
+
+- ❌ Pasternak in the top-1 and top-2 comma-join queries: the book subquery returns no row. He does appear in the count query, which returns one row containing 0.
+- ❌ The Island of Lost Ships as Belyaev's most expensive book: its price is NULL and `nulls last` puts it after priced books.
+- ❌ Captain Grant's Children in Verne's top 1: both books cost 610, and `book_id` selects Journey to the Center of the Earth.
+- ❌ Second books in the `limit 1` result: each author can contribute at most one row.
+- ❌ A sixth row in top 1: Pasternak has no book.
+
+## Pitfalls
+
+<Callout kind="trap">
+Omit `nulls last` and a book without a price comes first:
+
+```sql run expect=rows:5
+select a.name, t.title
+from author a,
+     lateral (
+       select title from book b
+       where b.author_id = a.author_id
+       order by price desc, book_id
+       limit 1
+     ) t
+order by a.name;
+```
+
+Five rows, but Belyaev now has The Island of Lost Ships. PostgreSQL sorts NULL first by default with `DESC`; `limit 1` takes that row.
+
+Use `nulls last` when missing prices should not outrank known prices.
+</Callout>
+
+<Callout kind="tip">
+Add a unique tie-breaker such as `book_id` when one row must be chosen reproducibly among equal prices.
+
+For top N on a large table, inspect the plan. A B-tree index matching the author lookup and ordering, including direction and NULL placement, can help; the planner decides whether to use it. For this query, `(author_id, price desc nulls last, book_id)` is a candidate to evaluate against the workload.
+</Callout>
+
+## Check yourself
+
+1. How many rows does the `limit 2` query return without the limit? Add the books belonging to the five authors.
+2. Which book does Belyaev get without `nulls last`? Check on the board.
+3. How many rows would `left join lateral ... on true` return instead of the comma join? Who appears as the sixth?
+
+<Cheatsheet>
+- `LATERAL` lets a subquery reference preceding `FROM` inputs.
+- Logically, its rows are evaluated in the context of each applicable left row or row set.
+- `from a, lateral (...) t` is a cross join: an empty subquery result excludes that left row.
+- `left join lateral (...) t on true` preserves the left row with NULLs when the subquery is empty.
+- Top N per group: filter by group key, then `order by` and `limit` inside `LATERAL`.
+- PostgreSQL's `desc` defaults to NULL first; use `nulls last` when appropriate.
+- A unique tie-breaker makes the selection reproducible.
+- The shown ungrouped `count(*)` subquery returns one row, including 0 for an empty group.
+</Cheatsheet>
