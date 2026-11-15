@@ -52,6 +52,10 @@ describe('трассировка DDL', () => {
         expect(ddl.diff.renamedTables).toEqual([{ from: 'public.author', to: 'public.writer' }]);
         expect(ddl.diff.addedTables).toEqual([]);
         expect(ddl.diff.droppedTables).toEqual([]);
+        expect(ddl.diff.addedConstraints).toEqual([]);
+        expect(ddl.diff.droppedConstraints).toEqual([]);
+        expect(ddl.diff.addedIndexes).toEqual([]);
+        expect(ddl.diff.droppedIndexes).toEqual([]);
       }),
     ));
 

@@ -54,11 +54,14 @@ export function diffSchemas(before: SchemaSnapshot, after: SchemaSnapshot, renam
   const beforeConstraints = constraints(before);
   const afterConstraints = constraints(after);
   const key = (item: { tableId: string; name: string }) => `${item.tableId}\u0003${item.name}`;
-  const oldConstraints = new Set(beforeConstraints.map(key));
+  const renamedIds = new Map(renames.tables.map(({ from, to }) => [from, to]));
+  const oldKey = (item: { tableId: string; name: string }) =>
+    key({ ...item, tableId: renamedIds.get(item.tableId) ?? item.tableId });
+  const oldConstraints = new Set(beforeConstraints.map(oldKey));
   const newConstraints = new Set(afterConstraints.map(key));
   const indexes = (schema: SchemaSnapshot) =>
     schema.tables.flatMap((table) => table.indexes.map((item) => ({ tableId: table.id, name: item.name })));
-  const oldIndexes = new Set(indexes(before).map(key));
+  const oldIndexes = new Set(indexes(before).map(oldKey));
   const newIndexes = new Set(indexes(after).map(key));
   return {
     addedTables,
@@ -69,10 +72,10 @@ export function diffSchemas(before: SchemaSnapshot, after: SchemaSnapshot, renam
     alteredColumns,
     addedConstraints: afterConstraints.filter((item) => !oldConstraints.has(key(item))),
     droppedConstraints: beforeConstraints
-      .filter((item) => !newConstraints.has(key(item)))
+      .filter((item) => !newConstraints.has(oldKey(item)))
       .map(({ tableId, name }) => ({ tableId, name })),
     addedIndexes: indexes(after).filter((item) => !oldIndexes.has(key(item))),
-    droppedIndexes: indexes(before).filter((item) => !newIndexes.has(key(item))),
+    droppedIndexes: indexes(before).filter((item) => !newIndexes.has(oldKey(item))),
     addedSchemas: after.schemas.filter((item) => !before.schemas.includes(item)),
     droppedSchemas: before.schemas.filter((item) => !after.schemas.includes(item)),
     renamedTables: renames.tables,

@@ -96,6 +96,21 @@ export const ddlAnimator: Animator<StageOf<'ddl'>> = (prev, stage, stageIndex, c
     }
   }
 
+  for (const change of diff.renamedTables) {
+    const old = beforeTable(change.from);
+    const next = afterTable(change.to);
+    if (!old || !next) continue;
+    const previous = ghost(old, ctx);
+    const renamed = ghost(next, ctx);
+    push('rename-table-before', [previous]);
+    push(
+      'rename-table-after',
+      [{ ...renamed, x: previous.x, y: previous.y }],
+      [],
+      `${old.name} → ${next.name}`,
+    );
+  }
+
   for (const change of diff.addedColumns) {
     const old = beforeTable(change.tableId);
     const next = afterTable(change.tableId);

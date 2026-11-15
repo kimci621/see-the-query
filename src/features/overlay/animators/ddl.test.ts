@@ -67,6 +67,16 @@ describe('сцены DDL на реальных трассах', () => {
       }),
     ));
 
+  it('RENAME TABLE показывает таблицу до и после переименования', () =>
+    withDataset('bookstore', (db) =>
+      inPreview(db, async () => {
+        const phases = buildPlayback(await traceSql(db, 'alter table author rename to writer'), ctx).phases;
+        expect(phases[0].frame.tables[0].title).toBe('author');
+        expect(phases.at(-1)?.frame.tables[0]).toMatchObject({ title: 'writer', x: 100, y: 100 });
+        expect(phases.at(-1)?.frame.tables[0].rows).toHaveLength(6);
+      }),
+    ));
+
   it('ALTER COLUMN TYPE подсвечивает колонку и называет типы', () =>
     withDataset('bookstore', (db) =>
       inPreview(db, async () => {
