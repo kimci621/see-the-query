@@ -243,7 +243,7 @@
 
 **08-subqueries**
 
-- [ ] 8.1 `scalar-subquery`: `content/lessons-en/08-subqueries/01-scalar-subquery.mdx`
+- [x] 8.1 `scalar-subquery`: `content/lessons-en/08-subqueries/01-scalar-subquery.mdx`
 - [ ] 8.2 `from-subquery`: `content/lessons-en/08-subqueries/02-from-subquery.mdx`
 - [ ] 8.3 `correlated-subquery`: `content/lessons-en/08-subqueries/03-correlated-subquery.mdx`
 - [ ] 8.4 `in-exists-any-all`: `content/lessons-en/08-subqueries/04-in-exists-any-all.mdx`

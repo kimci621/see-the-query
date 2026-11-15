@@ -1,0 +1,132 @@
+---
+id: scalar-subquery
+title: "Scalar subquery: one value"
+chapter: subqueries
+number: "8.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, (select max(price) from book) as max_price from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-SCALAR-SUBQUERIES
+    title: Scalar subqueries
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html
+    title: Subquery expressions
+tags: ["scalar subquery", "subquery in select", "single value"]
+mvp: false
+---
+
+<TlDr>A scalar subquery produces a single value for an expression. It must return one column and at most one row; no rows become `NULL`.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has 11 books. The most expensive is Learning Python at 3200.00. The Island of Lost Ships has `NULL` in <C id="public.book.price">price</C>. Both values will matter below.
+
+## One number for the table
+
+Start with an aggregate:
+
+```sql run expect=rows:1
+select max(price) from book;
+```
+
+One row: 3200.00. Now put the same query in parentheses inside another query:
+
+```sql run expect=rows:11
+select title, (select max(price) from book) as max_price from book order by book_id;
+```
+
+There are 11 rows, each with 3200.00 in `max_price`. This subquery does not refer to the outer book, so the same maximum is used for every row.
+
+<Callout kind="analogy">
+Imagine filling in 11 forms. For the “maximum price” field on each one, you copy the same number from a reference sheet. The sheet does not change from one form to the next.
+</Callout>
+
+Try the two queries in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="Inside: one number, 3200.00">
+
+```sql run expect=rows:1
+select max(price) from book;
+```
+
+</Step>
+<Step caption="Outside: 11 rows, each with 3200.00">
+
+```sql run expect=rows:11
+select title, (select max(price) from book) as max_price from book order by book_id;
+```
+
+</Step>
+</Scene>
+
+## Calculate with the value
+
+A scalar subquery is an expression. You can add, subtract or compare its value:
+
+```sql run expect=rows:11
+select title, price, round(price - (select avg(price) from book), 2) as diff
+from book order by book_id;
+```
+
+The average price is 1138.00: 11380 divided by the 10 books with prices. There are still 11 rows. And Quiet Flows the Don has a difference of -248.00; Learning Python has 2062.00. The Island of Lost Ships has a `NULL` price, so its difference is also `NULL`.
+
+## A subquery in WHERE
+
+The same technique works in a condition:
+
+```sql run expect=rows:3
+select title, price from book where price > (select avg(price) from book) order by book_id;
+```
+
+There are 3 rows: Fluent Python, Simple Python and Learning Python. The threshold is 1138.00 for all of them. The subquery does not refer to the row tested by the outer `WHERE`.
+
+## Zero rows are not an error
+
+```sql run expect=rows:11
+select title, (select price from book where book_id = 99) as missing_price
+from book order by book_id;
+```
+
+There are 11 rows with `NULL` in every `missing_price` cell. The subquery found no rows, so its scalar value is `NULL`. Two or more rows cause an error.
+
+## What is missing from the result
+
+- ❌ Eleven different `max_price` values: the example's subquery does not depend on an outer row, and the maximum is the same for each.
+- ❌ A numeric `diff` for The Island of Lost Ships: its row remains, but the price and difference are `NULL`.
+- ❌ Eight books in the `WHERE` query: only three have prices above 1138.00.
+- ❌ A missing outer row for `book_id = 99`: the empty subquery produces `NULL` in each of the 11 outer rows.
+- ❌ Result rows from the failing query below: PostgreSQL rejects it.
+
+## Traps
+
+<Callout kind="trap">
+A scalar subquery must return at most one row. This inner query returns all 11 prices:
+
+```sql run expectError=21000
+select title, (select price from book) as p from book;
+```
+
+Code `21000`: `more than one row returned by a subquery used as an expression`. Postgres does not choose the first row or calculate an average. If you need to work with multiple values, consider `IN`, `EXISTS` or a `JOIN`, depending on the question.
+</Callout>
+
+<Callout kind="tip">
+A scalar subquery is useful for one number, such as a maximum, average or count. If it contains `GROUP BY`, check that it returns at most one row. Otherwise it can raise `21000`.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `select title from book where price > 500` return? Answer first, then check on the board.
+2. What happens with `select title, (select price from book where category_id = 3) as p from book`? Count the inner rows.
+3. Replace `max` with `min` in the first nested query. What number appears in each row?
+
+<Cheatsheet>
+- `(select ...)` as a scalar expression: one column and at most one row.
+- One row supplies its value. Zero rows yield `NULL`. Two or more rows cause error `21000`.
+- An uncorrelated subquery does not refer to a row of the outer query. The maximum in this lesson is the same for every row.
+- A scalar subquery can supply a threshold in `WHERE`.
+- For multiple values, consider `IN`, `EXISTS` or a `JOIN` according to the result you need.
+</Cheatsheet>
