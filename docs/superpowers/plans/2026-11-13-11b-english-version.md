@@ -258,7 +258,7 @@
 - [x] 9.2 `ranking`: `content/lessons-en/09-windows/02-ranking.mdx`
 - [x] 9.3 `lag-lead`: `content/lessons-en/09-windows/03-lag-lead.mdx`
 - [x] 9.4 `window-frame`: `content/lessons-en/09-windows/04-window-frame.mdx`
-- [ ] 9.5 `top-n`: `content/lessons-en/09-windows/05-top-n.mdx`
+- [x] 9.5 `top-n`: `content/lessons-en/09-windows/05-top-n.mdx`
 
 **10-views**
 

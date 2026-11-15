@@ -1,0 +1,163 @@
+---
+id: top-n
+title: "Top-N within a group"
+chapter: windows
+number: "9.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.book, public.book_category]
+  layout:
+    book: { x: 0, y: 0 }
+    book_category: { x: 620, y: 0 }
+initialQuery: |
+  select * from (
+    select title, category_id,
+      row_number() over (partition by category_id order by price desc nulls last) as rn
+    from book
+  ) t
+  where rn = 1
+  order by category_id nulls last;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-window.html
+    title: Window functions
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-SUBQUERIES
+    title: Subqueries in FROM
+tags: [window functions, "top-n", row_number, "nulls last", subquery, "partition by"]
+mvp: false
+---
+
+<TlDr>To select up to N rows per group, number rows within each group using `row_number`, then filter those numbers in an outer query.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has 11 books. Not every book has a <C id="public.book.category_id">category_id</C>: Simple Python has none.
+
+Books form four groups: Science fiction (3), Classics (4), Python (6) and `NULL`. <T id="public.book_category">book_category</T> has six categories, but Photography (5) has no books directly assigned; Fiction (1) and Programming (2) have books only in their subcategories.
+
+Science fiction has four books. The Island of Lost Ships has no <C id="public.book.price">price</C>; Journey to the Center of the Earth and Captain Grant's Children both cost 610.00. This tie and the `NULL` price matter below.
+
+## Number rows within each category
+
+Number books from most to least expensive inside each category:
+
+```sql run expect=rows:11
+select title, category_id, price,
+  row_number() over (partition by category_id order by price desc nulls last) as rn
+from book
+order by category_id nulls last, price desc nulls last;
+```
+
+There are 11 rows, one per book. Numbers start at 1 within each category:
+
+- Science fiction: the two books at 610 get 1 and 2 in an unspecified order, Professor Dowell's Head at 560 gets 3, and The Island of Lost Ships without a price gets 4.
+- Classics: And Quiet Flows the Don at 890 gets 1, followed by 420, 350 and 350.
+- Python: Learning Python at 3200 gets 1 and Fluent Python at 2400 gets 2.
+- `NULL`: Simple Python at 1990 gets 1 because missing categories form a separate partition.
+
+`NULLS LAST` puts the book without a price at the end of its partition. Without it, descending order puts `NULL` first by default.
+
+## Keep one book per category group
+
+Wrap the query in a subquery and filter the numbers:
+
+```sql run expect=rows:4
+select * from (
+  select title, category_id,
+    row_number() over (partition by category_id order by price desc nulls last) as rn
+  from book
+) t
+where rn = 1
+order by category_id nulls last;
+```
+
+There are 4 rows:
+
+- either Journey to the Center of the Earth or Captain Grant's Children in category 3, both priced 610.00;
+- And Quiet Flows the Don in category 4, priced 890.00;
+- Learning Python in category 6, priced 3200.00;
+- Simple Python in the `NULL` category group, priced 1990.00.
+
+The query returns the title, category and row number, not the price; the prices above explain the choice. The inner query numbers 11 rows, and the outer `where rn = 1` keeps one per partition. The category 3 winner is unspecified because the two top prices tie.
+
+The final `order by category_id nulls last` orders the result rows by category. PostgreSQL also defaults to `NULLS LAST` for ascending order, but spelling it out makes the choice visible.
+
+## Why not filter in the same WHERE?
+
+A window function is evaluated after `WHERE`. In the query that defines `rn`, `where rn = 1` cannot refer to that output alias. A subquery or CTE calculates the numbers inside; the outer query filters them. This is the same boundary encountered in lesson 9.2.
+
+## A book without a price
+
+Remove `NULLS LAST` from the window:
+
+```sql run expect=rows:4
+select * from (
+  select title, category_id,
+    row_number() over (partition by category_id order by price desc) as rn
+  from book
+) t
+where rn = 1
+order by category_id nulls last;
+```
+
+The Island of Lost Ships now wins Science fiction despite having no price. By default, PostgreSQL puts `NULL` first in descending order, so it receives number 1.
+
+The other three partition winners are unchanged. In the original query, `NULLS LAST` places missing prices after known prices; it does not exclude them. A group containing only `NULL` prices would still have a row numbered 1.
+
+## What is missing from the result
+
+- ❌ Photography: no book has category 5, so there is no partition for it.
+- ❌ Fiction and Programming: no books are directly assigned to categories 1 and 2.
+- ❌ One of the two Science fiction books at 610 in the first result: `row_number` gives only one of them number 1, with no specified winner.
+- ❌ The Island of Lost Ships in the first result: its `NULL` price sorts last in its partition.
+- ❌ Five rows in the first result: each of the four existing partitions contributes one row. Using `rank` would keep both tied Science fiction books.
+
+## Traps
+
+<Callout kind="trap">
+`rank` can return more than one row per group:
+
+```sql run expect=rows:5
+select * from (
+  select title, category_id,
+    rank() over (partition by category_id order by price desc nulls last) as rn
+  from book
+) t
+where rn = 1
+order by category_id nulls last;
+```
+
+There are 5 rows: both Science fiction books at 610 receive `rank = 1`. Use `row_number` when you need at most N rows per group; use `rank` when tied places should share a rank. A group with fewer than N rows cannot produce N rows.
+</Callout>
+
+<Callout kind="trap">
+A window output alias is not visible in `WHERE` at the same query level:
+
+```sql run expectError=42703
+select title,
+  row_number() over (partition by category_id order by price desc nulls last) as rn
+from book
+where rn = 1;
+```
+
+Code `42703`: `rn` is not an input column. Wrap the query in a subquery, as in the main example, then filter its output.
+</Callout>
+
+<Callout kind="tip">
+For a stable winner when prices tie, add a unique key to the window order: `order by price desc nulls last, book_id`. To select up to two rows per partition, use `rn <= 2` in the outer query.
+</Callout>
+
+## Check yourself
+
+1. Replace `where rn = 1` with `where rn <= 2`. How many rows return? Count by category first, then check.
+2. Add `book_id` to the end of the window's `order by`. Which Science fiction book wins the 610.00 tie?
+3. Remove `desc` from the window order, keeping `nulls last`. Which Science fiction book wins?
+
+<Cheatsheet>
+- Top-N: calculate `row_number() over (partition by category_id order by price desc nulls last)` in a subquery.
+- Outside, use `where rn = 1` for one row or `where rn <= N` for up to N rows per partition.
+- `row_number` assigns distinct numbers; `rank` shares a rank for ties.
+- `NULLS LAST` sorts missing prices after known prices; it does not remove them.
+- A window alias is not visible in same-level `WHERE`; use a subquery or CTE.
+- A unique window ordering key makes the choice among ties stable.
+</Cheatsheet>
