@@ -1,0 +1,128 @@
+---
+id: jsonb
+title: JSON and JSONB
+chapter: types
+number: "5.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+initialQuery: |
+  select book_id, title, meta from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-json.html
+    title: JSON types
+  - url: https://www.postgresql.org/docs/current/functions-json.html
+    title: JSON functions and operators
+course: ["11.32", "11.33"]
+tags: [json, jsonb, jsonb_each, jsonb_array_elements]
+---
+
+<TlDr>`jsonb` stores JSON in a parsed form. Operators extract values and check contents; functions expand an object or array into rows.</TlDr>
+
+## What's in the data
+
+Books have an optional <C id="public.book.meta">meta</C> column of type `jsonb`. Customer preferences are stored in <C id="public.customer.settings">settings</C>.
+
+```sql run expect=rows:1
+select title, meta from book where book_id = 1;
+```
+
+And Quiet Flows the Don has language `ru` and format `hardcover`. Other books can have different keys, and some have SQL NULL in `meta`.
+
+<Callout kind="analogy">
+Imagine an envelope containing cards labeled “language: ru” and “format: hardcover”. Another book's envelope might contain only a language card. `jsonb_each` takes the cards out and shows each on a separate row.
+</Callout>
+
+## JSON and JSONB
+
+`json` preserves the input text, including whitespace, key order and duplicate keys. `jsonb` parses the document, does not preserve object key order and keeps only the last value for a duplicate key. For processing and search, `jsonb` is usually the choice; `json` can be useful when the exact input text matters. Indexes and operation costs depend on the query.
+
+## Extract a value
+
+```sql run expect=rows:2
+select book_id, meta->>'format' as format from book where meta ? 'format' order by book_id;
+```
+
+For these objects, `?` checks for a top-level key and `->>` returns the value as text. Books 1 and 2 have a format.
+
+```sql run expect=rows:1
+select meta->'edition' as edition_jsonb, meta->>'edition' as edition_text,
+       pg_typeof(meta->'edition')::text as json_type, pg_typeof(meta->>'edition')::text as text_type
+from book where book_id = 2;
+```
+
+Both values look like `2`, but `->` returned `jsonb` and `->>` returned `text`. For arithmetic, cast the text to a number: `(meta->>'edition')::int`.
+
+## Find a document by content
+
+```sql run expect=rows:7
+select book_id from book where meta @> '{"lang": "ru"}' order by book_id;
+```
+
+`@>` checks whether the document contains the given JSON. Seven books have language `ru`; rows with SQL NULL in `meta` do not pass the condition.
+
+## Expand an object and an array
+
+```sql run expect=rows:2
+select c.customer_id, s.key, s.value from customer c, jsonb_each(c.settings) as s(key, value) where c.customer_id = 1;
+```
+
+`jsonb_each` produces one row per key-value pair. Customer 1 has `lang` and `notify`. On the board, all customers' settings are expanded first; then `WHERE` keeps her rows.
+
+```sql run expect=rows:1
+select c.customer_id, s.key from customer c, jsonb_each(c.settings) as s(key, value) where c.customer_id = 2;
+```
+
+Customer 2 has one pair: `notify`. Customer 4's empty object produces no rows in this join.
+
+```sql run expect=rows:3
+select e.elem from (values ('[1,2,3]'::jsonb)) as j (doc), jsonb_array_elements(j.doc) as e (elem);
+```
+
+`jsonb_array_elements` expands the array into three rows: 1, 2 and 3. It handles a JSON array; `unnest` from the previous lesson works with a PostgreSQL array.
+
+## Build an object
+
+```sql run expect=rows:1
+select jsonb_build_object('title', title, 'cheap', price < 1000) as info from book where book_id = 1;
+```
+
+The result is an object with a title and a Boolean field `cheap`. Its value for the first book is true.
+
+## What's missing and why
+
+- ❌ Books without `format` in the `meta ? 'format'` query: the key is absent or the column itself is SQL NULL.
+- ❌ Rows for customer 4 when expanding `settings`: the empty object has no pairs.
+- ❌ All books in the `ru` language query: not every book has that key and value.
+
+## Pitfalls
+
+<Callout kind="trap">
+With `->>`, both a missing key and a key containing JSON `null` produce SQL NULL. The `?` check distinguishes them:
+
+```sql run expect=rows:1
+select '{"a": null}'::jsonb ? 'a' as present, '{"a": null}'::jsonb->>'a' as value,
+       '{"a": null}'::jsonb ? 'b' as missing;
+```
+
+The results are true, NULL and false. A document that is itself SQL NULL is another case: `?` returns SQL NULL for it too.
+</Callout>
+
+<Callout kind="tip">
+Choose a JSONB index for the query's operator and expression. GIN can speed up some containment checks; an expression index can suit a comparison using a particular `->>` expression.
+</Callout>
+
+## Check yourself
+
+1. What type does `meta->>'edition'` return, and how does it differ from `meta->'edition'`?
+2. How many rows does `jsonb_each` produce for an object with two keys?
+3. How can you distinguish a missing key from one containing JSON `null`?
+
+<Cheatsheet>
+- `json` preserves input text; `jsonb` stores a parsed representation.
+- `->` returns JSON or JSONB; `->>` returns text.
+- `?` checks for a top-level key or string array element; `@>` checks JSONB containment.
+- `jsonb_each` expands an object into pairs; `jsonb_array_elements` expands an array into elements.
+- A missing key and JSON `null` can both produce SQL NULL when extracted with `->>`.
+</Cheatsheet>
