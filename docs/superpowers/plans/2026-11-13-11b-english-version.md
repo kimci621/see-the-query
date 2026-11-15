@@ -198,7 +198,7 @@
 - [x] 4.2 `logical-order`: `content/lessons-en/04-select/02-logical-order.mdx`
 - [x] 4.3 `where-boolean`: `content/lessons-en/04-select/03-where-boolean.mdx`
 - [x] 4.4 `operators`: `content/lessons-en/04-select/04-operators.mdx`
-- [ ] 4.5 `null-logic`: `content/lessons-en/04-select/05-null-logic.mdx`
+- [x] 4.5 `null-logic`: `content/lessons-en/04-select/05-null-logic.mdx`
 - [ ] 4.6 `order-by`: `content/lessons-en/04-select/06-order-by.mdx`
 - [ ] 4.7 `limit-offset`: `content/lessons-en/04-select/07-limit-offset.mdx`
 - [ ] 4.8 `distinct-on`: `content/lessons-en/04-select/08-distinct-on.mdx`

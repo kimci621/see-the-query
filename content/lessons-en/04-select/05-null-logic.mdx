@@ -1,0 +1,180 @@
+---
+id: null-logic
+title: "NULL: missing, not zero"
+chapter: select
+number: "4.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+  layout:
+    book: { x: 0, y: 0 }
+    customer: { x: 0, y: 480 }
+initialQuery: |
+  select title, price from book where price is null;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-comparison.html
+    title: Comparison functions and operators
+  - url: https://www.postgresql.org/docs/current/functions-conditional.html
+    title: Conditional expressions
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+    title: The WHERE clause
+course: ["11.19"]
+tags: ["null", is null, is not null, coalesce, nullif, unknown, three-valued logic]
+mvp: true
+---
+
+<TlDr>`NULL` marks a missing value. Ordinary comparisons with it return unknown, so `WHERE` drops the row. Find missing values with `IS NULL`; substitute a value with `COALESCE`.</TlDr>
+
+## What's in the data
+
+There are two tables on the board. <T id="public.book">book</T> has 11 books; The Island of Lost Ships has no price, so <C id="public.book.price">price</C> is `NULL`. <T id="public.customer">customer</T> has 6 customers; Maria Ivanova has no <C id="public.customer.city">city</C>. We'll also use <C id="public.customer.bonus">bonus</C>: three customers have a bonus of 0.
+
+## NULL means a value is missing
+
+In lesson 1.1, `NULL` appeared as a gray badge in an empty cell. In lesson 4.3, gray rows had an `UNKNOWN` verdict. A missing value and the unknown result of a comparison with it are related, but they are different things.
+
+`NULL` is neither zero nor an empty string. It marks a missing or unknown value. Find books with no price using `IS NULL`:
+
+```sql run expect=rows:1
+select title, price from book where price is null;
+```
+
+One row: The Island of Lost Ships. Its price cell has a gray badge. `IS NULL` returns `TRUE` or `FALSE`, so no rows have an unknown verdict at `WHERE`: ten are red and one is green.
+
+## Comparison with NULL gives unknown
+
+Ordinary comparisons (`=`, `<>`, `<`, `>`) with `NULL` return `NULL` rather than `TRUE` or `FALSE`. In a condition, this third result is called `UNKNOWN`. `WHERE` keeps only `TRUE`.
+
+A common mistake:
+
+```sql run expect=rows:0
+select title, price from book where price = null;
+```
+
+No rows pass, not even The Island of Lost Ships. At `WHERE`, all 11 rows are gray and the caption reports 11 unknown results. A comparison with the NULL on the right cannot give a true result.
+
+`NULL = NULL` is unknown too. Two missing values might be equal or different. Use `IS NULL` and `IS NOT NULL` to test whether a value is missing.
+
+<Callout kind="analogy">
+Someone leaves the city field blank on a form. Ask whether they are from Kazan and the honest answer is “unknown”. If admission requires a yes, they do not enter. They do not qualify as definitely outside Kazan either.
+</Callout>
+
+## Rows disappear without an error
+
+Books cheaper than 1000:
+
+```sql run expect=rows:7
+select title, price from book where price < 1000;
+```
+
+There are 7 rows. With 11 books, it may seem the remaining 4 cost at least 1000. Check:
+
+```sql run expect=rows:3
+select title, price from book where price >= 1000;
+```
+
+Three rows. Seven plus three is 10, not 11. The Island of Lost Ships is in neither result. At `WHERE` it is gray in both queries, and the caption reports 1 `UNKNOWN`. There is no error or warning.
+
+## The same happens with text
+
+Customers outside Moscow:
+
+```sql run expect=rows:3
+select name, city from customer where city <> 'Moscow';
+```
+
+There are 6 customers, two from Moscow. You might expect 4 rows, but get 3: two from Kazan and one from Saint Petersburg. Maria is absent. Her city is missing, so `<>` gives `UNKNOWN`.
+
+To include customers without a city, say so with `OR city IS NULL`:
+
+```sql run expect=rows:4
+select name, city from customer where city <> 'Moscow' or city is null;
+```
+
+Four rows: Maria is back. For her, `city <> 'Moscow'` is `UNKNOWN`, but `city is null` is `TRUE`. `UNKNOWN OR TRUE` is `TRUE`, so her row is green at `WHERE`.
+
+## COALESCE: substitute a value
+
+**`COALESCE`** returns the first argument that is not `NULL`, or `NULL` if all are missing. Use it to supply a display value:
+
+```sql run expect=rows:11
+select title, price, coalesce(price, 0) as price_or_zero from book;
+```
+
+There are 11 rows. At `SELECT`, the calculated column `price_or_zero` appears on the right. Ten books keep their price; The Island of Lost Ships has 0 in the new column next to its gray `price` badge.
+
+The <T id="public.book">book</T> table has not changed. `COALESCE` changes this query's result; the stored price is still `NULL`.
+
+## NULLIF: turn a value into NULL
+
+**`NULLIF`** returns `NULL` when its two arguments are equal; otherwise it returns the first. A common use is avoiding division by zero. Divide 1000 by each customer's bonus:
+
+```sql run expectError=22012
+select name, 1000 / bonus as ratio from customer;
+```
+
+The error card reports division by zero, code `22012`. Three customers have a bonus of 0, so the whole query fails. Wrap the divisor in `nullif`:
+
+```sql run expect=rows:6
+select name, 1000 / nullif(bonus, 0) as ratio from customer;
+```
+
+Six rows, no error. When the bonus is 0, `nullif` returns `NULL`, and division by `NULL` gives `NULL`. Three customers have a gray badge in `ratio`. To show a number instead, wrap the expression in `coalesce(..., 0)`.
+
+Review the main idea in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="With a price: 10 rows">
+
+```sql run expect=rows:10
+select title, price from book where price is not null;
+```
+
+</Step>
+<Step caption="COALESCE substitutes 0 for NULL: 11 rows">
+
+```sql run expect=rows:11
+select title, price, coalesce(price, 0) as price_or_zero from book;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+- ❌ The Island of Lost Ships in `price = null`: the comparison is `UNKNOWN`, as it is for the other ten books.
+- ❌ The Island in both `price < 1000` and `price >= 1000`: its missing price makes both comparisons unknown.
+- ❌ Maria Ivanova in `city <> 'Moscow'`: her city is missing, so the comparison is unknown. `OR city IS NULL` brings her back.
+
+## Pitfalls
+
+<Callout kind="trap">
+`count(*)` counts rows, while `count(price)` counts only non-NULL prices:
+
+```sql run expect=rows:1
+select count(*) as all_books, count(price) as with_price from book;
+```
+
+One row: 11 and 10. The Island of Lost Ships is not counted in `with_price`. We'll cover aggregates in lesson 7.1.
+</Callout>
+
+<Callout kind="tip">
+Decide where NULL is allowed when creating a table. In <T id="public.book">book</T>, <C id="public.book.title">title</C> has `NOT NULL`, but <C id="public.book.price">price</C> does not. A book can have no price, but it must have a title.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `select title, price from book where price is not null and price < 400` return? Check on the board.
+2. What does `select name, city from customer where city = city` return? Think about Maria, then run it.
+3. Write a query using `coalesce(city, 'city not specified')` for <T id="public.customer">customer</T>. How many customers get the substitute?
+
+<Cheatsheet>
+- `NULL` marks a missing value, not zero or `''`.
+- Ordinary comparison with `NULL` gives `UNKNOWN`, even for `NULL = NULL`; `WHERE` drops those rows.
+- To include missing values, add `or col is null` where appropriate.
+- Find missing values with `IS NULL` or `IS NOT NULL`, not `= null`.
+- `coalesce(a, b, ...)` returns the first non-NULL argument.
+- `nullif(a, b)` returns `NULL` when `a = b`, otherwise `a`; use `x / nullif(y, 0)` to avoid division by zero.
+- `count(*)` counts rows; `count(col)` skips `NULL`.
+</Cheatsheet>
