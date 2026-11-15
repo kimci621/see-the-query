@@ -1,0 +1,123 @@
+---
+id: ranking
+title: "row_number, rank and dense_rank"
+chapter: windows
+number: "9.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.employee]
+  layout:
+    employee: { x: 0, y: 0 }
+initialQuery: |
+  select name, salary,
+    row_number() over (order by salary desc) as rn,
+    rank() over (order by salary desc) as rnk,
+    dense_rank() over (order by salary desc) as dr
+  from employee
+  order by salary desc;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-window.html
+    title: Window functions
+  - url: https://www.postgresql.org/docs/current/tutorial-window.html
+    title: "Tutorial: Window Functions"
+tags: [window functions, row_number, rank, dense_rank, ties, numbering]
+mvp: false
+---
+
+<TlDr>`row_number` gives each row a distinct number. `rank` shares a rank for ties and leaves gaps; `dense_rank` shares the rank without gaps.</TlDr>
+
+## The data
+
+<T id="public.employee">employee</T> has 8 employees. Their <C id="public.employee.salary">salary</C> values range from 40000 to 300000. All are distinct except one pair.
+
+Natalia Lebedeva and Igor Novikov both earn 70000. This tie shows the difference between the three functions.
+
+## row_number numbers rows consecutively
+
+```sql run expect=rows:8
+select name, salary, row_number() over (order by salary desc) as rn
+from employee
+order by salary desc;
+```
+
+There are 8 rows numbered 1 through 8. Olga Nikolaeva, at 300000, gets 1; Tatiana Zaitseva, at 40000, gets 8.
+
+The two Warehouse Assistants earning 70000 get numbers 6 and 7. The query does not specify which person gets which number: their salaries tie, and the window ordering has no tie-breaker. Do not rely on the order in a particular run.
+
+## rank and dense_rank with a tie
+
+Add the other two functions:
+
+```sql run expect=rows:8
+select name, salary,
+  row_number() over (order by salary desc) as rn,
+  rank() over (order by salary desc) as rnk,
+  dense_rank() over (order by salary desc) as dr
+from employee
+order by salary desc;
+```
+
+Above 70000, all three columns show 1, 2, 3, 4 and 5. Then they differ:
+
+- Natalia and Igor, each at 70000: `rn` is 6 for one and 7 for the other; both have `rnk` 6 and `dr` 6.
+- Tatiana, at 40000: `rn` 8, `rnk` 8 and `dr` 7.
+
+`rank` gives the tied rows the same sixth place. The next rank is eight, leaving a gap at seven. `dense_rank` also gives both sixth place, but the next rank is seven, with no gap.
+
+`row_number` assigns different numbers even when salaries tie. Which tied employee receives 6 remains unspecified.
+
+## PARTITION BY restarts numbering
+
+Number employees separately within each position:
+
+```sql run expect=rows:8
+select name, position, salary,
+  row_number() over (partition by position order by salary desc) as rn
+from employee
+order by position, salary desc;
+```
+
+There are still 8 rows, but numbering restarts in each position. The Director, Intern and each department manager get 1. The two Managers get 1 and 2, as do the two Warehouse Assistants. The latter tie on salary, so their individual numbering is unspecified.
+
+`PARTITION BY position` makes six partitions; `row_number` starts at 1 in each.
+
+## What is missing from the result
+
+- ❌ Rank 7 in `rnk`: after two sixth places, `rank` jumps to 8.
+- ❌ Repeated values in `rn` for this single partition: `row_number` assigns a distinct number to each row.
+- ❌ Rank 8 in `dr`: there are seven distinct salaries, so the highest `dense_rank` is 7.
+- ❌ A guaranteed order for Natalia and Igor: their numbers are 6 and 7, but the query does not specify which is first.
+
+## Traps
+
+<Callout kind="trap">
+A window function's output alias is not visible in `WHERE` at the same query level:
+
+```sql run expectError=42703
+select name, row_number() over (order by salary desc) as rn
+from employee
+where rn <= 3;
+```
+
+Code `42703`: there is no input column `rn`. `WHERE` filters rows before window functions calculate their values. Use a subquery or CTE to calculate `rn` inside and filter it outside. Lesson 9.5 covers this pattern.
+</Callout>
+
+<Callout kind="tip">
+For stable `row_number` assignments, add a unique key to its window ordering: `order by salary desc, employee_id`. If you also need `rank` to preserve salary ties, keep its window ordered by salary alone: adding the unique key to `rank` would break those ties.
+</Callout>
+
+## Check yourself
+
+1. How many rows get `rank = 6` when ordered by salary? Check on the board.
+2. How many distinct `dense_rank` values appear with that ordering?
+3. How many rows get number 1 with `partition by position`? Answer first, then run the partitioned query.
+
+<Cheatsheet>
+- `row_number()`: consecutive distinct numbers within a partition.
+- `rank()`: tied rows share a rank; the next rank can have a gap.
+- `dense_rank()`: tied rows share a rank; the next rank has no gap.
+- `partition by` restarts numbering within each partition.
+- A window output alias is not visible in same-level `WHERE`; use a subquery or CTE.
+- Add a unique key to `row_number`'s window order for stable numbering. Keep the desired tie definition in `rank` and `dense_rank`.
+</Cheatsheet>
