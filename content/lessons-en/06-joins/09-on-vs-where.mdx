@@ -1,0 +1,148 @@
+---
+id: on-vs-where
+title: "ON and WHERE in LEFT JOIN: when a pair is excluded"
+chapter: joins
+number: "6.9"
+order: 9
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name, b.title
+  from author a
+  left join book b
+    on a.author_id = b.author_id and b.price > 1000
+  order by a.name;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-WHERE
+    title: The WHERE clause
+tags: ["left join", "on", "where", "join condition", "outer join"]
+mvp: false
+---
+
+<TlDr>In a `LEFT JOIN`, `ON` determines which rows match. `WHERE` tests the joined row and can remove a left row the join preserved.</TlDr>
+
+## What's in the data
+
+There are 6 authors in <T id="public.author">author</T> and 11 books in <T id="public.book">book</T>. Three books cost more than 1000: Fluent Python at 2400 by Luciano Ramalho, Simple Python at 1990 and Learning Python at 3200. The last two have no author.
+
+Of the six authors, only Ramalho has a book over the threshold. Boris Pasternak has no books at all.
+
+## The condition in ON
+
+Show all authors, with a book only if it costs more than 1000:
+
+```sql run expect=rows:6
+select a.name, b.title
+from author a
+left join book b
+  on a.author_id = b.author_id and b.price > 1000
+order by a.name;
+```
+
+Six rows, one per author. Ramalho has Fluent Python in `title`; the other five have NULL.
+
+`ON` determines which pairs match. Both parts must be true: the author identifier matches, and the price exceeds 1000. If an author has no book satisfying both, `LEFT JOIN` keeps the author with NULL in the book columns.
+
+The condition in `ON` does not remove left rows. It determines which right rows can be paired with them.
+
+On the board, the join produces five NULL-filled rows and one row for Ramalho, six total.
+
+## The same condition in WHERE
+
+Move the price check to `WHERE`:
+
+```sql run expect=rows:1
+select a.name, b.title
+from author a
+left join book b on a.author_id = b.author_id
+where b.price > 1000
+order by a.name;
+```
+
+One row: Ramalho. The previous query returned six.
+
+Logically, the join comes before `WHERE`. Without the price condition in `ON`, it gives 10 rows: 9 pairs and Pasternak with NULL book columns. `WHERE` then tests each row. Of the other nine rows, some have prices below 1000 and two have NULL prices: one is a book without a price and one is Pasternak's unmatched row. Comparisons with NULL yield `UNKNOWN`; `WHERE` keeps only `TRUE`.
+
+The board shows 10 rows after the join and 1 of 10 after `WHERE`.
+
+Here the right-side filter removes the unmatched row, leaving the same result as an inner join with the same filter.
+
+## Find authors without an expensive book
+
+The `ON` condition also helps answer the reverse question. Keep only rows with no match:
+
+```sql run expect=rows:5
+select a.name
+from author a
+left join book b
+  on a.author_id = b.author_id and b.price > 1000
+where b.book_id is null
+order by a.name;
+```
+
+Five rows: every author except Ramalho. Pasternak has no books; the other four have no book over 1000. Their prices are below the threshold or missing.
+
+`book_id` is the primary key, so a real book cannot have NULL there. Here NULL means no pair matched. In this particular query, `b.price is null` also identifies unmatched rows: a matched book must have a price over 1000. In a join without that price condition, a matched book can have a NULL price, so its primary key is the safer match test. Lesson 6.11 covers this anti-join pattern.
+
+## What's missing and why
+
+- ❌ The other five authors in the `WHERE` version: their matched books are not over 1000 or have no price, or they have no matching book.
+- ❌ Cheaper books and the book without a price in the `ON` version: they are not matches under the price condition, so their authors appear with NULL book columns unless another book matches.
+- ❌ Pasternak in the `WHERE` version: he has no books and the filter requires a price over 1000.
+- ❌ Books by Ramalho and Verne in the query with `a.country = 'Russia'` in `ON`: those authors are not from Russia, so no pair matches. The authors still appear with NULL book columns.
+- ❌ Other books in the expensive-book query: only Ramalho's one book meets `price > 1000` and has an author.
+
+## Pitfalls
+
+<Callout kind="trap">
+A condition on the left table in `ON` does not filter left rows. It changes which pairs match:
+
+```sql run expect=rows:9
+select a.name, b.title
+from author a
+left join book b
+  on a.author_id = b.author_id and a.country = 'Russia'
+order by a.name, b.title;
+```
+
+Nine rows. Three Russian authors with books get all six of their books. Pasternak, Ramalho and Verne remain as one NULL-filled row each. Ramalho and Verne are not from Russia, so their books do not match, but the authors remain.
+
+To show only Russian authors, put that filter in `WHERE` instead.
+</Callout>
+
+<Callout kind="tip">
+Filtering authors in `WHERE`:
+
+```sql run expect=rows:7
+select a.name, b.title
+from author a
+left join book b on a.author_id = b.author_id
+where a.country = 'Russia'
+order by a.name, b.title;
+```
+
+Seven rows: six books by Russian authors and Pasternak with NULL for the book. The left-side condition filters the joined rows after the join.
+
+Think of `ON` as “is this a match?” and `WHERE` as “should this joined row appear?”
+</Callout>
+
+## Check yourself
+
+1. How many rows remain if you add `where b.price is null or b.price > 1000` to the first query? Start with five NULL-filled rows and one match.
+2. How many authors remain if you add `where a.country = 'Russia'` to the first query? Check on the board.
+3. Why is `b.book_id is null` a safer general match test than `b.price is null`? Do the two tests differ in this particular anti-join, and why?
+
+<Cheatsheet>
+- `ON` determines matches before unmatched left rows are added.
+- `WHERE` filters the joined rows.
+- A right-side `WHERE` condition that rejects NULL removes unmatched left rows.
+- A left-side condition in `ON` does not remove left rows; failed matches get NULL on the right.
+- Find no match using a non-nullable right key: `where right_table.pk is null`.
+- This is the logical order; PostgreSQL may choose an equivalent execution plan.
+</Cheatsheet>
