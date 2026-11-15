@@ -213,7 +213,7 @@
 - [x] 5.4 `dates-time`: `content/lessons-en/05-types/04-dates-time.mdx`
 - [x] 5.5 `boolean`: `content/lessons-en/05-types/05-boolean.mdx`
 - [x] 5.6 `enum`: `content/lessons-en/05-types/06-enum.mdx`
-- [ ] 5.7 `arrays`: `content/lessons-en/05-types/07-arrays.mdx`
+- [x] 5.7 `arrays`: `content/lessons-en/05-types/07-arrays.mdx`
 - [ ] 5.8 `jsonb`: `content/lessons-en/05-types/08-jsonb.mdx`
 - [ ] 5.9 `uuid-pk`: `content/lessons-en/05-types/09-uuid-pk.mdx`
 

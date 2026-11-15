@@ -1,0 +1,124 @@
+---
+id: arrays
+title: Arrays
+chapter: types
+number: "5.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, tags from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/arrays.html
+    title: Arrays
+  - url: https://www.postgresql.org/docs/current/functions-array.html
+    title: Array functions and operators
+course: ["11.31"]
+tags: [array, unnest, any]
+---
+
+<TlDr>An array holds multiple elements of one type in a single value. `unnest` turns the elements into separate rows.</TlDr>
+
+## What's in the data
+
+Each of the eleven books has <C id="public.book.tags">tags</C> of type `text[]`. The array holds one book's tags:
+
+```sql run expect=rows:1
+select title, tags from book where book_id = 1;
+```
+
+And Quiet Flows the Don has two tags: `classic` and `novel`. The braces show an array in one cell, not two rows.
+
+<Callout kind="analogy">
+Imagine a book's card with several stickers on it. While the stickers are on the card, you look at the book as a whole. Lay the stickers out separately and you can count or filter each one while keeping its connection to the book.
+</Callout>
+
+## Element and size
+
+```sql run expect=rows:1
+select tags[1] as first_tag, cardinality(tags) as n from book where book_id = 1;
+```
+
+The first tag is `classic`; there are two in total. These arrays start at index 1. PostgreSQL also permits other lower bounds, so for arbitrary arrays you can check with `array_lower`.
+
+```sql run expect=rows:11
+select book_id, array_length(tags, 1) as n from book order by book_id;
+```
+
+`array_length(tags, 1)` gives the size of the first dimension. In this dataset, books have one to three tags. For an empty array, `array_length` returns NULL, while `cardinality` returns 0.
+
+## Find a book by tag
+
+```sql run expect=rows:3
+select book_id, title from book where tags @> '{python}' order by book_id;
+```
+
+`@>` checks whether the array on the left contains every element of the array on the right. This finds books 2, 10 and 11.
+
+```sql run expect=rows:2
+select book_id, title from book where 'beginner' = any(tags) order by book_id;
+```
+
+`= ANY` checks whether the value equals at least one array element. Books 10 and 11 have the `beginner` tag.
+
+## Expand an array into rows
+
+```sql run expect=rows:3
+select b.title, u.tag from book b, unnest(b.tags) as u(tag) where b.book_id = 5;
+```
+
+The Tale of the Fisherman and the Fish has three tags: `classic`, `fairy_tale` and `children`. One book row becomes three rows, one per tag. On the board, `UNNEST` first expands the tags of all eleven books into 21 rows, retaining the source book's columns. Then `WHERE` keeps the three tags of book 5.
+
+```sql run expect=rows:3
+select b.title, u.tag from book b, unnest(b.tags) as u(tag) where u.tag = 'python' order by b.book_id;
+```
+
+The tags of all books are expanded, and the condition keeps only rows with `python`. Each book title appears beside its tag. An empty array produces no rows in this join; use `LEFT JOIN LATERAL` to retain the book as well.
+
+## Array or separate table
+
+An array can be useful for a small list often read with the book. If tags need their own properties, constraints or links to other objects, a tag table and a linking table are usually more convenient. PostgreSQL can use a GIN index for some array searches.
+
+## What's missing and why
+
+- ❌ Other books in the `@> '{python}'` search: their arrays don't contain that element.
+- ❌ Other tags in the expanded result with `u.tag = 'python'`: the condition filters individual rows after expansion.
+- ❌ Rows from an empty array with `unnest` in this `FROM`: there are no elements to expand.
+
+## Pitfalls
+
+<Callout kind="trap">
+You cannot nest `unnest` directly inside an aggregate argument:
+
+```sql run expectError=0A000
+select array_agg(distinct unnest(tags)) as all_tags from book;
+```
+
+PostgreSQL returns `0A000`. Expand the array in `FROM` first, then collect values with `array_agg`.
+</Callout>
+
+You can also call the function in the `SELECT` list, but the app shows this version only in the result panel, without a step-by-step expansion on the board:
+
+{/* final-only: set-returning функция в списке SELECT */}
+```sql run trace=final-only expect=rows:3
+select unnest(tags) as tag from book where book_id = 5;
+```
+
+<Callout kind="tip">
+Don't confuse NULL with an empty string when checking an out-of-range element: reading an index that does not exist returns NULL.
+</Callout>
+
+## Check yourself
+
+1. How many rows does `unnest` produce for a book with three tags?
+2. How does an empty array differ from NULL when counted with `cardinality`?
+3. Which query finds books with the `beginner` tag?
+
+<Cheatsheet>
+- `text[]` holds an array of text elements.
+- `tags[1]` reads an element by index; an array's lower bound need not be 1.
+- `cardinality(tags)` counts elements; `array_length(tags, 1)` gives the size of the first dimension.
+- `tags @> '{python}'` and `'python' = any(tags)` check for a tag.
+- `unnest(tags)` in `FROM` expands elements into rows.
+</Cheatsheet>
