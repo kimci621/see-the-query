@@ -1,0 +1,173 @@
+---
+id: logical-order
+title: The logical order of a query
+chapter: select
+number: "4.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, price * 0.9 as sale from book where price > 1000;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-select.html
+    title: SELECT reference
+course: ["11.23"]
+tags: [execution order, logical order, from, where, select, order by, limit]
+mvp: true
+---
+
+<TlDr>A query is written in one order and understood in another: `FROM` and `WHERE` come first, then `SELECT`, followed by `ORDER BY` and `LIMIT`.</TlDr>
+
+## What's in the data
+
+<T id="public.book">book</T> has 11 books. Three cost more than 1000: Fluent Python (2400), Simple Python (1990) and Learning Python (3200). The Island of Lost Ships has no price: its <C id="public.book.price">price</C> is `NULL`.
+
+## Written order and logical order
+
+Read the query as a sentence: select titles from books where the price exceeds 1000. `SELECT` comes first in the text, followed by `FROM` and `WHERE`. Logically, Postgres first finds the table, then filters the rows, then builds the result.
+
+The order used in this course is:
+
+1. `FROM` and `JOIN`: where the rows come from.
+2. `WHERE`: which rows pass.
+3. `GROUP BY`: rows form groups (chapter 7).
+4. `HAVING`: which groups pass.
+5. Window functions (chapter 9).
+6. `SELECT`: which columns and expressions appear in the result.
+7. `DISTINCT`: remove duplicates (lesson 4.8).
+8. `ORDER BY`: sort the rows.
+9. `LIMIT`: choose how many rows to return.
+
+This is the **logical order**. For speed, Postgres may perform physical operations in a different order while preserving the query's meaning. The steps in the player below the board follow the logical order, not the order in the query text.
+
+<Callout kind="analogy">
+Imagine an order at a warehouse. You write what you want: book titles and prices above 1000. The warehouse worker follows a different route: finds the shelf (`FROM`), sets aside items that do not qualify (`WHERE`), packs only what you requested (`SELECT`), orders the boxes (`ORDER BY`) and hands over the requested number (`LIMIT`).
+</Callout>
+
+## One query, step by step
+
+We'll build a query one clause at a time. Send the first step to the board, then use Next and watch the player steps.
+
+<Scene>
+<Step caption="FROM: take the whole book table">
+
+```sql run expect=rows:11
+select * from book;
+```
+
+</Step>
+<Step caption="WHERE: keep books costing more than 1000">
+
+```sql run expect=rows:3
+select * from book where price > 1000;
+```
+
+</Step>
+<Step caption="SELECT: title and discounted price">
+
+```sql run expect=rows:3
+select title, price * 0.9 as sale
+from book
+where price > 1000;
+```
+
+</Step>
+</Scene>
+
+The first query has two player steps, `FROM` and `SELECT`. Even `SELECT *` is a step: it keeps all 9 columns. In the second query, `WHERE` comes between them. The scanner passes over the rows, the counter shows 11 → 3, and the caption reports 3 of 11 rows remaining with 1 `UNKNOWN`. The unknown comparison belongs to The Island of Lost Ships, which has no price. The third query has the same steps, but `SELECT` now keeps `title` and creates the calculated `sale` column. In the query text `SELECT` comes first; in the player it follows `WHERE`.
+
+Click the `WHERE` step in the third query. The board returns to the point where there are still 9 columns but only 3 rows. The filter came before the result columns were chosen.
+
+## A SELECT alias is not visible in WHERE
+
+`WHERE` cannot use an output alias from the `SELECT` list. Try filtering on the discounted price:
+
+```sql run expectError=42703
+select title, price * 0.9 as sale
+from book
+where sale > 1800;
+```
+
+The error card reports that `sale` does not exist, code `42703`. The original Postgres message is `column "sale" does not exist`. The output alias is not available to `WHERE`; write the expression there instead:
+
+```sql run expect=rows:2
+select title, price * 0.9 as sale
+from book
+where price * 0.9 > 1800;
+```
+
+Two rows pass: Fluent Python and Learning Python. Simple Python's discounted price is 1791, just below the threshold. In this data, `where price > 2000` selects the same books.
+
+## An alias works in ORDER BY
+
+`ORDER BY` can use the output alias:
+
+```sql run expect=rows:3
+select title, price * 0.9 as sale
+from book
+where price > 1000
+order by sale;
+```
+
+The three discounted prices in ascending order are 1791.000, 2160.000 and 2880.000. The player adds an `ORDER BY` step after `SELECT`, and the rows move into order.
+
+There is an exception to the simple order above: PostgreSQL also accepts output aliases in `GROUP BY`, even though grouping comes earlier. Lesson 7.2 covers it.
+
+## LIMIT comes last
+
+Sort from highest to lowest and take two rows:
+
+```sql run expect=rows:2
+select title, price * 0.9 as sale
+from book
+where price > 1000
+order by sale desc
+limit 2;
+```
+
+The result is Learning Python (2880.000) and Fluent Python (2160.000). The player has five steps: `FROM`, `WHERE`, `SELECT`, `ORDER BY`, `LIMIT`. At `LIMIT`, a scissors line appears under the second row; the third fades and leaves.
+
+`LIMIT` takes rows after sorting, so these are the two highest prices. Without sorting first, the selected two would not necessarily be the most expensive.
+
+## What's missing and why
+
+In the query with `LIMIT 2`:
+
+- ❌ 7 books priced below 1000, including And Quiet Flows the Don at 890: `WHERE` filtered them out before `SELECT`.
+- ❌ The Island of Lost Ships: its missing price makes the comparison unknown, and `WHERE` does not keep unknown results. See lesson 4.5.
+- ❌ Simple Python: it passed `WHERE`, but came third after sorting and was cut by `LIMIT 2`.
+- ❌ <C id="public.book.price">price</C>, <C id="public.book.pages">pages</C> and the other columns: they are not in the `SELECT` list.
+
+## Pitfalls
+
+<Callout kind="trap">
+In `ORDER BY`, an output alias must stand alone. Inside an expression Postgres looks for an input column named `sale`, which does not exist:
+
+```sql run expectError=42703
+select title, price * 0.9 as sale
+from book
+where price > 1000
+order by round(sale);
+```
+
+The result is `column "sale" does not exist` again. Repeat the full expression: `order by round(price * 0.9)`.
+</Callout>
+
+<Callout kind="tip">
+When a query behaves unexpectedly, read it in logical order: `FROM`, `WHERE`, `SELECT`, `ORDER BY`, `LIMIT`. Writing the clauses down in that order can make a misplaced filter or alias easier to spot.
+</Callout>
+
+## Check yourself
+
+1. In what order do `WHERE`, `ORDER BY` and `SELECT` run in `select title as t from book where price > 1000 order by t`? Run it and check the player.
+2. How many rows would the third scene query return if `price > 1000` became `price > 500`? Estimate from the board, then run it.
+3. Why does `order by sale` work while `where sale > 1800` does not?
+
+<Cheatsheet>
+- Logical order: `FROM` → `JOIN` → `WHERE` → `GROUP BY` → `HAVING` → windows → `SELECT` → `DISTINCT` → `ORDER BY` → `LIMIT`.
+- Output aliases work in `ORDER BY`, but not in `WHERE` or `HAVING`; repeat the expression there.
+- PostgreSQL also accepts output aliases in `GROUP BY` (lesson 7.2).
+- In `ORDER BY`, use an output alias on its own, not inside an expression.
+- `LIMIT` takes rows after sorting.
+</Cheatsheet>
