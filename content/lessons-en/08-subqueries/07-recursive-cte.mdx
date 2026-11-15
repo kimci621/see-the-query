@@ -1,0 +1,169 @@
+---
+id: recursive-cte
+title: Recursive CTE
+chapter: subqueries
+number: "8.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.employee]
+  layout:
+    employee: { x: 0, y: 0 }
+initialQuery: |
+  with recursive tree as (
+    select employee_id, name, manager_id, 1 as level
+    from employee
+    where manager_id is null
+    union all
+    select e.employee_id, e.name, e.manager_id, t.level + 1
+    from employee e
+    join tree t on e.manager_id = t.employee_id
+  )
+  select employee_id, name, level from tree order by level, employee_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-RECURSIVE
+    title: Recursive queries (WITH RECURSIVE)
+tags: [cte, "with recursive", recursion, hierarchy, tree]
+mvp: false
+---
+
+<TlDr>`WITH RECURSIVE` can build a hierarchy in layers: an anchor supplies the first layer, the recursive step adds the next, and an empty working set stops the recursion.</TlDr>
+
+## The data
+
+<T id="public.employee">employee</T> has 8 employees. The tree has one root: Olga Nikolaeva (`employee_id = 1`), whose <C id="public.employee.manager_id">manager_id</C> is `NULL`. Its levels are:
+
+- level 1: Olga;
+- level 2: Pavel Orlov and Svetlana Volkova;
+- level 3: Dmitry Sokolov, Alexey Morozov, Natalia Lebedeva and Igor Novikov;
+- level 4: Tatiana Zaitseva.
+
+That is 8 rows across 4 levels. Tatiana's manager is employee 4; the four employees at level 3 report to employee 2 or 3.
+
+## The anchor: first layer
+
+A recursive CTE starts with a non-recursive query, the **anchor**, which supplies the initial rows. Select the root:
+
+```sql run expect=rows:1
+select employee_id, name, manager_id, 1 as level
+from employee
+where manager_id is null;
+```
+
+One row: Olga at level 1. This is an ordinary selection; it gives the recursion somewhere to start.
+
+## The step: add another layer
+
+Now the complete query:
+
+```sql run expect=rows:8
+with recursive tree as (
+  select employee_id, name, manager_id, 1 as level
+  from employee
+  where manager_id is null
+  union all
+  select e.employee_id, e.name, e.manager_id, t.level + 1
+  from employee e
+  join tree t on e.manager_id = t.employee_id
+)
+select employee_id, name, level
+from tree
+order by level, employee_id;
+```
+
+There are 8 rows. `WITH RECURSIVE` contains two parts joined by `UNION ALL`:
+
+- the anchor supplies the root at level 1;
+- the recursive step finds employees whose `manager_id` matches an `employee_id` in the working set and increments the level.
+
+The initial working set contains Olga, so the first step finds Pavel and Svetlana. The next working set contains only that previous layer, and the step finds their four reports. The third step finds Tatiana. The fourth finds nobody, so the recursion stops.
+
+The tracer records layers of 1, 2, 4, 1 and 0 rows. The final empty layer shows that there are no more rows to add. The query's outer `ORDER BY` explicitly orders the result by level and employee ID.
+
+## Count people at each level
+
+Group the result by level:
+
+```sql run expect=rows:4
+with recursive tree as (
+  select employee_id, name, manager_id, 1 as level
+  from employee
+  where manager_id is null
+  union all
+  select e.employee_id, e.name, e.manager_id, t.level + 1
+  from employee e
+  join tree t on e.manager_id = t.employee_id
+)
+select level, count(*)
+from tree
+group by level
+order by level;
+```
+
+There are 4 rows with counts 1, 2, 4 and 1. They add up to 8, as in the previous query. This is the same hierarchy summarized by level.
+
+## The tracer's limit
+
+A recursive step that never produces an empty working set can keep the query running until it is cancelled or hits a resource limit. The visual tracer limits its reconstruction to 50 recursive steps; this is not a PostgreSQL recursion limit and does not make an unbounded query safe to run.
+
+Check that recursion has a stopping condition. In this tree, leaves have no reports. In a graph with cycles, use a depth bound, a visited path or `CYCLE` (PostgreSQL 14+) as appropriate.
+
+## What is missing from the result
+
+- ❌ Olga at level 2: she is the root and the anchor puts her at level 1.
+- ❌ Pavel at level 1: his `manager_id` is 1, so he appears in the recursive step.
+- ❌ Tatiana at level 3: her manager Dmitry appears at level 3, so she is at level 4.
+- ❌ A fifth level: Tatiana has no reports, so the next step returns no rows.
+- ❌ Employees outside the tree: all 8 are reachable from the root.
+
+## Traps
+
+<Callout kind="trap">
+Without `RECURSIVE`, this CTE cannot refer to itself:
+
+```sql run expectError=42P01
+with tree as (
+  select employee_id, manager_id
+  from employee
+  where manager_id is null
+  union all
+  select e.employee_id, e.manager_id
+  from employee e
+  join tree t on e.manager_id = t.employee_id
+)
+select count(*) from tree;
+```
+
+Code `42P01`: `relation "tree" does not exist`. The CTE name is not available inside its own body here, and there is no table named `tree`. Add `recursive` after `with` to allow the self-reference.
+
+Another trap is a step without a stopping condition. Do not run this query:
+
+```sql noexec
+with recursive t(n) as (
+  select 1
+  union all
+  select n + 1 from t
+)
+select n from t;
+```
+
+`n + 1` never stops growing. Add a bound such as `where n < 5`. If rows can repeat, `UNION` can sometimes stop a cycle by discarding duplicate complete rows. A changing level counter makes each row distinct, so `UNION` alone does not fix that case. Track the path or use `CYCLE` instead.
+</Callout>
+
+## Check yourself
+
+1. How many rows does the tree query return if the anchor uses `where manager_id = 1`? Answer first, then check.
+2. How many employees are at level 3?
+3. What changes if `union all` is replaced with `union`?
+4. Where will recursion stop if Tatiana gains a direct report?
+
+<Cheatsheet>
+- `with recursive name as (anchor union all step) select ...`
+- The anchor supplies the first layer; the step adds the next.
+- In the recursive step, the CTE reference represents the current working set, not the complete accumulated result.
+- Anchor and step columns must have compatible numbers and types.
+- Recursion ends when the working set becomes empty.
+- `union` removes duplicate complete rows; `union all` retains copies.
+- The tracer reconstructs at most 50 recursive steps; PostgreSQL has no such fixed limit.
+- For cycles, use a visited path or `CYCLE` as appropriate.
+</Cheatsheet>
