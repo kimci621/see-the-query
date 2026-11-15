@@ -1,0 +1,154 @@
+---
+id: multi-join
+title: "Three or more tables: a JOIN chain"
+chapter: joins
+number: "6.7"
+order: 7
+dataset: bookstore
+board:
+  tables: [public.book, public.author, public.book_category]
+  layout:
+    author: { x: 0, y: 0 }
+    book_category: { x: 720, y: 0 }
+    book: { x: 360, y: 300 }
+initialQuery: |
+  select b.title, a.name as author, c.name as category
+  from book b
+  join author a on a.author_id = b.author_id
+  join book_category c on c.category_id = b.category_id
+  order by b.book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-FROM
+    title: "FROM: table lists"
+tags: ["three-table join", "join chain", "multiple tables", "table aliases", "join order"]
+mvp: false
+---
+
+<TlDr>You can chain `JOIN`s: each joins another input to the result of the previous ones. Three tables need two joins; four tables need three.</TlDr>
+
+## What's in the data
+
+There are 11 books in <T id="public.book">book</T>, 6 authors in <T id="public.author">author</T> and 6 categories in <T id="public.book_category">book_category</T>.
+
+Nine books have both an author and a category. Simple Python and Learning Python have no author; Simple Python also has no category. Boris Pasternak has no books.
+
+## First: book and author
+
+Start with two tables:
+
+```sql run expect=rows:9
+select b.title, a.name as author
+from book b
+join author a on a.author_id = b.author_id
+order by b.book_id;
+```
+
+Nine rows. The two books without authors are excluded, as is Pasternak, who has no books. This is the `INNER JOIN` from lesson 6.2.
+
+## Next: add the category
+
+```sql run expect=rows:9
+select b.title, a.name as author, c.name as category
+from book b
+join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id
+order by b.book_id;
+```
+
+Nine rows again. The second `JOIN` adds the category without changing the count: all nine books that passed the first join have one.
+
+Read the chain left to right. First `book` joins `author` on author_id, producing an intermediate result of 9 rows and 13 columns. That result then joins `book_category` on category_id. PostgreSQL can choose another physical execution order when it is equivalent.
+
+The second `JOIN` can reference the preceding inputs, including `b.category_id`, even though `author` is next to it in the query.
+
+If a book had an author but no category, the second `JOIN` would exclude it. None of these nine books has that problem, so the count remains 9. A row must survive every inner join in the chain.
+
+## Four tables
+
+Add orders:
+
+```sql run expect=rows:13
+select o.order_id, b.title, c.name as category
+from orders o
+join order_item oi on oi.order_id = o.order_id
+join book b on b.book_id = oi.book_id
+join book_category c on c.category_id = b.category_id
+order by o.order_id, b.title;
+```
+
+Thirteen rows, though order_item has 15. Two rows are lost at the last join: Simple Python has no category, and it was ordered in orders 4 and 6. The first two joins let those rows through; the third excludes them.
+
+The board shows three `JOIN` steps: orders with order_item, then book, then book_category. The first two yield 15 rows; the last leaves 13.
+
+## Conditions on different tables
+
+`WHERE` follows the chain and can reference its tables:
+
+```sql run expect=rows:2
+select b.title, a.name as author, c.name as category
+from book b
+join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id
+where c.name = 'Science fiction' and a.country = 'Russia'
+order by b.book_id;
+```
+
+Two rows: Professor Dowell's Head and The Island of Lost Ships. Both are science fiction by Alexander Belyaev. Jules Verne's science fiction fails the country condition; Russian classics fail the category condition.
+
+## What's missing and why
+
+- ❌ Simple Python and Learning Python in the book-author-category chain: no author, so the first `JOIN` excludes them.
+- ❌ Two order_item rows from orders 4 and 6 in the four-table query: Simple Python has no category, so the last `JOIN` excludes them.
+- ❌ Journey to the Center of the Earth and Captain Grant's Children in the Russian science fiction query: Jules Verne is from France.
+- ❌ And Quiet Flows the Don, The Fate of a Man, The Captain's Daughter and The Tale of the Fisherman and the Fish in that query: they are classics, not science fiction.
+
+## Pitfalls
+
+<Callout kind="trap">
+Both author and book_category have a column named `name`:
+
+```sql run expectError=42702
+select name
+from book b
+join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id;
+```
+
+Error `42702`, `column reference name is ambiguous`. Postgres cannot tell whether you want the author or the category. Write `a.name` or `c.name`.
+</Callout>
+
+<Callout kind="trap">
+A `LEFT JOIN` early in a chain does not guarantee that a later inner join will keep its rows:
+
+```sql run expect=rows:10
+select b.title, a.name, c.name as category
+from book b
+left join author a on a.author_id = b.author_id
+join book_category c on c.category_id = b.category_id
+order by b.book_id;
+```
+
+Ten rows. `LEFT JOIN` keeps Learning Python without an author, but the next `INNER JOIN` on category excludes Simple Python, which has no category. To keep all books in this chain, use `LEFT JOIN` at both steps.
+</Callout>
+
+<Callout kind="tip">
+Write the chain in a readable order: start with the main table, then add reference tables. Give tables aliases so each `name` remains easy to identify in a longer query.
+</Callout>
+
+## Check yourself
+
+1. Add `where a.country = 'Russia'` to the main query. How many rows remain? Three Russian authors have books, two each.
+2. Why does the four-table query return 13 rows rather than 15? Find the two missing order items.
+3. Replace the first `JOIN` in the three-table chain with `LEFT JOIN`. How many rows appear, and which book is added?
+
+<Cheatsheet>
+- Chain joins as `from a join b on ... join c on ...`: three tables, two joins.
+- Each next join can reference preceding inputs; the planner may choose an equivalent execution order.
+- A row must survive every `INNER JOIN` in the chain.
+- An `INNER JOIN` after a `LEFT JOIN` can remove previously preserved rows.
+- `WHERE` can reference tables in the chain.
+- Qualify ambiguous column names: an unqualified reference gives `42702`.
+- Equivalent inner joins can often be reordered, but check conditions and output column order.
+</Cheatsheet>

@@ -225,7 +225,7 @@
 - [x] 6.4 `full-join`: `content/lessons-en/06-joins/04-full-join.mdx`
 - [x] 6.5 `cross-join`: `content/lessons-en/06-joins/05-cross-join.mdx`
 - [x] 6.6 `self-join`: `content/lessons-en/06-joins/06-self-join.mdx`
-- [ ] 6.7 `multi-join`: `content/lessons-en/06-joins/07-multi-join.mdx`
+- [x] 6.7 `multi-join`: `content/lessons-en/06-joins/07-multi-join.mdx`
 - [ ] 6.8 `natural-join`: `content/lessons-en/06-joins/08-natural-join.mdx`
 - [ ] 6.9 `on-vs-where`: `content/lessons-en/06-joins/09-on-vs-where.mdx`
 - [ ] 6.10 `semi-join`: `content/lessons-en/06-joins/10-semi-join.mdx`
