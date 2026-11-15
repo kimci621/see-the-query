@@ -1,0 +1,115 @@
+---
+id: enum
+title: enum
+chapter: types
+number: "5.6"
+order: 6
+dataset: bookstore
+board:
+  tables: [public.orders]
+initialQuery: |
+  select order_id, status from orders order by order_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-enum.html
+    title: Enumerated types
+  - url: https://www.postgresql.org/docs/current/sql-altertype.html
+    title: Altering a type
+course: ["11.28"]
+tags: [enum, enumeration, status, alter type]
+---
+
+<TlDr>An enum limits values to a defined list. The list's order determines comparisons and sorting.</TlDr>
+
+## What's in the data
+
+The eight orders have a <C id="public.orders.status">status</C> of type `order_status`. It has four allowed values. See them with `enum_range`:
+
+```sql run expect=rows:1
+select enum_range(null::order_status) as statuses;
+```
+
+The result is `new`, `paid`, `shipped`, `cancelled`, in declaration order. `NULL` here identifies the argument's type; it is not one of the statuses.
+
+<Callout kind="analogy">
+Think of a scale with labeled marks in a chosen order. Enum values have their own order too, even when their labels would sort differently as text.
+</Callout>
+
+## Orders by status
+
+```sql run expect=rows:4
+select status, count(*) as n from orders group by status order by status;
+```
+
+There are two `new` orders, four `paid`, one `shipped` and one `cancelled`. The groups follow enum order, not alphabetical order.
+
+```sql run expect=rows:3
+select status, order_id from orders order by status, order_id limit 3;
+```
+
+Orders 5 and 8 with status `new` come first, followed by order 1 with status `paid`. Within each status, `order_id` determines the order.
+
+## Comparing and sorting as text
+
+```sql run expect=rows:4
+select status, status > 'paid' as after_paid from orders group by status order by status;
+```
+
+`shipped` and `cancelled` follow `paid` in the enum, so their comparisons return true. This does not mean a cancellation must follow shipping in a real workflow: the type's author chooses the order.
+
+```sql run expect=rows:1
+select status from orders order by status::text limit 1;
+```
+
+Casting to `text` sorts the labels. Here `cancelled` comes first, rather than `new`.
+
+## An invalid label
+
+```sql run expectError=22P02
+insert into orders (customer_id, status, created_at) values (6, 'payed', '2024-05-04 12:00:00+03');
+```
+
+PostgreSQL returns `22P02`: `payed` is not a value of this type. Preview does not save changes.
+
+## Changing the list
+
+You can add a value at the end or choose its position with `BEFORE` / `AFTER`. The Apply button saves this change in the practice database:
+
+```sql apply expect=rows:0
+alter type order_status add value if not exists 'returned' after 'shipped';
+```
+
+After applying it, run the first query again to see `returned` between `shipped` and `cancelled`. If the command runs inside a transaction, the new value cannot be used until the transaction commits. Resetting the database restores the original list.
+
+## When to choose an enum
+
+An enum is useful for a small set that rarely changes: the type validates its values and keeps their order. Text with a `CHECK` constraint can also restrict input, though the constraint must be changed separately. A lookup table with a foreign key suits values that change often or need extra fields, such as a display name.
+
+## What's missing and why
+
+- ❌ Alphabetical order in `order by status`: the enum has its own sequence.
+- ❌ An order with status `payed`: the type rejects an unknown label.
+- ❌ `returned` in the original database: it appears only after the add command is applied.
+
+## Pitfalls
+
+<Callout kind="trap">
+When inserting several rows, one invalid label stops the whole command; the other rows in that command are not saved either. Case and spaces matter in enum labels.
+</Callout>
+
+<Callout kind="tip">
+`ALTER TYPE` can add or rename a label, but it cannot directly remove an existing label or reorder old ones. That requires recreating the type. Choose an enum when this restriction is acceptable.
+</Callout>
+
+## Check yourself
+
+1. How does `order by status` change if you cast the status to `text`?
+2. Why is `cancelled > paid` true for this type?
+3. What happens if you insert a `payed` status?
+
+<Cheatsheet>
+- `CREATE TYPE ... AS ENUM` defines a type and the order of its values.
+- `enum_range(null::order_status)` returns the type's values.
+- `ORDER BY status` uses enum order; `ORDER BY status::text` sorts labels as text.
+- `ALTER TYPE ... ADD VALUE` adds a label; a value added in a transaction is usable after commit.
+- Text with `CHECK` and a lookup table are other ways to restrict a set of values.
+</Cheatsheet>
