@@ -1,0 +1,139 @@
+---
+id: strings
+title: Strings
+chapter: types
+number: "5.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+initialQuery: |
+  select title from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-character.html
+    title: Character types
+  - url: https://www.postgresql.org/docs/current/functions-string.html
+    title: String functions and operators
+course: ["11.27"]
+tags: [strings, text, varchar, char, ilike, format]
+---
+
+<TlDr>Text and varchar usually suit string data. Char(n) has a particular behavior: it pads values with spaces.</TlDr>
+
+## What's in the data
+
+Book <C id="public.book.title">title</C> and customer <C id="public.customer.name">name</C> are both text. Two customers share the full name Ivan Petrov. All email addresses in the dataset use lowercase letters. Three book titles contain Python.
+
+## text, varchar and char
+
+Three string types:
+
+- `text`: a string without a declared length limit.
+- `varchar(n)`: a string with a limit of `n` characters.
+- `char(n)`: a string padded with spaces to `n` characters when stored.
+
+<Callout kind="analogy">
+Put the word “cat” in a form with five boxes: three are filled and two remain empty. `char(5)` pads a short string with spaces to five characters; `text` keeps the length entered. Some operations strip the trailing spaces from a `char` value.
+</Callout>
+
+See what happens to the padding:
+
+```sql run expect=rows:1
+select 'ab'::char(5) || '|' as glued, length('ab'::char(5)) as len;
+```
+
+`glued` is `ab|`, not `ab   |`. Casting a `char` value to `text` removes trailing spaces, and the concatenation operator returns text. A function's result can therefore look different from the stored value.
+
+<DontDoThis href="https://wiki.postgresql.org/wiki/Don't_Do_This#Don't_use_char(n)">
+Don't choose `char(n)` for speed: PostgreSQL pads its values with spaces, and it is not faster than `text`. Usually `text`, or `varchar(n)` when a length limit is needed, is more convenient. `char(n)` can help with an existing schema or standard, but account for its handling of spaces.
+</DontDoThis>
+
+## Concatenation and repetition
+
+The `||` operator joins strings:
+
+```sql run expect=rows:1
+select 'Quiet' || ' ' || 'Don' as full_title;
+```
+
+Repeat text and change its case:
+
+```sql run expect=rows:1
+select initcap('hello world') as titled, repeat('=', 10) as line;
+```
+
+`initcap` capitalizes the first letter of each word: “Hello World”.
+
+## Case and spaces
+
+```sql run expect=rows:1
+select upper('quiet don') as up, lower('Python') as down, btrim('  hello  ') as trimmed;
+```
+
+Ordinary string comparison is case-sensitive in the usual deterministic collations: `'ABC' = 'abc'` is false. Use `ilike` for a case-insensitive pattern search:
+
+```sql run expect=rows:3
+select title, price from book where title ilike '%python%' order by book_id;
+```
+
+Three books have Python in their titles. `ILIKE` matches without regard to case according to the active locale.
+
+## Parts of a string
+
+```sql run expect=rows:1
+select left('Hello', 3) as l, right('Hello', 2) as r, position('on' in 'Quiet Don') as at;
+```
+
+`left` and `right` take characters from either end. `position` finds a substring: “on” starts at position 8 in “Quiet Don”. Now compare character and byte counts:
+
+```sql run expect=rows:1
+select length('café') as chars, octet_length('café') as bytes;
+```
+
+There are 4 characters and 5 bytes here: `length` counts characters, while `octet_length` counts bytes. The byte count depends on the characters and encoding; this example uses UTF-8.
+
+## format: building a string
+
+`format` builds a string from a template:
+
+```sql run expect=rows:1
+select format('%s (%s ₽)', title, price) as label from book where book_id = 1;
+```
+
+The result is “And Quiet Flows the Don (890.00 ₽)”. `%s` inserts a value as text. A template makes the position of each value clear when there are several parts.
+
+## What's missing and why
+
+- ❌ Books without Python in the `ilike` example: they don't contain the substring.
+- ❌ Simple Python with `like '%python%'` under a case-sensitive collation: uppercase `P` doesn't match lowercase `p`.
+- ❌ The `char(5)` padding in the concatenation: conversion to text strips trailing spaces.
+
+## Pitfalls
+
+<Callout kind="trap">
+`LIKE` uses the pattern characters `%` and `_`, not regular expression syntax. Spaces matter too:
+
+```sql run expect=rows:1
+select ' a@b.com ' = 'a@b.com' as raw, btrim(' a@b.com ') = 'a@b.com' as trimmed;
+```
+
+The first comparison returns false and the second true. Trim spaces on input if they should not be part of the value; for saved data, you can apply `btrim`.
+</Callout>
+
+<Callout kind="tip">
+Applications often look up email addresses and logins without regard to case: `where lower(email) = lower($1)`. Chapter 12 covers an expression index that can help with this lookup.
+</Callout>
+
+## Check yourself
+
+1. What does `select left(title, 7) from book where book_id = 1` return?
+2. How many books match `title like '%o%'`? How many match with `ilike`?
+3. How would you build “Customer N places order M” from two columns with `format`?
+
+<Cheatsheet>
+- Text has no declared length limit; varchar(n) has a character limit. With char(n), account for padding.
+- `||` concatenates; `format('%s...', ...)` uses a template.
+- String functions include `upper`, `lower`, `initcap`, `btrim`, `left`, `right`, `position` and `length`.
+- `like` uses patterns with `%` and `_`, not regular expressions. `ilike` ignores case according to the active locale.
+- `length` counts characters; `octet_length` counts bytes.
+</Cheatsheet>
