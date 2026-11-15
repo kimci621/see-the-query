@@ -1,0 +1,129 @@
+---
+id: correlated-subquery
+title: "Correlated subquery: a value for each row"
+chapter: subqueries
+number: "8.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title from book b where price > (select avg(price) from book where author_id = b.author_id) order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-SCALAR-SUBQUERIES
+    title: Scalar subqueries
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html
+    title: Subquery expressions
+tags: ["correlated subquery", "subquery in where", "average by author"]
+mvp: false
+---
+
+<TlDr>A correlated subquery refers to a row of the outer query. Its result can depend on values from that row.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has 11 books by 5 recorded authors. Sholokhov has two books priced 890.00 and 350.00, averaging 620.00. Ramalho has one at 2400.00. Pushkin has 420.00 and 350.00, averaging 385.00. Belyaev has 560.00 and `NULL`, averaging 560.00. Verne has two books at 610.00 each. Simple Python and Learning Python have no recorded author.
+
+## Average by author
+
+```sql run expect=rows:6
+select author_id, round(avg(price), 2) as avg_price
+from book
+group by author_id
+order by author_id nulls last;
+```
+
+There are 6 rows: five authors and a `NULL` group. The `NULL` group's average is 2595.00, the average for two books without an author, not for an author named `NULL`.
+
+## Compare with the book's own group
+
+```sql run expect=rows:2
+select title from book b
+where price > (select avg(price) from book where author_id = b.author_id)
+order by book_id;
+```
+
+Two titles pass: And Quiet Flows the Don and The Captain's Daughter. Inside the parentheses, `b.author_id` refers to the current row of the outer query.
+
+For And Quiet Flows the Don, the subquery's average for Sholokhov is 620.00, so 890.00 passes. For The Captain's Daughter, Pushkin's average is 385.00, so 420.00 passes. The other books do not pass.
+
+Logically, the condition uses the outer book's author for each comparison. PostgreSQL can choose a different physical execution strategy, so use the execution plan to see what actually happens.
+
+<Callout kind="analogy">
+A teacher checks test papers. A single threshold for the whole class is like an uncorrelated subquery. Comparing each paper with that student's previous score is like a correlated one: the comparison depends on whose paper is being checked.
+</Callout>
+
+## Compare with the overall average
+
+A similar query without a reference to the outer row gives a different answer:
+
+```sql run expect=rows:3
+select title, price from book where price > (select avg(price) from book) order by book_id;
+```
+
+There are 3 rows instead of 2. The threshold is the overall average, 1138.00, not an author's average. The first query asks for books above their author's average; this one asks for books above the overall average.
+
+Try the main examples in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="Author averages: 6 rows">
+
+```sql run expect=rows:6
+select author_id, round(avg(price), 2) as avg_price
+from book
+group by author_id
+order by author_id nulls last;
+```
+
+</Step>
+<Step caption="Above the author's average: 2 rows">
+
+```sql run expect=rows:2
+select title from book b
+where price > (select avg(price) from book where author_id = b.author_id)
+order by book_id;
+```
+
+</Step>
+</Scene>
+
+## What is missing from the result
+
+- ❌ Fluent Python: 2400.00 equals Ramalho's average; the condition requires strictly more.
+- ❌ Professor Dowell's Head: 560.00 equals Belyaev's average.
+- ❌ Journey to the Center of the Earth and Captain Grant's Children: 610.00 equals Verne's average.
+- ❌ The Island of Lost Ships: its price is `NULL`, so the comparison is `UNKNOWN`.
+- ❌ Simple Python and Learning Python: their `author_id` is `NULL`, so the inner equality finds no matches and `avg` returns `NULL`.
+- ❌ The three rows from the overall-average query: it uses a different threshold.
+
+## Traps
+
+<Callout kind="trap">
+Reusing an alias can hide which table a name refers to:
+
+```sql run expect=rows:3
+select title from book b
+where price > (select avg(price) from book b)
+order by book_id;
+```
+
+There are 3 rows and no error. The inner table is also called `b`, but this subquery has no reference to the outer row at all: it calculates the overall average. Renaming the inner alias alone does not create a correlation. To compare by author, give the inner table a distinct alias and add a condition such as `b2.author_id = b.author_id`. An inner alias shadows the same name from the outer query.
+</Callout>
+
+<Callout kind="tip">
+A correlated subquery expresses rules such as “above this author's average”. On a large table, repeated work may be expensive. A join to precomputed averages can be another way to express the query; compare execution plans and timings for your data.
+</Callout>
+
+## Check yourself
+
+1. Change `>` to `>=` in the main query. How many rows remain? Answer first, then check.
+2. Change `>` to `<`. How many rows return?
+3. Why do books without authors fail the comparison even if their prices are high?
+
+<Cheatsheet>
+- A correlated subquery refers to the outer row, for example `b.author_id`.
+- Its logical result can vary with outer-row values; physical execution depends on the plan.
+- Without an outer reference, this subquery is uncorrelated and answers a different question.
+- An outer `NULL` does not match on `=`: `NULL = NULL` is not true, so the inner `avg` returns `NULL` for no matching rows.
+- An inner alias shadows an outer alias of the same name. Use distinct names and explicitly write the correlation condition.
+</Cheatsheet>
