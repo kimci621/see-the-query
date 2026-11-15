@@ -1,0 +1,156 @@
+---
+id: semi-join
+title: "SEMI JOIN: EXISTS and IN without multiplying rows"
+chapter: joins
+number: "6.10"
+order: 10
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: 0 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select a.name
+  from author a
+  where exists (select 1 from book b where b.author_id = a.author_id)
+  order by a.name;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS
+    title: EXISTS subquery
+  - url: https://www.postgresql.org/docs/current/functions-comparisons.html#FUNCTIONS-COMPARISONS-IN-SCALAR
+    title: IN expression
+tags: ["semi join", "exists", "in", "subquery", "existence check"]
+mvp: false
+---
+
+<TlDr>`EXISTS` asks whether there is at least one row, not how many. It keeps an author row once regardless of the number of books. In this positive `WHERE` check, `IN` selects the same authors even though the book list contains NULL.</TlDr>
+
+## What's in the data
+
+There are 6 authors in <T id="public.author">author</T>; five have books. Boris Pasternak has none.
+
+Mikhail Sholokhov, Alexander Pushkin, Alexander Belyaev and Jules Verne have two books each; Luciano Ramalho has one. Two more books in <T id="public.book">book</T>, Simple Python and Learning Python, have no author.
+
+## JOIN multiplies rows
+
+Which authors have books? Start with an ordinary join:
+
+```sql run expect=rows:9
+select a.name, b.title
+from author a
+join book b on b.author_id = a.author_id
+order by a.name, b.title;
+```
+
+Nine rows. There are five authors, but four have two books and appear twice. Keep the count of 9 in mind.
+
+The board shows an author row participating in two pairs. For the question “has books?”, the second row is not needed.
+
+## DISTINCT after the join
+
+```sql run expect=rows:5
+select distinct a.name
+from author a
+join book b on b.author_id = a.author_id
+order by a.name;
+```
+
+Five names in this dataset. Logically, `DISTINCT` removes duplicate output names after the join. Adding the book title makes the pairs different again. Also, two different authors with the same name would collapse into one result; include a unique identifier if each author must remain distinct.
+
+For an existence check, no book columns are needed in the output. Only the existence of a match matters.
+
+## EXISTS checks for a row
+
+```sql run expect=rows:5
+select a.name
+from author a
+where exists (select 1 from book b where b.author_id = a.author_id)
+order by a.name;
+```
+
+Five rows: all authors except Pasternak.
+
+This is a **correlated subquery**: it refers to `a.author_id` from the outer query. Logically, the check uses each author's identifier. Once a match is known, no further book is needed to answer “exists?”. The planner can implement the query in different ways, so this does not promise a separate physical scan per author.
+
+`select 1` is a convention. For this simple subquery, `select *` gives the same existence result: the returned values are not used. Some subqueries with set operations can be exceptions.
+
+On the board, each author is checked against `book`. Authors with a match remain; Pasternak is excluded. The count is 5 of 6.
+
+This pattern is called a **semi join**. PostgreSQL has no `SEMI JOIN` SQL keyword, though its planner can use a semi-join operation.
+
+## IN checks membership
+
+```sql run expect=rows:5
+select a.name
+from author a
+where a.author_id in (select author_id from book)
+order by a.name;
+```
+
+The same five rows. `IN` compares the current author_id with values returned by the subquery. This subquery is uncorrelated; the planner decides how to execute it and may produce a plan similar to `EXISTS`.
+
+The book list has two NULLs for the books without authors. For an author with a book, a match makes `IN` true. Pasternak has no match and the list contains NULL, so his `IN` result is `UNKNOWN`; `WHERE` rejects it. `EXISTS` gives false for him, but both checks select the same rows here. The distinction matters with `NOT IN`, covered in lesson 6.11.
+
+## A condition inside EXISTS
+
+Find authors with a book over 1000:
+
+```sql run expect=rows:1
+select a.name
+from author a
+where exists (
+  select 1 from book b
+  where b.author_id = a.author_id and b.price > 1000
+)
+order by a.name;
+```
+
+One row: Ramalho. The price condition is inside `EXISTS`, alongside the author match. Referencing book columns outside this subquery would require another way to bring them into scope, such as a join, which can multiply rows.
+
+## What's missing and why
+
+- ❌ Pasternak in `EXISTS` and `IN`: he has no books.
+- ❌ Extra copies of an author row in `EXISTS`: the check produces a yes-or-no result, not book rows. Different authors can still share a displayed name.
+- ❌ Book titles in the output: the subquery's columns are not selected by the outer query.
+- ❌ Simple Python and Learning Python as author matches: their `author_id` is NULL.
+- ❌ A second book row in the `EXISTS` output: one matching row is enough for the check.
+
+## Pitfalls
+
+<Callout kind="trap">
+Omit the correlation and `EXISTS` no longer depends on the author:
+
+```sql run expect=rows:6
+select a.name
+from author a
+where exists (select 1 from book b)
+order by a.name;
+```
+
+Six rows, including Pasternak. The subquery does not reference `a`, so it asks the same question for every outer row: does book contain any row? In this dataset it does.
+
+The board shows the same check for all six authors. Compare it with the correlated version, where Pasternak has no match.
+
+When the question concerns each outer row, check that the subquery links back to its alias. Without that link, this example checks the entire book table.
+</Callout>
+
+<Callout kind="tip">
+`EXISTS` can express a complex relationship check; `IN` can be readable for membership in a single-column result. Compare plans for your workload instead of assuming either is faster. If only existence is needed, `EXISTS` expresses that directly without multiplying outer rows.
+</Callout>
+
+## Check yourself
+
+1. How many authors have a book cheaper than 400? Use `EXISTS` with `b.price < 400`.
+2. How many authors have a book without a price? Check `b.price is null` inside `EXISTS`.
+3. Replace `EXISTS` with `NOT EXISTS`. How many rows remain, and who are they?
+
+<Cheatsheet>
+- `exists (select 1 ...)` is true if the subquery returns at least one row.
+- A correlated subquery references an outer query alias.
+- `EXISTS` does not multiply outer rows, even if several inner rows match.
+- In this simple check, `select 1` supplies a row; its value is not used.
+- Positive `IN` in `WHERE` selects matching rows here; a NULL in the list can make a non-match unknown instead of false.
+- `EXISTS` without an outer reference checks the whole inner query, not the current outer row.
+- Put conditions on matching books inside the correlated `EXISTS` when they define the match.
+</Cheatsheet>
