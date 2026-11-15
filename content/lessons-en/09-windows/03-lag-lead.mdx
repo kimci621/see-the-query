@@ -1,0 +1,143 @@
+---
+id: lag-lead
+title: "lag, lead, first_value, last_value"
+chapter: windows
+number: "9.3"
+order: 3
+dataset: events
+board:
+  tables: [public.event, public.orders]
+  layout:
+    orders: { x: 0, y: 0 }
+    event: { x: 620, y: 0 }
+initialQuery: |
+  select kind, amount,
+    lag(kind) over (order by happened_at) as prev,
+    lead(kind) over (order by happened_at) as next
+  from event
+  where order_id = 7
+  order by happened_at;
+docs:
+  - url: https://www.postgresql.org/docs/current/functions-window.html
+    title: Window functions
+  - url: https://www.postgresql.org/docs/current/tutorial-window.html
+    title: "Tutorial: Window Functions"
+tags: [window functions, lag, lead, first_value, last_value, "neighboring row"]
+mvp: false
+---
+
+<TlDr>`lag` and `lead` get values from neighboring rows in a partition. `first_value` and `last_value` get values at the edges of the current window frame.</TlDr>
+
+## The data
+
+<T id="public.event">event</T> has 21 events for 8 orders. <C id="public.event.kind">kind</C> has five values: `created`, `paid`, `shipped`, `cancelled` and `returned`. <C id="public.event.amount">amount</C> is filled only for payments.
+
+Order 7 has four events: created, paid 2110.00, shipped and returned. Their <C id="public.event.happened_at">happened_at</C> values are distinct, giving us a short ordered sequence.
+
+## Previous and next neighbors
+
+```sql run expect=rows:4
+select kind, amount,
+  lag(kind) over (order by happened_at) as prev,
+  lead(kind) over (order by happened_at) as next
+from event
+where order_id = 7
+order by happened_at;
+```
+
+There are 4 rows:
+
+- `created`: `prev` is `NULL`, `next` is `paid`;
+- `paid`: `prev` is `created`, `next` is `shipped`;
+- `shipped`: `prev` is `paid`, `next` is `returned`;
+- `returned`: `prev` is `shipped`, `next` is `NULL`.
+
+`lag` looks one row back in the window order; `lead` looks one row forward. The first row has no previous neighbor and the last has no next neighbor, so their respective values default to `NULL`.
+
+## Order boundaries
+
+Without a partition, the window can see events from different orders. Take the first two orders:
+
+```sql run expect=rows:5
+select order_id, kind,
+  lag(kind) over (order by happened_at) as prev_all,
+  lag(kind) over (partition by order_id order by happened_at) as prev_order
+from event
+where order_id in (1, 2)
+order by happened_at;
+```
+
+There are 5 rows: three events for order 1 and two for order 2.
+
+For order 2's first `created` event, `prev_all` is `shipped` from order 1. Without partitions, the previous row in the combined sequence belongs to another order. `prev_order` is `NULL` because `created` is first within order 2's partition.
+
+<Callout kind="tip">
+If the question is about events within each order, use `partition by order_id`. Without it, a neighbor may belong to another order. If the question is about a global timeline, a single partition may be intentional.
+</Callout>
+
+## first_value and last_value
+
+`first_value` takes the first value in the current frame; `last_value` takes the last. For order 7:
+
+```sql run expect=rows:4
+select kind, happened_at,
+  first_value(kind) over (order by happened_at) as first_kind,
+  last_value(kind) over (order by happened_at rows between unbounded preceding and unbounded following) as last_kind
+from event
+where order_id = 7
+order by happened_at;
+```
+
+All four rows have `first_kind` `created` and `last_kind` `returned`. The `last_value` frame explicitly spans the whole partition. `first_value` uses the default ordered frame, which starts at the beginning of the partition. Frame boundaries can depend on the current row.
+
+## A default when a neighbor is missing
+
+The third argument of `lag` or `lead` is returned when the requested neighbor does not exist:
+
+```sql run expect=rows:4
+select kind, lag(kind, 1, 'start') over (order by happened_at) as prev
+from event
+where order_id = 7
+order by happened_at;
+```
+
+The `created` row now has `start` in `prev`; the other rows keep their previous values. The default must have a compatible type. It does not replace a `NULL` stored in an existing neighbor's value.
+
+## What is missing from the result
+
+- ❌ A previous event for `created`: there is none, so `lag` returns `NULL` by default.
+- ❌ A next event for `returned`: there is none, so `lead` returns `NULL` by default.
+- ❌ The earlier order's `shipped` value in `prev_order` for order 2's `created`: it is outside that partition, so `prev_order` is `NULL`.
+- ❌ `returned` on every row of `last_kind` with the default frame: in this example, `last_value` returns each current row's value.
+- ❌ An `amount` on `shipped` and `returned`: only payments have one.
+
+## Traps
+
+<Callout kind="trap">
+With an ordered default frame, `last_value` does not necessarily reach the end of the partition:
+
+```sql run expect=rows:4
+select kind, last_value(kind) over (order by happened_at) as last_kind
+from event
+where order_id = 7
+order by happened_at;
+```
+
+`last_kind` is `created`, `paid`, `shipped`, `returned`, matching the current row in this dataset. The default frame is `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`: its end includes the current row's peers. Here timestamps are distinct, so each row is its own last peer.
+
+To get the last value of the whole partition, use a frame ending at `unbounded following`, as in the example above.
+</Callout>
+
+## Check yourself
+
+1. Replace `lead(kind)` with `lead(kind, 2)` for order 7. What is `next` for `created` and `paid`?
+2. What is `prev` for `created` if the window uses `order by happened_at desc`?
+3. How many `NULL` values appear in `prev_order` for orders 1 and 2? How many in `prev_all`?
+
+<Cheatsheet>
+- `lag(kind)` and `lead(kind)` read the previous and next rows in the partition's window order.
+- A missing neighbor gives `NULL` by default. The third argument supplies a different default only when the neighbor is absent.
+- `partition by order_id` keeps neighbors within the same order.
+- `first_value` and `last_value` read the edges of the current frame.
+- An ordered default frame ends at the current row's last peer. Use an explicit frame through `unbounded following` for the whole-partition last value.
+</Cheatsheet>
