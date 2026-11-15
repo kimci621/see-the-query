@@ -1,0 +1,168 @@
+---
+id: from-subquery
+title: "A subquery in FROM: a table inside a query"
+chapter: subqueries
+number: "8.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select * from (select category_id, avg(price) as avg_price from book group by category_id) s where avg_price > 500 order by category_id nulls last;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-FROM
+    title: Subqueries in FROM
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUP
+    title: GROUP BY and HAVING
+tags: ["subquery in from", "derived table", "aggregate", "alias"]
+mvp: false
+---
+
+<TlDr>A subquery in `FROM` supplies a derived table to the outer query. The outer query can filter, sort or aggregate its result.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> has 11 books; Simple Python has no category. Average prices grouped by <C id="public.book.category_id">category_id</C> give four rows: category 3 averages 593.33, category 4 averages 502.50, category 6 averages 2800.00, and `NULL` averages 1990.00. The `NULL` row represents a book without a category, not a separate category.
+
+## First, calculate averages
+
+```sql run expect=rows:4
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id
+order by category_id nulls last;
+```
+
+There are 4 rows, one for each `category_id` group.
+
+## Why not filter in the same WHERE?
+
+You might try adding a condition on the average to the same query:
+
+```sql run expectError=42703
+select category_id, avg(price) as avg_price
+from book where avg_price > 500 group by category_id;
+```
+
+Code `42703`: `column "avg_price" does not exist`. The output alias from `SELECT` is not visible to `WHERE` at the same query level. In lesson 7.3, `HAVING` filtered groups. Here is another approach: compute the averages in a derived table, then filter them outside.
+
+## Averages become a table
+
+```sql run expect=rows:4
+select * from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where avg_price > 500
+order by category_id nulls last;
+```
+
+There are 4 rows. The inner query produces four groups, and all pass the outer filter: the lowest average is 502.50.
+
+The outer query sees the subquery's output as a table called `s`, with columns `category_id` and `avg_price`. This describes the logical result; PostgreSQL can choose an execution plan that does not materialize a separate table.
+
+<Callout kind="analogy">
+Think of building a component from smaller parts and labeling it `s`. The next step can refer to the finished component by its label instead of listing the parts again.
+</Callout>
+
+Raise the threshold to 550 and one row drops out:
+
+```sql run expect=rows:3
+select s.category_id, round(s.avg_price, 2) as avg_price
+from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where s.avg_price > 550
+order by s.category_id nulls last;
+```
+
+There are 3 rows: categories 3 and 6, plus `NULL`. Category 4, with average 502.50, does not pass. The `s.` prefixes refer to the columns returned by the subquery.
+
+The outer query can aggregate again:
+
+```sql run expect=rows:1
+select count(*) as categories
+from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where avg_price > 550;
+```
+
+One row, count 3. The outer aggregate counts rows of `s`, not individual books. One of those rows is the `NULL` group, so the count labeled `categories` includes the group for books with no category.
+
+Try the main examples in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="Inside: 4 averages by category">
+
+```sql run expect=rows:4
+select category_id, round(avg(price), 2) as avg_price
+from book
+group by category_id
+order by category_id nulls last;
+```
+
+</Step>
+<Step caption="Outside: threshold 550, 3 rows remain">
+
+```sql run expect=rows:3
+select s.category_id, round(s.avg_price, 2) as avg_price
+from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where s.avg_price > 550
+order by s.category_id nulls last;
+```
+
+</Step>
+</Scene>
+
+## What is missing from the result
+
+- ❌ Eleven individual books: the inner `GROUP BY` reduced them to 4 groups.
+- ❌ Category 4 at threshold 550: its average 502.50 is lower.
+- ❌ Book titles: the subquery did not select them.
+- ❌ The original `price` column in the outer query: the subquery did not return it.
+- ❌ One overall average: `GROUP BY` calculates one per category group.
+
+## Traps
+
+<Callout kind="trap">
+The outer query sees only the subquery's output columns:
+
+```sql run expectError=42703
+select * from (
+  select category_id, avg(price) as avg_price
+  from book
+  group by category_id
+) s
+where price > 500;
+```
+
+Code `42703`: `column "price" does not exist`. Table `s` has `category_id` and `avg_price`, not `price`. To expose another column, the inner query must select it, subject to the grouping rules.
+</Callout>
+
+<Callout kind="tip">
+If the only goal is filtering groups by an aggregate, `HAVING` may be enough. A subquery is useful when the outer query needs another aggregate or a join. An inner `ORDER BY` alone does not guarantee the outer result's order; use an outer `ORDER BY` for that. An inner ordering can still matter for operations within the subquery.
+</Callout>
+
+## Check yourself
+
+1. How many rows remain at `avg_price > 1000`? Answer first, then check.
+2. What does `select count(*) from (...) s where avg_price > 500` return? Work it out from the four averages.
+3. How many rows pass `avg_price > 3000`? Check on the board.
+
+<Cheatsheet>
+- `from (select ...) s`: the subquery provides a derived table named `s`.
+- The outer query sees only the subquery's output columns.
+- An aggregate's output alias can be filtered in the outer `WHERE`, but is not visible in `WHERE` at the same query level.
+- The outer query can group, aggregate and sort the derived rows again.
+- If you only need to filter groups, consider `HAVING`.
+</Cheatsheet>
