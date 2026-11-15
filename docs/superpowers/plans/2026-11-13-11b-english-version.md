@@ -210,7 +210,7 @@
 - [x] 5.1 `types-casting`: `content/lessons-en/05-types/01-types-casting.mdx`
 - [x] 5.2 `numbers`: `content/lessons-en/05-types/02-numbers.mdx`
 - [x] 5.3 `strings`: `content/lessons-en/05-types/03-strings.mdx`
-- [ ] 5.4 `dates-time`: `content/lessons-en/05-types/04-dates-time.mdx`
+- [x] 5.4 `dates-time`: `content/lessons-en/05-types/04-dates-time.mdx`
 - [ ] 5.5 `boolean`: `content/lessons-en/05-types/05-boolean.mdx`
 - [ ] 5.6 `enum`: `content/lessons-en/05-types/06-enum.mdx`
 - [ ] 5.7 `arrays`: `content/lessons-en/05-types/07-arrays.mdx`

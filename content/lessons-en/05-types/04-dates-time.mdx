@@ -1,0 +1,153 @@
+---
+id: dates-time
+title: Dates and time
+chapter: types
+number: "5.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.orders, public.book]
+initialQuery: |
+  select order_id, created_at from orders;
+docs:
+  - url: https://www.postgresql.org/docs/current/datatype-datetime.html
+    title: Date and time types
+  - url: https://www.postgresql.org/docs/current/functions-datetime.html
+    title: Date and time functions and operators
+course: ["11.29"]
+tags: [date, time, timestamp, timestamptz, interval, time zone]
+---
+
+<TlDr>Date stores a calendar day, timestamp stores date and time without a zone, and timestamptz represents an instant. Interval describes a span of time.</TlDr>
+
+## What's in the data
+
+The orders' <C id="public.orders.created_at">created_at</C> is timestamptz, while the books' <C id="public.book.published_at">published_at</C> is date. The timestamps in the dataset are written with the `+03` offset. Look out for order 7, created at `2024-05-01 00:10+03`: in Moscow it was May 1, but in UTC it was still April 30.
+
+## Three everyday types
+
+- `date`: a calendar day, without a time or zone. Books use it for `published_at`.
+- `timestamp`: a date and wall-clock time without a time zone. The value alone does not identify an instant.
+- `timestamptz`: an instant. Postgres stores it internally in UTC, displays it in the session's zone and does not retain the original zone name. Orders use it for `created_at`.
+
+## A date plus an interval
+
+An `interval` represents a span in months, days and time. You can add it to a date or time. Since months have different lengths, an interval containing months cannot always be reduced to a fixed number of days:
+
+```sql run expect=rows:1
+select published_at, (published_at + interval '90 days')::date as later from book where book_id = 7;
+```
+
+The Island of Lost Ships was published on 1926-01-01; 90 days later is 1926-04-01. Postgres accounts for month lengths and leap years.
+
+```sql run expect=rows:1
+select interval '1 day 2 hours' as i;
+```
+
+## Extract and truncate
+
+`extract` gets a field such as year, month or hour from a date or time:
+
+```sql run expect=rows:2
+select book_id, extract(year from published_at) as year from book where book_id in (1, 2) order by book_id;
+```
+
+The years are 1940 and 2022. `date_trunc` reduces a value to the start of a specified time unit:
+
+```sql run expect=rows:1
+select date_trunc('month', published_at)::date as month_start from book where book_id = 2;
+```
+
+The book was published on 2022-03-01, so the start of its month is the same date. Any other day in March would also produce March 1.
+
+## Calendar difference with age
+
+```sql run expect=rows:1
+select age(timestamp '2026-01-01', timestamp '1990-05-15') as a;
+```
+
+The result is `35 years 7 mons 17 days`. `age` expresses the calendar difference in years, months and days. This is different from a simple day count because months have different lengths.
+
+<Callout kind="analogy">
+Imagine a video call between Moscow and London. It starts at the same instant for both participants, but their clocks show different local times. `timestamptz` holds the instant; a zone determines how to display it on local clocks.
+</Callout>
+
+## timestamptz: one instant, two readings
+
+Return to order 7. Show the same instant in two zones:
+
+```sql run expect=rows:1
+select order_id,
+       to_char(created_at at time zone 'Europe/Moscow', 'YYYY-MM-DD HH24:MI') as msk,
+       to_char(created_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI') as utc
+from orders where order_id = 7;
+```
+
+In Moscow it is `2024-05-01 00:10`; in UTC it is `2024-04-30 21:10`. The order's date depends on the chosen zone. First, show its Moscow day:
+
+```sql run expect=rows:1
+select to_char(created_at at time zone 'Europe/Moscow', 'YYYY-MM-DD') as day_msk from orders where order_id = 7;
+```
+
+To find all orders from May 1 in Moscow, specify the start of that day and the start of the next:
+
+```sql run expect=rows:1
+select order_id from orders
+where created_at >= timestamptz '2024-05-01 00:00+03'
+  and created_at < timestamptz '2024-05-02 00:00+03'
+order by order_id;
+```
+
+Order 7 is returned. The lower bound is included and the upper bound is excluded, so midnight on the next day belongs to the next range. These examples specify the offset instead of relying on the session setting.
+
+<DontDoThis href="https://wiki.postgresql.org/wiki/Don't_Do_This#Don't_use_timestamp_(without_time_zone)">
+For events that happened at a particular instant, such as orders, payments and log entries, use `timestamptz`. A `timestamp` without a zone can represent an agreed wall-clock time, such as a shift schedule. For a day, use a half-open range: `>= start and < start_of_next_day`. Unlike `BETWEEN`, it excludes the next midnight and does not depend on fractional-second precision.
+</DontDoThis>
+
+## An invalid date
+
+Postgres validates dates:
+
+```sql run expectError=22008
+select '2024-02-31'::date;
+```
+
+`22008 datetime_field_out_of_range`: there is no February 31.
+
+## What's missing and why
+
+- ❌ Order 7 in a May 1 UTC range: it falls in April there. The instant is the same; its local readings differ.
+- ❌ A time in `published_at`: date stores only a day.
+- ❌ Order 8 in the Moscow May 1 range: it was created on May 3 in Moscow.
+
+## Pitfalls
+
+<Callout kind="trap">
+If you specify `timestamp` without a zone, Postgres ignores an offset in the input. Compare:
+
+```sql run expect=rows:1
+select to_char(timestamp '2024-05-01 00:10+03', 'YYYY-MM-DD HH24:MI') as plain,
+       to_char(timestamptz '2024-05-01 00:10+03' at time zone 'UTC', 'YYYY-MM-DD HH24:MI') as utc;
+```
+
+The first retains the date and time fields `2024-05-01 00:10` without identifying an instant. The second shows the instant given with offset `+03` as `2024-04-30 21:10` in UTC. Comparing a date without a zone to timestamptz also depends on the session's time zone. Specify an offset or zone for the boundaries.
+</Callout>
+
+<Callout kind="tip">
+`now()` returns the start time of the current transaction; `clock_timestamp()` returns the time of the call. `default now()` is common for creation timestamps, but all rows created in one transaction receive the same value.
+</Callout>
+
+## Check yourself
+
+1. How many days are between the `published_at` dates of books 1 and 2? Hint: subtract the dates.
+2. What year was the oldest book published? Use `extract` with `order by ... limit 1`.
+3. What does `created_at at time zone 'Asia/Tokyo'` return for order 7?
+
+<Cheatsheet>
+- Date is a day. Timestamp is date and time without a zone. Timestamptz is an instant without the original zone. Interval is a span.
+- `+ interval '90 days'`, `extract(year from x)`, `date_trunc('month', x)`, `age(a, b)`.
+- `at time zone 'Europe/Moscow'` converts an instant to the city's wall-clock time.
+- For timestamptz boundaries, give an offset such as `+03` or an explicit zone.
+- A day range: `>= start and < start_of_next_day`.
+- An invalid date gives `22008`.
+</Cheatsheet>
