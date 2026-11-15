@@ -1,0 +1,127 @@
+---
+id: natural-join
+title: "NATURAL JOIN: matching shared names"
+chapter: joins
+number: "6.8"
+order: 8
+dataset: bookstore
+board:
+  tables: [public.orders, public.order_item, public.customer]
+  layout:
+    orders: { x: 0, y: 0 }
+    customer: { x: 720, y: 0 }
+    order_item: { x: 0, y: 360 }
+initialQuery: |
+  select order_id, book_id, qty
+  from orders natural join order_item
+  order by order_id, book_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-JOIN
+    title: Joining tables
+  - url: https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM
+    title: "SELECT: FROM clause"
+tags: ["natural join", "join using", "shared columns", "join", "cross join"]
+mvp: false
+---
+
+<TlDr>`NATURAL JOIN` finds columns with matching names and joins on all of them. One shared column may be convenient; an unexpected second one can silently produce no matches.</TlDr>
+
+## What's in the data
+
+There are 8 orders in <T id="public.orders">orders</T> and 15 items in <T id="public.order_item">order_item</T>. They share one column name: <C id="public.orders.order_id">order_id</C>. `NATURAL JOIN` uses it.
+
+<T id="public.customer">customer</T> and `orders` share two names: <C id="public.customer.customer_id">customer_id</C> and <C id="public.customer.created_at">created_at</C>. The second name will cause a problem.
+
+## NATURAL finds the key
+
+```sql run expect=rows:15
+select order_id, book_id, qty
+from orders natural join order_item
+order by order_id, book_id;
+```
+
+Fifteen rows, one for each order_item. There is no written `ON` condition: Postgres found `order_id` in both tables and joined on it.
+
+The result has one `order_id` column, although it exists in both tables. Like `USING`, `NATURAL` merges the shared columns in the joined output.
+
+On the board, the tables join on `order_id` and the result has 15 rows. Order 3 has three rows, orders 2 and 4 have one each, and the others have two each.
+
+## Two shared columns
+
+Now join customers and orders:
+
+```sql run expect=rows:1
+select count(*) from customer natural join orders;
+```
+
+One row containing 0. Although each of the eight orders references an existing customer_id, `NATURAL` also compares `created_at`.
+
+The customer and order creation times never match. The closest example is customer 5, created at `2024-04-10 14:00`, and order 6 at `15:00`: the same day and customer, one hour apart. They do not match on both columns.
+
+List the two columns explicitly:
+
+```sql run expect=rows:1
+select count(*) from customer join orders using (customer_id, created_at);
+```
+
+Zero again. This has the same join condition, but `USING` names the columns.
+
+Now use only `customer_id`:
+
+```sql run expect=rows:1
+select count(*) from customer join orders using (customer_id);
+```
+
+The result is 8. Every order finds its customer. Elena Kozlova has no orders and is absent from this inner join.
+
+Eight versus zero. The extra `created_at` comparison accounts for the difference.
+
+## NATURAL is USING on all shared names
+
+You cannot add an `ON` condition to `NATURAL JOIN`:
+
+```sql run expectError=42601
+select * from orders natural join order_item on orders.order_id = order_item.order_id;
+```
+
+Postgres returns `42601`, `syntax error at or near "on"`. Use `NATURAL` without an explicit condition, or `JOIN` with `ON` or `USING`.
+
+<Callout kind="tip">
+Write `join ... using (order_id)` when that is the intended key. It makes the key visible and prevents a newly shared column name from silently changing the join condition.
+</Callout>
+
+## What's missing and why
+
+- ❌ Every order and customer in `customer natural join orders`: no pair matches on `created_at`, and the join is inner.
+- ❌ The Island of Lost Ships in the orders-to-items join: it was never ordered, so it has no item row.
+- ❌ Elena Kozlova with `using (customer_id)`: customer 6 has no orders.
+- ❌ All eight orders with `using (customer_id, created_at)`: customer and order creation are different events.
+
+## Pitfalls
+
+<Callout kind="trap">
+If there are no shared column names, a plain `NATURAL JOIN` does not fail. It acts as a `CROSS JOIN`, pairing every row with every row:
+
+```sql run expect=rows:1
+select count(*) from orders natural join book_category;
+```
+
+One row containing 48. Orders and book_category share no column names, so 8 orders are paired with 6 categories.
+
+`join ... on true` would give the same 48 rows. `NATURAL` hides the absence of a key: a query intended to match related records can produce a Cartesian product.
+</Callout>
+
+## Check yourself
+
+1. What does `select count(*) from book natural join order_item` return? Predict, then check.
+2. What does `select count(*) from author natural join book` return? Remember Pasternak and the two books without authors.
+3. What does `select count(*) from orders natural join employee` return? Do those tables have any shared names?
+
+<Cheatsheet>
+- `natural join` uses `USING` semantics on every shared column name.
+- Each shared column appears once in the joined output.
+- `NATURAL` with an explicit `ON` condition gives syntax error `42601`.
+- With no shared columns, a plain `NATURAL JOIN` behaves as `CROSS JOIN`.
+- Every shared name matters, including fields such as `created_at`.
+- Explicit `join ... using (...)` makes the intended keys visible.
+</Cheatsheet>
