@@ -194,7 +194,7 @@
 
 **04-select**
 
-- [ ] 4.1 `select-basics`: `content/lessons-en/04-select/01-select-basics.mdx`
+- [x] 4.1 `select-basics`: `content/lessons-en/04-select/01-select-basics.mdx`
 - [ ] 4.2 `logical-order`: `content/lessons-en/04-select/02-logical-order.mdx`
 - [ ] 4.3 `where-boolean`: `content/lessons-en/04-select/03-where-boolean.mdx`
 - [ ] 4.4 `operators`: `content/lessons-en/04-select/04-operators.mdx`

@@ -23,13 +23,13 @@ test('переведённый первый урок открывается на
 test('язык в ссылке, переключатель и история сохраняют урок и параметры', async ({ page }) => {
   await page.goto('/l/select-basics?lang=en&source=test#part');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(page.getByRole('heading', { name: 'Translation coming soon' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'SELECT: columns, expressions and aliases' })).toBeVisible();
   await page.getByRole('button', { name: 'Switch language to Russian' }).click();
   await expect(page).toHaveURL(/\/l\/select-basics\?lang=ru&source=test#part$/);
   await expect(page.getByRole('heading', { name: /SELECT:/ })).toBeVisible();
   await page.goBack();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(page.getByRole('heading', { name: 'Translation coming soon' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'SELECT: columns, expressions and aliases' })).toBeVisible();
 });
 
 test('быстрая смена языка сохраняет введённый SQL', async ({ page }) => {
@@ -40,7 +40,7 @@ test('быстрая смена языка сохраняет введённый
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.type('select 123;');
   await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
-  await expect(page.getByRole('heading', { name: 'Translation coming soon' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'SELECT: columns, expressions and aliases' })).toBeVisible();
   await page.getByRole('button', { name: 'Switch language to Russian' }).click();
   await expect(page.getByRole('textbox', { name: 'SQL-запрос' })).toHaveText('select 123;');
 });
@@ -48,8 +48,8 @@ test('быстрая смена языка сохраняет введённый
 test('английская песочница выполняет запросы и хранит изменения отдельно от русской', async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto('/l/select-basics?lang=en');
-  await expect(page.getByRole('heading', { name: 'Translation coming soon' })).toBeVisible();
-  await expect(page.locator('.cm-content')).toHaveText('');
+  await expect(page.getByRole('heading', { name: 'SELECT: columns, expressions and aliases' })).toBeVisible();
+  await expect(page.locator('.cm-content')).toHaveText('select title, price from book;');
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 30_000 });
 
   await writeSql(page, 'select title from book where book_id = 10');

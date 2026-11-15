@@ -4,7 +4,7 @@ import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '@/app/router';
 import { LessonView } from '@/features/lessons/LessonView';
-import { getLesson, loadLessonContent, neighbours } from '@/features/lessons/registry';
+import { getLesson, LESSONS, loadLessonContent, neighbours } from '@/features/lessons/registry';
 import { useEditorStore } from '@/stores/editor';
 import { useLessonStore } from '@/stores/lesson';
 import { useSettingsStore } from '@/stores/settings';
@@ -129,9 +129,10 @@ describe('AppShell', () => {
     expect(await screen.findByRole('heading', { name: 'How to use the board' })).toBeInTheDocument();
   });
 
-  it('позволяет выйти из режима фокуса, если перевода ещё нет', async () => {
+  const untranslatedLesson = LESSONS.find((lesson) => !getLesson(lesson.id, 'en'));
+  it.skipIf(!untranslatedLesson)('позволяет выйти из режима фокуса, если перевода ещё нет', async () => {
     useSettingsStore.setState({ focusMode: true });
-    renderAt('/l/select-basics?lang=en');
+    renderAt(`/l/${untranslatedLesson?.id}?lang=en`);
     fireEvent.click(await screen.findByRole('button', { name: /Exit focus mode/ }));
     expect(await screen.findByRole('heading', { name: 'Translation coming soon' })).toBeInTheDocument();
   });

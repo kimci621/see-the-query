@@ -1,0 +1,181 @@
+---
+id: select-basics
+title: "SELECT: columns, expressions and aliases"
+chapter: select
+number: "4.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.author, public.book]
+  layout:
+    author: { x: 330, y: -100 }
+    book: { x: 0, y: 280 }
+initialQuery: |
+  select title, price from book;
+docs:
+  - url: https://www.postgresql.org/docs/current/tutorial-select.html
+    title: "Tutorial: querying a table"
+  - url: https://www.postgresql.org/docs/current/queries-select-lists.html
+    title: Select lists
+course: ["11.15", "11.37"]
+tags: [select, alias, projection, expressions]
+mvp: true
+---
+
+<TlDr>`SELECT` chooses the columns in the result: existing columns, calculated values and columns renamed with aliases.</TlDr>
+
+## What's in the data
+
+<T id="public.author">author</T> has 6 authors, each with an ID, name, country and birth year. <T id="public.book">book</T> has 11 books. Two details matter later: The Island of Lost Ships has no price, and only two books cost more than 2000.
+
+## The star: all columns
+
+Start with a common query:
+
+```sql run expect=rows:6
+select * from author;
+```
+
+The star means all columns from the table: 6 rows and 4 columns. On the board, a ghost copy separates from <T id="public.author">author</T>. At the `SELECT` step no columns leave it: the caption says 4 columns out of 4.
+
+`SELECT *` is handy for a quick look at a table. In application code, listing columns explicitly is usually safer. We'll see why below.
+
+## A list of columns
+
+List the columns you need, separated by commas:
+
+```sql run expect=rows:6
+select name, country from author;
+```
+
+There are still 6 rows, but only 2 columns. At the `SELECT` step, the extra columns on the ghost are crossed out, fade and disappear. The result is narrower. Choosing columns this way is called **projection**.
+
+Result columns follow the order you listed, not their order in the table:
+
+```sql run expect=rows:6
+select born_year, name from author;
+```
+
+The birth year comes first now. Swap the columns and run the query again.
+
+## Expressions: a new column from existing values
+
+You can write an expression instead of selecting a column directly. Double the page count for the first three books:
+
+```sql run expect=rows:3
+select title, pages * 2 from book where book_id <= 3;
+```
+
+There are 3 rows. At the `SELECT` step, `pages` is crossed out and leaves; a new highlighted column appears to the right with 3008, 1796 and 128. Postgres calculated the expression for each row.
+
+Look at the new column's name: `?column?`. The expression has no explicit name, so Postgres supplied a placeholder. Let's give it a useful name.
+
+## Aliases
+
+An **alias** is a name you give a result column. Write it after `AS`:
+
+```sql run expect=rows:3
+select title, pages * 2 as double_pages from book where book_id <= 3;
+```
+
+The values are still 3008, 1796 and 128, but the column is now called `double_pages`.
+
+Expressions can use arithmetic, functions or string concatenation. Calculate a 10 percent discount:
+
+```sql run expect=rows:1
+select title, price, price * 0.9 as sale from book where book_id = 2;
+```
+
+One row: the price is 2400.00 and `sale` is 2160.000. There are three digits after the decimal point: the price has two, 0.9 has one, and numeric multiplication did not round the result.
+
+You can also give an existing column an alias:
+
+```sql run expect=rows:2
+select title as book_title, price as price_rub from book where price > 2000;
+```
+
+Two rows, for the two books costing more than 2000. At `SELECT`, `title` and `price` are highlighted, the caption describes their new names, and the ghost's header shows them.
+
+An alias does not change the data or the table. In <T id="public.book">book</T>, the column is still called <C id="public.book.title">title</C>. The new name belongs to this query's result.
+
+<Callout kind="analogy">
+Think of `SELECT` as a restaurant kitchen. A whole box of ingredients arrives from storage: that's a row. The cook takes what the dish needs (columns), prepares some ingredients (expressions) and labels the plate with its menu name (an alias). The plate goes out to the dining room, not the box.
+</Callout>
+
+Put these ideas together in one scene. Send the first step to the board, then use Next:
+
+<Scene>
+<Step caption="All columns of three books">
+
+```sql run expect=rows:3
+select * from book where book_id <= 3;
+```
+
+</Step>
+<Step caption="Two of nine columns">
+
+```sql run expect=rows:3
+select title, pages from book where book_id <= 3;
+```
+
+</Step>
+<Step caption="A calculated column with an alias">
+
+```sql run expect=rows:3
+select title, pages * 2 as double_pages from book where book_id <= 3;
+```
+
+</Step>
+</Scene>
+
+## What's missing and why
+
+In the `price > 2000` example:
+
+- ❌ Simple Python at 1990 and another 7 books: their prices are not greater than 2000.
+- ❌ The Island of Lost Ships: its price is missing, so the comparison with 2000 is unknown. Lesson 4.5 explains why unknown does not pass the filter.
+- ❌ <C id="public.book.author_id">author_id</C>, <C id="public.book.pages">pages</C> and the other columns: they are not in the list after `SELECT`.
+
+## Pitfalls
+
+<Callout kind="trap">
+A typo in a column name breaks the whole query, not just one row:
+
+```sql run expectError=42703
+select titel from book;
+```
+
+Postgres responds with `column "titel" does not exist`, code `42703`. There is no `titel` column, and Postgres will not guess. The error card suggests a similar name; you can also check the spelling on the board.
+</Callout>
+
+<Callout kind="trap">
+Use single quotes for text and double quotes for identifiers. Mix them up and Postgres looks for a column:
+
+```sql run expectError=42703
+select "And Quiet Flows the Don" from book;
+```
+
+Postgres looked for a column called `And Quiet Flows the Don` and returned `42703`. A text value would use single quotes: `'And Quiet Flows the Don'`.
+</Callout>
+
+<Callout kind="tip">
+Avoid `SELECT *` in application code when you need a stable list of columns. Adding a column to the table silently changes the result. An explicit list fixes what the query returns; the star is useful for a quick look.
+</Callout>
+
+<Callout kind="tip">
+You can omit `AS`: `select title book_title from book` works too. Some keywords used as aliases require `AS` or double quotes to avoid ambiguity. Using `AS`, or quoting the alias, is safer when keywords change.
+</Callout>
+
+## Check yourself
+
+1. `select name, born_year from author` returns 6 rows. How many columns?
+2. Write a query for book titles and prices with a 25 percent discount, using the alias `sale`. How many rows have prices above 1000?
+3. What does `select price as title from book where book_id = 1` return? Why is the column called `title`?
+
+<Cheatsheet>
+- `select *`: all columns. `select a, b`: only the listed columns, in that order.
+- Expressions in the list: `pages * 2`, `price * 0.9`.
+- For the arithmetic expression in this lesson, Postgres uses `?column?` without an alias.
+- Alias: `expression as name`. It names the result column; the table stays unchanged.
+- A column typo gives `42703`. Single quotes mark text; double quotes mark identifiers.
+</Cheatsheet>
