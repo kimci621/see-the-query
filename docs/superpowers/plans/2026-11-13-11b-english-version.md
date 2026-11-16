@@ -292,7 +292,7 @@
 **14-extras**
 
 - [x] 14.1 `full-text-search`: `content/lessons-en/14-extras/01-full-text-search.mdx`
-- [ ] 14.2 `functions`: `content/lessons-en/14-extras/02-functions.mdx`
+- [x] 14.2 `functions`: `content/lessons-en/14-extras/02-functions.mdx`
 - [ ] 14.3 `triggers`: `content/lessons-en/14-extras/03-triggers.mdx`
 - [ ] 14.4 `roles`: `content/lessons-en/14-extras/04-roles.mdx`
 - [ ] 14.5 `partitioning`: `content/lessons-en/14-extras/05-partitioning.mdx`

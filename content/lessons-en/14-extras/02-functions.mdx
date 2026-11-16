@@ -1,0 +1,164 @@
+---
+id: functions
+title: Functions and procedures
+chapter: extras
+number: "14.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.customer]
+initialQuery: |
+  select customer_id, name, bonus from customer order by customer_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-createfunction.html
+    title: Creating a function
+  - url: https://www.postgresql.org/docs/18/xfunc-sql.html
+    title: SQL functions
+  - url: https://www.postgresql.org/docs/18/xfunc-volatility.html
+    title: Function volatility categories
+  - url: https://www.postgresql.org/docs/18/sql-createprocedure.html
+    title: Creating a procedure
+  - url: https://www.postgresql.org/docs/18/sql-call.html
+    title: Calling a procedure
+course: ["12.41", "12.42"]
+tags: [function, procedure, plpgsql, volatility]
+---
+
+<TlDr>A function returns a result to a SQL expression. A procedure is called with CALL; both can perform actions on data.</TlDr>
+
+## The data
+
+<T id="public.customer">customer</T> contains six customers. Anna has 120 bonus points, while Ivan, customer 2, has none:
+
+```sql run expect=rows:2
+select customer_id, name, bonus from customer
+where customer_id in (1, 2) order by customer_id;
+```
+
+The board shows two rows. First create a function that calculates a value, then a procedure that changes data.
+
+## A SQL function
+
+A **function** stores named code and returns a result. Create one with two arguments: a customer ID and an amount of bonus points.
+
+```sql apply expect=rows:0
+create function add_bonus(p_customer_id bigint, p_amount integer) returns integer
+language sql stable as $$
+  select bonus + p_amount from customer where customer_id = p_customer_id
+$$;
+```
+
+Press Apply to save the definition. The function reads the table but does not change it. Call it from `SELECT`:
+
+```sql run expect=rows:1
+select add_bonus(1, 10) as new_bonus;
+```
+
+The result on the board is 130. This is a calculation, not a write to `customer`. Arguments can be named and passed in a different order:
+
+```sql run expect=rows:1
+select add_bonus(p_amount => 0, p_customer_id => 1) as same_bonus;
+```
+
+The result is 120. If the customer does not exist, the query inside the function returns no row, and the scalar SQL function returns `NULL`:
+
+```sql run expect=rows:1
+select add_bonus(999, 10) as missing_customer;
+```
+
+The board shows one row with `NULL`, not zero rows. You can change this behavior by explicitly handling a missing customer.
+
+<Callout kind="analogy">
+A function is like a formula in a cell: it receives inputs and returns a result. PostgreSQL functions can do more, including changing data, so a call is not always as safe as an ordinary calculation.
+</Callout>
+
+## Variables and conditions in PL/pgSQL
+
+**PL/pgSQL** adds variables, conditions, and loops to SQL. The next function reads a bonus and chooses a label:
+
+```sql apply expect=rows:0
+create function bonus_label(p_customer_id bigint) returns text
+language plpgsql stable as $$
+declare
+  b integer;
+begin
+  select bonus into b from customer where customer_id = p_customer_id;
+  if b is null then
+    return 'customer not found';
+  elsif b > 0 then
+    return 'bonus: ' || b;
+  end if;
+  return 'no bonus';
+end;
+$$;
+```
+
+`$$` delimits the function body. `SELECT ... INTO` stores a value in variable `b`, and `IF` chooses the result. Check two branches:
+
+```sql run expect=rows:2
+select customer_id, bonus_label(customer_id) as label
+from customer where customer_id in (1, 2) order by customer_id;
+```
+
+Anna gets “bonus: 120”, and Ivan gets “no bonus”. A separate branch handles a missing customer.
+
+## Procedures and CALL
+
+A **procedure** is invoked as a separate `CALL` command, not inside `SELECT`. Create a procedure that grants bonus points:
+
+```sql apply expect=rows:0
+create procedure grant_bonus(p_customer_id bigint, p_amount integer)
+language sql as $$
+  update customer set bonus = bonus + p_amount where customer_id = p_customer_id
+$$;
+```
+
+Now call it and save the change:
+
+```sql apply expect=rows:0
+call grant_bonus(1, 10);
+```
+
+Check the customer row:
+
+```sql run expect=rows:1
+select customer_id, bonus from customer where customer_id = 1;
+```
+
+The board shows 130: the procedure changed the data. Reset restores the original 120 and removes the created objects. A procedure can have output parameters; a function can also change tables. The distinction is not simply “read versus write”.
+
+Some procedures can control transactions, but not in every calling context. For example, a procedure called inside a transaction block cannot execute `COMMIT` or `ROLLBACK`. This example does not control transactions.
+
+## A promise to the planner
+
+A volatility category describes a function's behavior. `VOLATILE`, the default, permits data changes or different results for identical arguments. `STABLE` promises the same result for identical arguments within a single statement and does not allow database changes. `IMMUTABLE` promises the same result for identical arguments forever.
+
+Our functions read `customer`, so they are not `IMMUTABLE`: a bonus can change between queries. Functions in an index expression must be `IMMUTABLE`. A value computed in an index search condition has different requirements: a `STABLE` function can be suitable there. The planner can sometimes inline a SQL function, but this is not guaranteed for every call.
+
+## What's missing and why
+
+- ❌ Customer 999 in the table: the function returned `NULL` because its internal query found no row.
+- ❌ A bonus change after `SELECT add_bonus(...)`: the function only calculated the sum.
+
+## Traps
+
+<Callout kind="trap">
+Do not mark a function `IMMUTABLE` just to use it in an index if it reads a changing table. The planner trusts the promise and can reuse a stale result.
+</Callout>
+
+<Callout kind="tip">
+Check how a function behaves for a missing row and `NULL`. Choose its volatility category based on what the code actually does, not the plan you want.
+</Callout>
+
+## Check yourself
+
+1. What does `add_bonus(1, 0)` return before the procedure is called, and does it change the table?
+2. What label does `bonus_label(999)` return?
+3. Why can't a function that reads a bonus from a table promise to be `IMMUTABLE`?
+
+<Cheatsheet>
+- `CREATE FUNCTION ... RETURNS ...` creates a function; you can call it in `SELECT`.
+- `CREATE PROCEDURE` creates a procedure; `CALL` invokes it.
+- `STABLE`, `IMMUTABLE`, and `VOLATILE` describe promises to the planner.
+- PL/pgSQL supports variables and conditions inside a function body.
+</Cheatsheet>
