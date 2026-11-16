@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { expect, it } from 'vitest';
 
 it('проверяет настоящий перевод и останавливается на неверном SQL или отсутствии ожидания', () => {
@@ -36,6 +37,7 @@ it('проверяет настоящий перевод и останавлив
       [
         path.join(process.cwd(), 'node_modules/vitest/vitest.mjs'),
         'run',
+        '--color',
         '--project',
         'content',
         'tests/content/lessons.test.ts',
@@ -48,7 +50,8 @@ it('проверяет настоящий перевод и останавлив
           ...process.env,
           VS_CONTENT_ROOT: root,
           VITEST_MAX_WORKERS: '1',
-          FORCE_COLOR: '0',
+          FORCE_COLOR: '1',
+          NO_COLOR: undefined,
         },
         encoding: 'utf8',
         timeout: 60000,
@@ -61,7 +64,7 @@ it('проверяет настоящий перевод и останавлив
     writeFileSync(dataset, '');
     const good = run();
     expect(good.status, good.stdout + good.stderr).toBe(0);
-    expect(good.stdout).toMatch(/Tests\s+5 passed/);
+    expect(stripVTControlCharacters(good.stdout)).toMatch(/Tests\s+5 passed/);
 
     writeFileSync(en, source.replace('select title from book', 'select missing_column from book'));
     const broken = run();
