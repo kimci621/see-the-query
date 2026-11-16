@@ -1,0 +1,139 @@
+---
+id: transactions
+title: BEGIN, COMMIT, ROLLBACK and ACID
+chapter: transactions
+number: "11.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+initialQuery: |
+  select title, price from book where book_id = 2;
+docs:
+  - url: https://www.postgresql.org/docs/current/tutorial-transactions.html
+    title: Transactions
+  - url: https://www.postgresql.org/docs/current/sql-begin.html
+    title: BEGIN
+  - url: https://www.postgresql.org/docs/current/sql-rollback.html
+    title: ROLLBACK
+course: ["12.8", "12.9", "12.10"]
+tags: [transaction, begin, commit, rollback, acid]
+---
+
+<TlDr>A transaction groups changes: COMMIT saves them, while ROLLBACK discards them. Other sessions cannot see uncommitted changes.</TlDr>
+
+## The data
+
+In <T id="public.book">book</T>, book 2, Fluent Python, costs 2400.00. Change its price and see what persists. Run the examples in order: Apply keeps changes in the lesson database until Reset.
+
+```sql run expect=rows:1
+select title, price from book where book_id = 2;
+```
+
+The board shows one book. Remember its price, 2400.00, for comparison with the first change.
+
+## Commit a change
+
+A **transaction** groups database commands into one unit of work. `BEGIN` starts a transaction block; `COMMIT` completes it successfully. After commit, other transactions can see the changes depending on their data snapshot.
+
+```sql apply expect=rows:1
+begin;
+update book set price = 7 where book_id = 2;
+commit;
+select title, price from book where book_id = 2;
+```
+
+Select Apply. The final `SELECT` returns one row with price 7.00. The change remains in the table, so later examples will see it.
+
+<Callout kind="analogy">
+Imagine a warehouse worker assembling an order. While items are being gathered, the order has not been handed over for shipping. Once assembly is complete, the worker confirms the order as a whole.
+</Callout>
+
+In the prepared scene below, A changes the price of book 1. Before A commits, B reads the old price. After `COMMIT`, B's next query sees the new one. The scene does not change the lesson database.
+
+<TwoSessions id="tx-basic" />
+
+Without an explicit `BEGIN`, PostgreSQL normally runs each individual statement in its own transaction. A client library may manage transaction blocks itself, so check its settings in your application.
+
+## Roll back a change
+
+`ROLLBACK` ends the current transaction and discards its changes. Set another price, but do not save it:
+
+```sql apply expect=rows:1
+begin;
+update book set price = 9 where book_id = 2;
+rollback;
+select title, price from book where book_id = 2;
+```
+
+The final query returns 7.00: the change to 9 was rolled back, while the earlier committed change remains. Look at the board after applying the block.
+
+<TwoSessions id="tx-rollback" />
+
+Now change two books and roll back both changes with one command:
+
+```sql apply expect=rows:2
+begin;
+update book set price = 15 where book_id = 1;
+update book set price = 20 where book_id = 2;
+rollback;
+select book_id, price from book where book_id in (1, 2) order by book_id;
+```
+
+The two returned prices are 890.00 and 7.00. Neither temporary change remains. Rollback affects the current transaction, not the entire history of the database.
+
+## The four ACID properties
+
+- **Atomicity**: a transaction's changes are committed as a unit or discarded. In the last example, both prices returned to their earlier values.
+- **Consistency**: the database enforces its defined constraints. For example, the bonus constraint rejects a negative value. Rules not enforced by the database remain the application's responsibility.
+- **Isolation**: concurrent transactions interact according to their isolation level. In the scenes, B does not read A's uncommitted write; isolation levels differ in how they determine visibility of later changes.
+- **Durability**: with normal PostgreSQL settings, an acknowledged commit is designed to survive a crash using write-ahead logging. The in-memory lesson sandbox is not a substitute for a backup.
+
+Check the bonus constraint. Customer 2 has a bonus of zero:
+
+```sql run expect=rows:1
+select customer_id, bonus from customer where customer_id = 2;
+```
+
+The board shows one row with bonus 0. Trying to reduce it violates a `CHECK` constraint:
+
+```sql apply expectError=23514
+begin;
+update customer set bonus = bonus - 500 where customer_id = 2;
+commit;
+```
+
+PostgreSQL returns error `23514`. The sandbox stops the block at the error and rolls back the open transaction. The next query shows bonus 0 again:
+
+```sql run expect=rows:1
+select customer_id, bonus from customer where customer_id = 2;
+```
+
+## What is missing from the result
+
+- ❌ Price 9 after `ROLLBACK`: that change was discarded before the read.
+- ❌ A negative bonus: the `CHECK` constraint rejected the update.
+- ❌ A's uncommitted price in B's first read: A has not committed it yet.
+
+## Traps
+
+<Callout kind="trap">
+For an ordinary Show on board example, the application opens a transaction and rolls back the preview itself. Blocks with their own `BEGIN`, `COMMIT` and `ROLLBACK` in this lesson use Apply. Sending `BEGIN` inside an already open transaction produces a PostgreSQL warning; it does not create a nested transaction.
+</Callout>
+
+<Callout kind="tip">
+Keep transactions short: an open transaction can hold locks and delay other work. After an error, roll back the failed transaction; lesson 11.2 covers partial rollback with `SAVEPOINT`.
+</Callout>
+
+## Check yourself
+
+1. What price does book 2 have after rolling back the change to 9? Why?
+2. What does B see before and after `COMMIT` in the first scene?
+3. What happens to the bonus after the constraint error?
+
+<Cheatsheet>
+- `BEGIN` starts a transaction block.
+- `COMMIT` saves changes; `ROLLBACK` discards changes in the current transaction.
+- A constraint error rejects the command. An open failed transaction needs a rollback.
+- ACID: atomicity, consistency, isolation, durability.
+</Cheatsheet>

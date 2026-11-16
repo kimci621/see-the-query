@@ -267,7 +267,7 @@
 
 **11-transactions**
 
-- [ ] 11.1 `transactions`: `content/lessons-en/11-transactions/01-transactions.mdx`
+- [x] 11.1 `transactions`: `content/lessons-en/11-transactions/01-transactions.mdx`
 - [ ] 11.2 `savepoint`: `content/lessons-en/11-transactions/02-savepoint.mdx`
 - [ ] 11.3 `mvcc`: `content/lessons-en/11-transactions/03-mvcc.mdx`
 - [ ] 11.4 `isolation`: `content/lessons-en/11-transactions/04-isolation.mdx`
