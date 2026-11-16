@@ -6,6 +6,7 @@ async function writeSql(page: Page, sql: string) {
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.press('Backspace');
   await page.keyboard.insertText(sql);
+  await expect(editor).toHaveText(sql);
 }
 
 test('переведённый первый урок открывается на обоих языках', async ({ page }) => {
@@ -62,7 +63,9 @@ test('английская песочница выполняет запросы 
   await expect(page.getByTestId('cell-0-1')).toHaveText('Mikhail Sholokhov');
 
   await writeSql(page, "insert into author (name) values ('English author') returning name");
-  await page.getByTestId('apply-button').click();
+  await page.keyboard.press('Control+Space');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toBeVisible();
+  await page.getByTestId('apply-button').click({ timeout: 10_000 });
   await expect(page.getByTestId('cell-0-0')).toHaveText('English author', { timeout: 15_000 });
   await writeSql(page, 'select nme from book');
   await expect(page.getByTestId('pg-explain-title')).toContainText('Column nme does not exist', {
@@ -71,10 +74,12 @@ test('английская песочница выполняет запросы 
   await expect(page.getByTestId('pg-original')).toContainText('nme');
 
   await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await expect(page.getByRole('textbox', { name: 'SQL-запрос' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /SELECT:/ })).toBeVisible();
   await writeSql(page, "select count(*) from author where name = 'English author'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await expect(page.getByRole('textbox', { name: 'SQL query' })).toBeVisible();
   await expect(page.locator('.cm-content')).toHaveText('select nme from book');
   await writeSql(page, "select count(*) from author where name = 'English author'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
@@ -164,15 +169,18 @@ test('отмена и сброс меняют только журнал выбр
   await expect(page.getByTestId('apply-button')).toContainText('Applied', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Switch language to Russian' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+  await expect(page.getByRole('textbox', { name: 'SQL-запрос' })).toBeVisible();
   await writeSql(page, "insert into author (name) values ('Russian journal')");
   await page.getByTestId('apply-button').click();
   await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await expect(page.getByRole('textbox', { name: 'SQL query' })).toBeVisible();
   await writeSql(page, "select count(*) from author where name = 'English journal'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await expect(page.getByRole('textbox', { name: 'SQL-запрос' })).toBeVisible();
   await writeSql(page, "select count(*) from author where name = 'Russian journal'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Отменить', exact: true }).click();
@@ -181,6 +189,7 @@ test('отмена и сброс меняют только журнал выбр
   await page.getByTestId('apply-button').click();
   await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await expect(page.getByRole('textbox', { name: 'SQL query' })).toBeVisible();
   await writeSql(page, "insert into author (name) values ('English reset')");
   await page.getByTestId('apply-button').click();
   await expect(page.getByTestId('apply-button')).toContainText('Applied', { timeout: 20_000 });
@@ -189,6 +198,7 @@ test('отмена и сброс меняют только журнал выбр
   await writeSql(page, "select count(*) from author where name = 'English reset'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await expect(page.getByRole('textbox', { name: 'SQL-запрос' })).toBeVisible();
   await writeSql(page, "select count(*) from author where name = 'Russian reset'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
   await page.getByRole('button', { name: 'Сброс', exact: true }).click();

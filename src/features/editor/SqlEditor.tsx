@@ -1,7 +1,7 @@
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
 import { type Diagnostic, setDiagnostics } from '@codemirror/lint';
 import { type Extension, Prec } from '@codemirror/state';
-import { EditorView, hoverTooltip, keymap, type ViewUpdate } from '@codemirror/view';
+import { EditorView, hoverTooltip, keymap, tooltips, type ViewUpdate } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { clauseRanges } from '@/features/sql/clauses';
@@ -82,6 +82,15 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
         schema: schema ? buildSchemaSpec(schema) : undefined,
       }),
       EditorView.contentAttributes.of({ 'aria-label': message(locale, 'SQL-запрос') }),
+      // Подсказки не перекрывают кнопки под редактором.
+      tooltips({
+        tooltipSpace: (view) => ({
+          top: 0,
+          left: 0,
+          right: document.documentElement.clientWidth,
+          bottom: view.dom.getBoundingClientRect().bottom,
+        }),
+      }),
       // Prec.highest: иначе Mod-Enter из defaultKeymap (insertBlankLine) срабатывает раньше
       Prec.highest(
         keymap.of([
