@@ -1,0 +1,147 @@
+---
+id: dont-do-this
+title: Common PostgreSQL traps
+chapter: design
+number: "13.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.author, public.book, public.orders]
+initialQuery: |
+  select name from author order by author_id;
+docs:
+  - url: https://wiki.postgresql.org/wiki/Don't_Do_This
+    title: Don't Do This on the PostgreSQL wiki
+  - url: https://www.postgresql.org/docs/18/functions-subquery.html
+    title: Subqueries and NOT IN
+  - url: https://www.postgresql.org/docs/18/datatype-datetime.html
+    title: Date and time types
+  - url: https://www.postgresql.org/docs/18/datatype-character.html
+    title: Character types
+  - url: https://www.postgresql.org/docs/18/ddl-depend.html
+    title: Object dependencies
+course: ["12.3"]
+tags: ["null", "not in", dates, char, dependencies]
+---
+
+<TlDr>Check the meaning of `NULL`, time interval boundaries, types, and object dependencies. Many risky constructs are valid, but require an understanding of their behavior.</TlDr>
+
+## The data
+
+<T id="public.author">author</T> has an author without books. In <T id="public.book">book</T>, two books have an unknown `author_id`. In <T id="public.orders">orders</T>, order time is stored with time-zone awareness. Use these data to examine several common mistakes.
+
+## NOT IN and NULL on the right
+
+Try to find authors without books:
+
+```sql run expect=rows:0
+select name from author where author_id not in (select author_id from book);
+```
+
+There are 0 rows, even though an author without books exists. The subquery contains `NULL`: for an author with no match, comparison with the unknown value does not yield `true`, so `WHERE` excludes the row. Exclude `NULL` from the subquery:
+
+```sql run expect=rows:1
+select name from author
+where author_id not in (select author_id from book where author_id is not null);
+```
+
+Now Boris Pasternak appears. Here `author.author_id` is a primary key and cannot be `NULL`. Another way to check for the absence of a related row:
+
+```sql run expect=rows:1
+select a.name from author a
+where not exists (select 1 from book b where b.author_id = a.author_id);
+```
+
+Again, one row contains Boris Pasternak. `NOT EXISTS` checks for the absence of matching rows, not the absence of a value in a list with unknown elements.
+
+<DontDoThis href="https://wiki.postgresql.org/wiki/Don't_Do_This#Don't_use_NOT_IN">
+Do not replace `NOT IN` with `NOT EXISTS` mechanically: first decide what to do with `NULL` on both sides of the comparison. The constructs can return different results for an unknown value.
+</DontDoThis>
+
+## NULL on the left matters too
+
+Check for books without a matching author using a list of authors without `NULL`:
+
+```sql run expect=rows:0
+select title from book where author_id not in (select author_id from author);
+```
+
+The result is empty again. Two books have a `NULL` `author_id`; comparing that unknown value to this nonempty list does not yield `true`, even though the subquery contains no `NULL`. Check for the absence of a related row:
+
+```sql run expect=rows:2
+select b.title from book b
+where not exists (select 1 from author a where a.author_id = b.author_id)
+order by b.book_id;
+```
+
+The result is Simple Python and Learning Python. Their authors are unspecified; that does not prove the books have no authors in the real world. If unknown values should not be included, add an explicit `b.author_id is not null` condition.
+
+<Callout kind="analogy">
+If a card's number is unknown, you cannot confidently say it differs from every number in a list. Checking for a related card answers another question: was a matching record found for the number provided?
+</Callout>
+
+## Time boundaries
+
+`BETWEEN` includes both boundaries. Compare two conditions at exactly midnight on April 1:
+
+```sql run expect=rows:1
+select timestamp '2024-04-01 00:00' between timestamp '2024-03-01 00:00' and timestamp '2024-04-01 00:00' as included_between,
+       timestamp '2024-04-01 00:00' >= timestamp '2024-03-01 00:00'
+       and timestamp '2024-04-01 00:00' < timestamp '2024-04-01 00:00' as included_half_open;
+```
+
+One row shows `true` and `false`. For neighboring months, a half-open interval is convenient: include the start and exclude the start of the next month. Count March orders using the Moscow offset:
+
+```sql run expect=rows:1
+select count(*) as total from orders
+where created_at >= '2024-03-01 00:00+03' and created_at < '2024-04-01 00:00+03';
+```
+
+The single count is 3. For instants, use a suitable type, usually `timestamptz`: it represents an instant and displays it in the session time zone. It does not store the original time-zone name. `timestamp without time zone` suits local time without a specific instant when that model is needed.
+
+## Text and names
+
+`char(n)` pads short values with spaces. Check string length and byte count for an ASCII character:
+
+```sql run expect=rows:1
+select length('a'::char(4)) as characters, octet_length('a'::char(4)) as bytes;
+```
+
+One row shows 1 and 4: the functions treat padding spaces differently. For ordinary text, `text` is often enough; if length or format is a data rule, add an appropriate constraint.
+
+PostgreSQL folds unquoted names to lowercase. A name created as `"OrderLine"` must be written with exactly those quotes and case. Lowercase names with underscores are usually easier to use in SQL and tools.
+
+## Extra data and dependencies
+
+`SELECT *` is useful for exploration, but a stable query often benefits from listing the required columns: its result contract is clearer and it avoids sending unnecessary values. This does not promise a proportional reduction in page reads. Similarly, do not automatically index every column: check plans and index maintenance costs on writes.
+
+`DROP TABLE ... CASCADE` can remove dependent objects or constraints. Before dropping, inspect dependencies and consequences; the default `RESTRICT` helps reveal obstacles instead of removing them automatically.
+
+## What's missing and why
+
+- ❌ The author without books in the first `NOT IN`: the right side contains `NULL`, so the condition is unknown for that author.
+- ❌ Books with an unknown author in `NOT IN` even after excluding `NULL` on the right: `NULL` remains on the left.
+- ❌ April 1 in the half-open March interval: the upper boundary is excluded.
+
+## Traps
+
+<Callout kind="trap">
+`NOT EXISTS` and `NOT IN` can return different answers with `NULL`. Choose the construct for the semantics you need, not just for how the query looks.
+</Callout>
+
+<Callout kind="tip">
+Check conditions at boundary values and with `NULL`, and inspect dependencies before changing a schema. The documentation explains both the reasons for recommendations and cases where an exception is justified.
+</Callout>
+
+## Check yourself
+
+1. Why did the first `NOT IN` query not return the author without books?
+2. What changes in the book example if you exclude `NULL` only on the right?
+3. Why is a half-open interval useful for neighboring months?
+
+<Cheatsheet>
+- `NOT IN` with `NULL` requires attention to both sides of the comparison.
+- For time periods, `>= start AND < next_start` is often convenient.
+- `timestamptz` stores an instant, not the original time-zone name.
+- Check dependencies before `CASCADE`; choose indexes and selected columns for the task.
+</Cheatsheet>

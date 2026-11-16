@@ -287,7 +287,7 @@
 
 - [x] 13.1 `normalization`: `content/lessons-en/13-design/01-normalization.mdx`
 - [x] 13.2 `denormalization`: `content/lessons-en/13-design/02-denormalization.mdx`
-- [ ] 13.3 `dont-do-this`: `content/lessons-en/13-design/03-dont-do-this.mdx`
+- [x] 13.3 `dont-do-this`: `content/lessons-en/13-design/03-dont-do-this.mdx`
 
 **14-extras**
 
