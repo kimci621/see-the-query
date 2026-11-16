@@ -1,0 +1,144 @@
+---
+id: denormalization
+title: Redundancy and denormalization
+chapter: design
+number: "13.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book, public.order_item]
+initialQuery: |
+  select book_id, title from book order by book_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-generated-columns.html
+    title: Generated columns
+  - url: https://www.postgresql.org/docs/18/rules-materializedviews.html
+    title: Materialized views
+  - url: https://www.postgresql.org/docs/18/trigger-definition.html
+    title: How triggers work
+course: ["12.4"]
+tags: [redundancy, denormalization, counter, consistency]
+---
+
+<TlDr>Denormalization stores derived data separately for a particular benefit. The copy also needs to be kept consistent with its source.</TlDr>
+
+## The data
+
+<T id="public.book">book</T> contains 11 books, and <T id="public.order_item">order_item</T> holds order lines. Count the lines for each book and keep books appearing in at least two:
+
+```sql run expect=rows:5
+select b.title, count(oi.book_id) as order_lines
+from book b left join order_item oi on oi.book_id = b.book_id
+group by b.book_id, b.title
+having count(oi.book_id) >= 2
+order by b.book_id;
+```
+
+The result contains five books. `count(oi.book_id)` counts order lines, not copies: the number of copies is in `qty` and can be greater than one. A book with no order lines gets a count of 0 thanks to the `LEFT JOIN`.
+
+## Store a copy of the count
+
+Add an ordinary column to the book for a stored count of order lines:
+
+```sql apply expect=rows:0
+alter table book add column order_line_count int not null default 0;
+```
+
+Press Apply. Now populate the column with counts from `order_item`:
+
+```sql apply expect=rows:11
+update book set order_line_count =
+  (select count(*) from order_item oi where oi.book_id = book.book_id);
+```
+
+Eleven rows were updated. Repeat the selection using the stored column:
+
+```sql run expect=rows:5
+select title, order_line_count from book where order_line_count >= 2 order by book_id;
+```
+
+The same five books are returned. The value in `book` duplicates a fact that can be calculated from `order_item`. A stored count can make frequent reads cheaper, but measure the actual benefit alongside write and maintenance costs.
+
+<Callout kind="analogy">
+A library might have a list of loans and a separate loan count for each book. The count is convenient for a quick overview, but a new loan must update both the list and the count.
+</Callout>
+
+## How the counts diverge
+
+Compare the stored and current counts for book 7, The Island of Lost Ships:
+
+```sql run expect=rows:1
+select b.title, b.order_line_count, count(oi.book_id) as actual_lines
+from book b left join order_item oi on oi.book_id = b.book_id
+where b.book_id = 7
+group by b.book_id, b.title, b.order_line_count;
+```
+
+Both values are 0: this book has no order lines yet. Add it to order 1 with a practice line price of 100:
+
+```sql apply expect=rows:1
+insert into order_item (order_id, book_id, qty, price) values (1, 7, 1, 100) returning book_id;
+```
+
+Apply adds one line. The line price is provided for this exercise; the price on the book record can be missing and is not automatically inserted into the order. Compare the counts again:
+
+```sql run expect=rows:1
+select b.title, b.order_line_count, count(oi.book_id) as actual_lines
+from book b left join order_item oi on oi.book_id = b.book_id
+where b.book_id = 7
+group by b.book_id, b.title, b.order_line_count;
+```
+
+Now `actual_lines` is 1, but the stored `order_line_count` remains 0. An ordinary column does not learn about changes to another table on its own. Restore consistency for this book:
+
+```sql apply expect=rows:1
+update book set order_line_count =
+  (select count(*) from order_item oi where oi.book_id = book.book_id)
+where book_id = 7;
+```
+
+Check again:
+
+```sql run expect=rows:1
+select b.title, b.order_line_count, count(oi.book_id) as actual_lines
+from book b left join order_item oi on oi.book_id = b.book_id
+where b.book_id = 7
+group by b.book_id, b.title, b.order_line_count;
+```
+
+Both values are 1 again. The manual recount fixed the mismatch in this example, but does not automatically handle updates, deletions, and concurrent changes in a working system. Reset restores the original practice dataset.
+
+## Keep the result up to date
+
+A generated column is suitable for an expression based on the same row, but cannot count rows in another table through a subquery. A materialized view stores a query result and is updated with `REFRESH`; data can be stale between refreshes. A trigger can update a count when order lines change, but it must be designed for every required operation and concurrent work.
+
+Denormalization can be useful for frequently read reports or precomputed totals when acceptable update delay and maintenance costs are understood. Start with measurements and explicitly define the data source and how to rebuild the count.
+
+## What's missing and why
+
+- ❌ The number of copies sold in `order_line_count`: it counts order lines regardless of `qty`.
+- ❌ An automatic change to the ordinary count when a line is inserted: we did not define a synchronization mechanism.
+- ❌ A guarantee that storing a copy will speed up the system: that depends on workload and maintenance cost.
+
+## Traps
+
+<Callout kind="trap">
+A stored total can become stale after an `INSERT`, `UPDATE`, or `DELETE` in the source table. The update mechanism must account for every way data can change and for concurrent transactions.
+</Callout>
+
+<Callout kind="tip">
+Measure queries first and agree on acceptable staleness. For a copy, define the source of truth, a way to rebuild it, and a check for discrepancies.
+</Callout>
+
+## Check yourself
+
+1. Why does the number of order lines not always equal the number of copies of a book?
+2. Why did the two counts differ after a new line was inserted?
+3. How does a manual recount differ from refreshing a materialized view or using a trigger?
+
+<Cheatsheet>
+- Redundancy can speed up reads, but adds cost and a risk of inconsistency.
+- An ordinary column does not update automatically when another table changes.
+- A materialized view is refreshed separately; a trigger needs correct logic for every change.
+- Compare stored totals with their source and check behavior under concurrent writes.
+</Cheatsheet>
