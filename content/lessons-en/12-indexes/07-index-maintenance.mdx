@@ -1,0 +1,126 @@
+---
+id: index-maintenance
+title: Index maintenance
+chapter: indexes
+number: "12.7"
+order: 7
+dataset: big_bookstore
+board:
+  tables: [public.customer, public.orders]
+initialQuery: |
+  select count(*) as total from customer where bonus = 42;
+docs:
+  - url: https://www.postgresql.org/docs/18/sql-createindex.html
+    title: Creating an index and CONCURRENTLY
+  - url: https://www.postgresql.org/docs/18/monitoring-stats.html
+    title: PostgreSQL activity statistics
+  - url: https://www.postgresql.org/docs/18/sql-dropindex.html
+    title: Removing an index
+course: ["12.22", "12.24"]
+tags: [index, concurrently, statistics, maintenance]
+---
+
+<TlDr>Indexes take space and add work to writes. Before removing one, check its purpose and statistics; CONCURRENTLY reduces write blocking during creation.</TlDr>
+
+## Why inspect indexes
+
+An additional index can speed up queries, but it takes space and requires maintenance as data changes. In the practice dataset, <T id="public.customer">customer</T> contains 20,000 customers. Find those with 42 bonus points:
+
+```sql run expect=rows:1
+select count(*) as total from customer where bonus = 42;
+```
+
+The single count is 40 customers. An index on bonus points might help some queries, but its usefulness should be checked against a real workload and the cost of writes.
+
+## What the statistics show
+
+The system view `pg_stat_user_indexes` contains information about index use. Look at the primary key index on <T id="public.orders">orders</T>:
+
+{/* final-only: системное представление не показано на учебной доске */}
+```sql run expect=rows:1 trace=final-only
+select indexrelname, idx_scan from pg_stat_user_indexes
+where schemaname = 'public' and relname = 'orders';
+```
+
+The result is one row, `orders_pkey`, with a count of 0. In this PGlite lesson database, activity statistics are not accumulated, so zero does not reflect actual use. On a server, `idx_scan` helps find candidates to investigate, but does not by itself prove that an index is unnecessary.
+
+Primary keys and unique constraints protect data even when their indexes are not selected for ordinary queries. Consider the time since statistics were reset, infrequent periodic queries, replicas, and the index's purpose before deciding to remove it.
+
+<Callout kind="analogy">
+A log of visits to an emergency exit can remain empty for a long time. That does not mean the exit is unnecessary: first understand the job it does.
+</Callout>
+
+## Create without blocking ordinary writes
+
+Ordinary `CREATE INDEX` blocks changes to the table until construction finishes. `CREATE INDEX CONCURRENTLY` lets ordinary `INSERT`, `UPDATE`, and `DELETE` operations continue, but does more work and may wait for other transactions. It cannot run inside a transaction block.
+
+Show on board runs a preview inside a transaction that is rolled back. This example therefore fails:
+
+```sql run expectError=25001
+create index concurrently customer_bonus_idx on customer (bonus);
+```
+
+Error `25001` says concurrent creation cannot run inside a transaction. Create the index as a separate command outside the preview:
+
+```sql apply expect=rows:0
+create index concurrently customer_bonus_idx on customer (bonus);
+```
+
+Press Apply. The lesson database runs in the browser and does not model concurrent server load; here we check the syntax and transaction restriction, not the locks under load.
+
+Check the customer's indexes:
+
+{/* final-only: системное представление не показано на учебной доске */}
+```sql run expect=rows:3 trace=final-only
+select indexname from pg_indexes
+where schemaname = 'public' and tablename = 'customer' order by indexname;
+```
+
+Three rows: the new `customer_bonus_idx`, the unique email index, and the primary key index. After a failed concurrent build on a server, an `INVALID` index can remain. It is not used for queries but may still require update resources. Check its state and the reason for failure before retrying.
+
+## Remove the practice index
+
+Remove only the index created in this lesson:
+
+```sql apply expect=rows:0
+drop index customer_bonus_idx;
+```
+
+Press Apply and inspect the list again:
+
+{/* final-only: системное представление не показано на учебной доске */}
+```sql run expect=rows:2 trace=final-only
+select indexname from pg_indexes
+where schemaname = 'public' and tablename = 'customer' order by indexname;
+```
+
+The two indexes supporting constraints remain. Ordinary `DROP INDEX` blocks access to the table during removal; `DROP INDEX CONCURRENTLY` reduces this impact but has restrictions and also cannot run in a transaction block. On a working server, first inspect dependencies and removal conditions instead of dropping indexes based only on a zero count.
+
+## What's missing and why
+
+- ❌ Proof that `orders_pkey` is useless when `idx_scan` is zero: it enforces the primary key, and the lesson counter does not accumulate.
+- ❌ `customer_bonus_idx` after removal: the command removed that practice index.
+- ❌ A demonstration of concurrent writes: the browser example checks commands in one lesson database.
+
+## Traps
+
+<Callout kind="trap">
+`CREATE INDEX CONCURRENTLY` cannot run inside a transaction block. After a failure, check whether an `INVALID` index remains and find the cause.
+</Callout>
+
+<Callout kind="tip">
+To assess an index, inspect queries over a representative period, as well as constraints and dependencies. Then compare its benefit with storage and maintenance costs.
+</Callout>
+
+## Check yourself
+
+1. Why is a zero `idx_scan` not enough reason to remove an index?
+2. Why did concurrent creation fail through Show on board but work through Apply?
+3. What should you check after a failed `CREATE INDEX CONCURRENTLY`?
+
+<Cheatsheet>
+- An index consumes storage and maintenance resources when data changes.
+- `idx_scan` helps investigate use but does not fully describe an index's purpose.
+- `CREATE INDEX CONCURRENTLY` does not block ordinary writes for the entire build and cannot run inside a transaction block.
+- A failed concurrent build can leave an `INVALID` index.
+</Cheatsheet>

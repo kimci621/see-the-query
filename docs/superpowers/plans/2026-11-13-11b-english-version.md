@@ -281,7 +281,7 @@
 - [x] 12.4 `index-variants`: `content/lessons-en/12-indexes/04-index-variants.mdx`
 - [x] 12.5 `selectivity`: `content/lessons-en/12-indexes/05-selectivity.mdx`
 - [x] 12.6 `index-types`: `content/lessons-en/12-indexes/06-index-types.mdx`
-- [ ] 12.7 `index-maintenance`: `content/lessons-en/12-indexes/07-index-maintenance.mdx`
+- [x] 12.7 `index-maintenance`: `content/lessons-en/12-indexes/07-index-maintenance.mdx`
 
 **13-design**
 
