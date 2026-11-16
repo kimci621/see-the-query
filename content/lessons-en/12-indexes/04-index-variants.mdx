@@ -1,0 +1,134 @@
+---
+id: index-variants
+title: Index variants
+chapter: indexes
+number: "12.4"
+order: 4
+dataset: big_bookstore
+board:
+  tables: [public.orders, public.customer]
+initialQuery: |
+  select count(*) as total from orders where customer_id = 1 and status = 'new';
+docs:
+  - url: https://www.postgresql.org/docs/18/indexes-unique.html
+    title: Unique indexes
+  - url: https://www.postgresql.org/docs/18/indexes-partial.html
+    title: Partial indexes
+  - url: https://www.postgresql.org/docs/18/indexes-expressional.html
+    title: Indexes on expressions
+  - url: https://www.postgresql.org/docs/18/indexes-index-only-scans.html
+    title: Covering indexes and index-only scans
+course: ["12.21", "12.25", "12.26", "12.27"]
+tags: [unique, partial index, expression, include]
+---
+
+<TlDr>An index can enforce uniqueness, contain only some rows, index an expression, or include extra columns needed by a query.</TlDr>
+
+## A unique index on part of a table
+
+In the practice dataset, customer 1 has five new orders:
+
+```sql run expect=rows:1
+select count(*) as total from orders where customer_id = 1 and status = 'new';
+```
+
+The one result row contains 5. Try to require at most one new order per customer:
+
+```sql run expectError=23505
+create unique index orders_new_unique_idx on orders (customer_id) where status = 'new';
+```
+
+Error `23505`: the existing data violates this rule, so the index was not created. If no customer had more than one new order, this **partial unique index** would enforce uniqueness only among rows satisfying its `WHERE` clause. Orders with other statuses would not be included.
+
+A unique index can also help searches. By default, an ordinary unique index allows multiple `NULL` values; `NULLS NOT DISTINCT` changes that rule. Primary keys and `UNIQUE` constraints automatically create the unique indexes they need.
+
+Create a partial index without the uniqueness requirement:
+
+```sql apply expect=rows:0
+create index orders_new_customer_idx on orders (customer_id) where status = 'new';
+```
+
+Apply saves the index in the lesson database. Now find the same orders:
+
+```sql run expect=rows:5
+select order_id from orders where customer_id = 1 and status = 'new' order by order_id;
+```
+
+The result has five rows. The partial index contains only rows with status `new`; the planner can choose it when it can prove the query condition implies the index predicate. Creating the index does not change the result.
+
+<Callout kind="analogy">
+A warehouse can keep a separate directory just for parcels waiting to be shipped. If the directory forbids duplicate recipient numbers, first check that the waiting parcels contain no such duplicates.
+</Callout>
+
+## An index on an expression
+
+In <T id="public.customer">customer</T>, customer 42's address is `User42@Example.com`. Find it case-insensitively with `lower`:
+
+```sql run expect=rows:1
+select customer_id, email from customer where lower(email) = 'user42@example.com';
+```
+
+One row is returned with the original address. Create an index on the expression's result:
+
+```sql apply expect=rows:0
+create index customer_lower_email_idx on customer (lower(email));
+```
+
+You can inspect the full plan for the same search in JSON:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+select customer_id from customer where lower(email) = 'user42@example.com';
+```
+
+Open the full cell value. On the original dataset, the plan usually contains a `Bitmap Index Scan` using `customer_lower_email_idx`. The index stores the result of `lower(email)`, not the original address text. A suitable index does not guarantee its selection: the decision depends on estimates and data.
+
+## Extra columns in an index
+
+Create an index on customer and include the status:
+
+```sql apply expect=rows:0
+create index orders_customer_cover_idx on orders (customer_id) include (status);
+```
+
+`customer_id` is the search key; `status` after `INCLUDE` is stored as an extra value. It does not become an index search or sort key. Request a plan for one matching order:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+select status from orders where customer_id = 42 limit 1;
+```
+
+The result is one row with a JSON plan. On this dataset the plan usually shows an `Index Only Scan` using the new index. Find `Heap Fetches`: if it is greater than zero, PostgreSQL still checked visibility for some rows in the table. The name `Index Only Scan` does not promise zero table visits. That depends on the visibility map and the data's state.
+
+Reset removes the practice indexes and restores the original dataset. Additional indexes take space and add work when data changes.
+
+## What's missing and why
+
+- ❌ A unique index on new orders by customer: five orders for one customer violate its condition.
+- ❌ Orders of other statuses in the partial index: they do not satisfy its `WHERE` clause.
+- ❌ A guarantee of no table visits during an `Index Only Scan`: row visibility may need a table check.
+
+## Traps
+
+<Callout kind="trap">
+A partial index can help a query only when the planner can relate the query's condition to the index predicate. Check the actual plan, especially for parameterized queries.
+</Callout>
+
+<Callout kind="tip">
+Choose indexes for specific queries and data constraints. Check the plan and `Heap Fetches`, and account for index size and write costs.
+</Callout>
+
+## Check yourself
+
+1. Why was the unique index on customer among new orders not created?
+2. How does an index on `lower(email)` differ from one on the original address?
+3. Why can `Heap Fetches` be nonzero in an `Index Only Scan`?
+
+<Cheatsheet>
+- `UNIQUE` prevents duplicate keys according to its rules for `NULL`.
+- A partial index contains rows satisfying its `WHERE` clause.
+- An expression index stores the result of the expression.
+- `INCLUDE` adds data to the index but not to the search key; visibility can still require a table visit.
+</Cheatsheet>
