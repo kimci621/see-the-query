@@ -24,6 +24,8 @@ for (const { minChips, ...viewport } of [
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.press('Backspace');
     await page.keyboard.insertText(QUERY);
+    await page.keyboard.press('Control+Space');
+    await expect(page.locator('.cm-tooltip-autocomplete')).toBeVisible();
     await expect(page.getByTestId('stage-chip')).toHaveText(CHIPS, { timeout: 5_000 });
 
     // лента чипов не отдаёт ширину настройкам плеера: видно не меньше minChips чипов целиком
@@ -39,7 +41,7 @@ for (const { minChips, ...viewport } of [
     expect(visibleChips).toBeGreaterThanOrEqual(minChips);
 
     // последний чип кликабелен и подпись про его шаг
-    await page.getByTestId('stage-chip').last().click();
+    await page.getByTestId('stage-chip').last().click({ timeout: 10_000 });
     const caption = page.getByTestId('timeline-caption');
     await expect(caption).toContainText('ORDER BY');
 

@@ -82,15 +82,8 @@ export const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(function
         schema: schema ? buildSchemaSpec(schema) : undefined,
       }),
       EditorView.contentAttributes.of({ 'aria-label': message(locale, 'SQL-запрос') }),
-      // Подсказки не перекрывают кнопки под редактором.
-      tooltips({
-        tooltipSpace: (view) => ({
-          top: 0,
-          left: 0,
-          right: document.documentElement.clientWidth,
-          bottom: view.dom.getBoundingClientRect().bottom,
-        }),
-      }),
+      // Подсказки остаются внутри редактора и не закрывают соседние панели.
+      tooltips({ tooltipSpace: (view) => view.dom.getBoundingClientRect() }),
       // Prec.highest: иначе Mod-Enter из defaultKeymap (insertBlankLine) срабатывает раньше
       Prec.highest(
         keymap.of([

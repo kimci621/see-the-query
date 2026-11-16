@@ -29,6 +29,8 @@ export function editorTheme(): Extension[] {
         color: 'var(--popover-foreground)',
         border: '1px solid var(--border)',
       },
+      '.cm-tooltip-autocomplete': { overflow: 'hidden' },
+      '.cm-tooltip-autocomplete > ul': { maxHeight: '100%' },
       '.cm-tooltip-autocomplete ul li[aria-selected]': {
         backgroundColor: 'var(--accent)',
         color: 'var(--accent-foreground)',
