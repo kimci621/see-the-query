@@ -1,0 +1,149 @@
+---
+id: normalization
+title: Data normalization
+chapter: design
+number: "13.1"
+order: 1
+dataset: empty
+initialQuery: |
+  select 1;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-basics.html
+    title: PostgreSQL tables
+  - url: https://www.postgresql.org/docs/18/ddl-constraints.html
+    title: Primary and foreign keys
+  - url: https://www.postgresql.org/docs/18/functions-string.html
+    title: String functions
+course: ["12.5"]
+tags: [normalization, 1nf, 2nf, 3nf, foreign key]
+---
+
+<TlDr>Normalization helps store independent facts separately and reduce inconsistencies when data changes. Keys preserve relationships between tables.</TlDr>
+
+## The data
+
+There are no user tables at the start of this lesson. Create students with a text list of hobbies. Execute the blocks in order and press Apply to change the database; Reset returns it to the beginning.
+
+```sql apply expect=rows:0
+create table student (id int primary key, name text, city text, hobbies text);
+```
+
+Add three rows:
+
+```sql apply expect=rows:3
+insert into student values
+  (1, 'Anna', 'Moscow', 'chess, drawing'),
+  (2, 'Boris', 'Kazan', 'swimming'),
+  (3, 'Vera', null, 'chess, music, cinema');
+```
+
+The table contains three students. Anna has two hobbies, Boris has one, and Vera has three. Find the row whose list contains “music”:
+
+```sql run expect=rows:1
+select name from student where hobbies like '%music%';
+```
+
+Vera is returned. Substring search is convenient for this experiment but does not check the boundaries of individual hobbies: a similar fragment inside another word would match too. A list in one string is difficult to validate with constraints or link to individual records.
+
+## Separate the values
+
+If hobbies need to be searched and changed individually, represent each student-hobby relationship as a separate row. The scene reads the current table and shows a proposed split; it does not change the database. Switch through all three steps and follow the links by `id`:
+
+<SplitScene source="student" keyColumn="id" extract="hobbies" target="student_hobby" parentColumn="student_id" valueColumn="hobby" />
+
+PostgreSQL can perform the same split: `string_to_array` divides text at commas, `unnest` expands the array into rows, and `trim` removes surrounding spaces:
+
+{/* final-only: разворачивание массива не имеет пошаговой трассы */}
+```sql run expect=rows:6 trace=final-only
+select id, trim(unnest(string_to_array(hobbies, ','))) as hobby from student order by id;
+```
+
+Six rows are returned. This works for our data, but if a value itself contains a comma, simple splitting cannot reliably reconstruct it.
+
+<Callout kind="analogy">
+Instead of one card listing every club, keep a separate card for each club membership. The student number on the card links it to a person; adding one membership does not require rewriting the whole list.
+</Callout>
+
+## Create related tables
+
+Create a relationship table. The foreign key requires an existing student, and the composite primary key prevents duplicate pairs:
+
+```sql apply expect=rows:0
+create table student_hobby (
+  student_id int references student(id),
+  hobby text,
+  primary key (student_id, hobby)
+);
+```
+
+Transfer the six values:
+
+```sql apply expect=rows:6
+insert into student_hobby (student_id, hobby)
+select id, trim(unnest(string_to_array(hobbies, ','))) from student;
+```
+
+After a successful transfer in this exercise, remove the old list column:
+
+```sql apply expect=rows:0
+alter table student drop column hobbies;
+```
+
+`student` now has an identifier, name, and city; `student_hobby` has six pairs. After the old column is removed, the scene can no longer read the source list and will show a prompt. To replay it, press Reset and create the original data again.
+
+Join the tables by key:
+
+```sql run expect=rows:6
+select s.name, sh.hobby from student s
+join student_hobby sh on sh.student_id = s.id
+order by s.id, sh.hobby;
+```
+
+Six rows are returned, one for each pair. The original hobbies are preserved as separate values. This `JOIN` shows only students with hobbies; use a suitable outer `JOIN` to keep rows without a match.
+
+To display a list to a person, assemble it in a query:
+
+```sql run expect=rows:3
+select s.name, string_agg(sh.hobby, ', ' order by sh.hobby) as hobbies
+from student s join student_hobby sh on sh.student_id = s.id
+group by s.id, s.name order by s.id;
+```
+
+Three rows are returned. Hobbies are sorted by name here, so the order and spaces from the original text are not necessarily preserved. For these data, the set of values survives, not an exact copy of the old string.
+
+## Normal forms
+
+**First normal form** requires treating attribute values as individual values in the chosen model. In this example, hobbies are needed as independent facts, so we store each separately. Atomicity depends on what the domain treats as a value: the presence of `array` or `jsonb` alone does not settle the design question.
+
+**Second normal form** adds a requirement: a non-key attribute must not depend on only part of a composite candidate key. For example, in a table of `(student_id, hobby)` pairs, the student's name depends on `student_id` alone, so it belongs in `student`.
+
+**Third normal form** eliminates certain transitive dependencies. In a simple case with one key, a non-key fact should not be determined by another non-key column: a department name determined by a department number belongs with the department instead of being repeated in every employee row. Check dependencies against the rules of your domain, not just column names.
+
+## What's missing and why
+
+- ❌ A separate row for a student without hobbies in the ordinary `JOIN`: it needs a matching relationship row.
+- ❌ The original hobby order in `string_agg`: the query explicitly sorts values by name.
+- ❌ The old `hobbies` column after `ALTER TABLE`: values were transferred to the practice relationship table.
+
+## Traps
+
+<Callout kind="trap">
+Splitting on commas is unsuitable for arbitrary lists with commas inside values, duplicates, or meaningful order. Before moving data, define its format and check which information must be preserved.
+</Callout>
+
+<Callout kind="tip">
+Use keys and constraints for facts that must remain consistent. If order, repetition, or change history matters, represent it explicitly in the model and verify the data transfer.
+</Callout>
+
+## Check yourself
+
+1. Why can substring search in the original list find extra matches?
+2. Which constraints protect pairs in `student_hobby`?
+3. Why does `string_agg` in this example not promise to reconstruct the original string exactly?
+
+<Cheatsheet>
+- Normalization separates facts and reduces inconsistencies when data changes.
+- Individual values can be stored as rows in a relationship table with a foreign key.
+- 2NF considers partial dependencies on composite candidate keys; 3NF considers transitive dependencies.
+- A migration must preserve the values, repetitions, order, and meaning the application needs.
+</Cheatsheet>
