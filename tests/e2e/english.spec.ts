@@ -122,3 +122,77 @@ test('неудачная вставка не меняет сохранённый
   await writeSql(page, "select customer_id from customer where email = 'new@example.com'");
   await expect(page.getByTestId('cell-0-0')).toHaveText('8', { timeout: 30_000 });
 });
+
+test('первый вход открывает русский урок и сохраняет выбор языка', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Как пользоваться доской' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+  await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await expect(page.getByRole('heading', { name: 'How to use the board' })).toBeVisible();
+  await page.goto('/l/select-basics');
+  await expect(page.getByRole('heading', { name: 'SELECT: columns, expressions and aliases' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});
+
+test('английская навигация и поиск сохраняют язык при переходах', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/l/how-to-use?lang=en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.getByRole('link', { name: /1\.1 Tables, rows, columns and cells/ }).click();
+  await expect(page.getByRole('heading', { name: 'Tables, rows, columns and cells' })).toBeVisible();
+  await page.getByRole('link', { name: '⟨ 0.1 How to use the board' }).click();
+  await expect(page.getByRole('heading', { name: 'How to use the board' })).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.getByRole('combobox', { name: 'Search lessons' }).fill('partitioning');
+  await page.getByRole('option', { name: '14.5 Table partitioning' }).click();
+  await expect(page.getByRole('heading', { name: 'Table partitioning' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.goto('/l/how-to-use');
+  await expect(page.getByRole('heading', { name: 'How to use the board' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+});
+
+test('отмена и сброс меняют только журнал выбранного языка', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/l/select-basics?lang=en');
+  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 30_000 });
+  await writeSql(page, "insert into author (name) values ('English journal')");
+  await page.getByTestId('apply-button').click();
+  await expect(page.getByTestId('apply-button')).toContainText('Applied', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+  await writeSql(page, "insert into author (name) values ('Russian journal')");
+  await page.getByTestId('apply-button').click();
+  await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await writeSql(page, "select count(*) from author where name = 'English journal'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await writeSql(page, "select count(*) from author where name = 'Russian journal'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Отменить', exact: true }).click();
+  await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
+  await writeSql(page, "insert into author (name) values ('Russian reset')");
+  await page.getByTestId('apply-button').click();
+  await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Переключить язык на английский' }).click();
+  await writeSql(page, "insert into author (name) values ('English reset')");
+  await page.getByTestId('apply-button').click();
+  await expect(page.getByTestId('apply-button')).toContainText('Applied', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Reset', exact: true }).click();
+  await writeSql(page, "select count(*) from author where name = 'English reset'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Switch language to Russian' }).click();
+  await writeSql(page, "select count(*) from author where name = 'Russian reset'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('1', { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Сброс', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Сбросить', exact: true }).click();
+  await writeSql(page, "select count(*) from author where name = 'Russian reset'");
+  await expect(page.getByTestId('cell-0-0')).toHaveText('0', { timeout: 20_000 });
+});

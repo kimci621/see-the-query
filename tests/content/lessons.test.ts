@@ -23,10 +23,7 @@ import {
 
 // Отдельный корень нужен проверке раннера на временных уроках.
 const ROOT = process.env.VS_CONTENT_ROOT ?? process.cwd();
-const LESSONS = [
-  ...collectLessonsMeta(ROOT),
-  ...collectLessonsMeta(ROOT, 'en', { requireAll: process.env.VS_REQUIRE_EN_LESSONS === '1' }),
-];
+const LESSONS = [...collectLessonsMeta(ROOT), ...collectLessonsMeta(ROOT, 'en', { requireAll: true })];
 
 // Уроки, написанные по docs/content-style.md. Задача урока добавляет сюда свой id первым шагом
 const GUIDE_LESSONS: string[] = [

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
@@ -47,7 +47,6 @@ it('проверяет настоящий перевод и останавлив
         env: {
           ...process.env,
           VS_CONTENT_ROOT: root,
-          VS_REQUIRE_EN_LESSONS: '1',
           VITEST_MAX_WORKERS: '1',
           FORCE_COLOR: '0',
         },
@@ -73,6 +72,14 @@ it('проверяет настоящий перевод и останавлив
     const missing = run();
     expect(missing.status, missing.stdout + missing.stderr).not.toBe(0);
     expect(missing.stdout + missing.stderr).toContain('нет ожидания');
+
+    writeFileSync(en, source);
+    renameSync(en, `${en}.bak`);
+    const renamed = run();
+    expect(renamed.status, renamed.stdout + renamed.stderr).not.toBe(0);
+    expect(renamed.stdout + renamed.stderr).toContain('Нет английских уроков: inner-join');
+    renameSync(`${en}.bak`, en);
+    expect(run().status).toBe(0);
 
     rmSync(en);
     const untranslated = run();

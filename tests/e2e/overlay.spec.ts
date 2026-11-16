@@ -208,7 +208,8 @@ test('переход из урока со сценой не сдвигает с�
   };
   const saved = () =>
     page.evaluate(() => {
-      const v = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['null-logic']?.viewport;
+      const v = JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['null-logic']?.workspaces
+        ?.ru?.viewport;
       return v ? [v.x, v.y, v.zoom].map((n: number) => Math.round(n * 100) / 100) : null;
     });
   // сохраняем камеру null-logic колесом над доской, когда стартовый запрос урока уже оттрассирован
@@ -226,7 +227,7 @@ test('переход из урока со сценой не сдвигает с�
   await typeQuery(page, QUERY);
   await expect(page.getByTestId('ghost-row')).toHaveCount(3, { timeout: 10_000 });
   // переход по сайдбару: фокус на ссылке, сцену стартового запроса запустил не пользователь
-  await page.locator('a[href="/l/null-logic"]').click();
+  await page.locator('a[href="/l/null-logic?lang=ru"]').click();
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 10_000 });
   await expect.poll(camera, { timeout: 5_000 }).toEqual(kept);
   // Проверка «камера не сдвинулась»: ждать нечего, кроме паузы возврата (RETURN_DELAY_MS 800) и полёта.

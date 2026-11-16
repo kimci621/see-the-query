@@ -57,8 +57,8 @@ test('камера урока переживает перезагрузку, ⌘
     .poll(() =>
       page.evaluate(
         () =>
-          JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['select-basics']?.viewport ??
-          null,
+          JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.['select-basics']?.workspaces
+            ?.ru?.viewport ?? null,
       ),
     )
     .not.toBeNull();
@@ -292,9 +292,8 @@ async function saveCamera(page: Page, lessonId: string): Promise<string> {
   const savedZoom = (id: string) =>
     page.evaluate(
       (id) =>
-        (JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.[id]?.viewport?.zoom as
-          | number
-          | undefined) ?? null,
+        (JSON.parse(localStorage.getItem('vs-lessons') ?? '{}').state?.byId?.[id]?.workspaces?.ru?.viewport
+          ?.zoom as number | undefined) ?? null,
       id,
     );
   await expect
