@@ -1,0 +1,123 @@
+---
+id: composite-indexes
+title: Multicolumn indexes
+chapter: indexes
+number: "12.3"
+order: 3
+dataset: big_bookstore
+board:
+  tables: [public.orders]
+initialQuery: |
+  select count(*) as total from orders where status = 'new' and created_at >= '2023-06-01 00:00+03';
+docs:
+  - url: https://www.postgresql.org/docs/18/indexes-multicolumn.html
+    title: Multicolumn indexes
+  - url: https://www.postgresql.org/docs/18/indexes-ordering.html
+    title: Indexes and ordering
+  - url: https://www.postgresql.org/docs/18/indexes-bitmap-scans.html
+    title: Combining multiple indexes
+course: ["12.20"]
+tags: [index, btree, column order, sorting]
+---
+
+<TlDr>In a multicolumn B-tree, column order affects search and sorting. Conditions on leading columns usually narrow the search most effectively.</TlDr>
+
+## The data
+
+<T id="public.orders">orders</T> contains 100,000 orders. Count new orders from June 1, 2023 onward:
+
+```sql run expect=rows:1
+select count(*) as total from orders
+where status = 'new' and created_at >= '2023-06-01 00:00+03';
+```
+
+The result is one row with the value 1696. `count(*)` returns the count in one row, not 1696 result rows. Remove the status condition:
+
+```sql run expect=rows:1
+select count(*) as total from orders
+where created_at >= '2023-06-01 00:00+03';
+```
+
+The single result row now contains 56,513: that includes orders of every status. These numbers apply to the original practice dataset.
+
+## Key order
+
+Create a B-tree on status and time:
+
+```sql apply expect=rows:0
+create index orders_status_created_idx on orders (status, created_at);
+```
+
+Press Apply to save the index in the lesson database. It does not change the number of orders and takes additional space. Reset restores the original dataset.
+
+Index entries are ordered first by <C id="public.orders.status">status</C>, then by <C id="public.orders.created_at">created_at</C> within each status. Equality on status and a range on time can limit the search area. Examine the actual plan:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+select order_id from orders
+where status = 'new' and created_at >= '2023-06-01 00:00+03';
+```
+
+Open the full JSON value in the result. On the practice dataset, the plan usually contains a `Bitmap Index Scan` with both conditions in `Index Cond`, followed by a table read. It returns 1696 orders; the chosen plan depends on statistics and may differ.
+
+<Callout kind="analogy">
+Imagine parcels in a catalog sorted by city, then by shipping date. For one city you can go directly to a range of dates. Finding a date across all cities requires considering several separate groups.
+</Callout>
+
+## Without a condition on the first column
+
+Check the plan for a search by time alone:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+select order_id from orders where created_at >= '2023-06-01 00:00+03';
+```
+
+The planner usually chooses a `Seq Scan` here: more than half the table matches. This is a decision for this dataset, not a prohibition on using the index without its first column.
+
+In PostgreSQL 18, a B-tree can use **skip scan**: perform repeated searches for values of the omitted leading column. This can pay off when there are few distinct values and much of the index can be skipped. Check the plan for your data instead of assuming that a missing leading condition always rules out the index.
+
+## Indexes and sorting
+
+Key order can help with `ORDER BY` too:
+
+```sql run expect=rows:10
+select status, created_at from orders order by status, created_at limit 10;
+```
+
+Ten rows are returned. Open the Plan tab: an index in a suitable order can avoid a separate `Sort` node. The plan depends on the conditions, sort direction, and planner estimates; you still need `ORDER BY` to require the desired order.
+
+## One multicolumn index or two separate indexes
+
+A multicolumn index can suit repeated combinations of conditions and a required ordering. Separate indexes can be useful if each column is often searched independently. PostgreSQL can sometimes combine them using a bitmap, but index order is lost and `ORDER BY` may need a sort. Compare plans and index maintenance costs for the real workload.
+
+## What's missing and why
+
+- ❌ 1696 result rows from `count(*)`: that is the count in a single row.
+- ❌ Orders before the specified date in either count: the time condition excludes them.
+- ❌ A guaranteed plan choice: an index gives the planner an option but does not force its use.
+
+## Traps
+
+<Callout kind="trap">
+For a B-tree, equality on leading columns and a range on the next column usually limit the scan area. Conditions to the right of the range can be checked in the index but do not necessarily reduce the part scanned.
+</Callout>
+
+<Callout kind="tip">
+Choose column order for frequent queries and sorts. Check `EXPLAIN ANALYZE` after changes, and account for storage and extra work on writes.
+</Callout>
+
+## Check yourself
+
+1. Why does the first `count(*)` show one row with the value 1696?
+2. How does `(status, created_at)` help a search by status and a time range?
+3. Why does the time-only search not prove that the multicolumn index is never used?
+
+<Cheatsheet>
+- A B-tree orders a multicolumn key from left to right.
+- Equality on leading columns and a range on the next column limit the search area.
+- Skip scan can help without a condition on the first column if the planner considers it worthwhile.
+- An index can help with sorting; `ORDER BY` specifies the required result order.
+</Cheatsheet>
