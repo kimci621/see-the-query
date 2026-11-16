@@ -1,0 +1,144 @@
+---
+id: index-types
+title: GIN, GiST, BRIN, and Hash
+chapter: indexes
+number: "12.6"
+order: 6
+dataset: big_bookstore
+board:
+  tables: [public.book, public.orders, public.customer]
+initialQuery: |
+  select count(*) as total from book where title ilike '%about Python%';
+docs:
+  - url: https://www.postgresql.org/docs/18/indexes-types.html
+    title: PostgreSQL index types
+  - url: https://www.postgresql.org/docs/18/pgtrgm.html
+    title: Trigram search
+  - url: https://www.postgresql.org/docs/18/gin.html
+    title: GIN indexes
+  - url: https://www.postgresql.org/docs/18/brin.html
+    title: BRIN indexes
+course: ["12.28"]
+tags: [gin, gist, brin, hash, pg_trgm]
+---
+
+<TlDr>PostgreSQL has several index types. The choice depends on the data, query operators, and available operator class.</TlDr>
+
+## GIN and substring search
+
+<T id="public.book">book</T> contains 100,000 books. Count the titles containing “about Python”:
+
+```sql run expect=rows:1
+select count(*) as total from book where title ilike '%about Python%';
+```
+
+The single result row contains 16,667. `ILIKE` searches without regard to case; `%` allows any characters. To support searching inside a string, install the `pg_trgm` extension:
+
+```sql apply expect=rows:0
+create extension pg_trgm;
+```
+
+Press Apply, then create a GIN index with the trigram operator class:
+
+```sql apply expect=rows:0
+create index book_title_trgm_idx on book using gin (title gin_trgm_ops);
+```
+
+**GIN** associates composite values with their elements. With suitable operator classes, it is used for arrays, JSONB, full-text search, and trigrams. The `pg_trgm` extension can help search for a fragment inside a string, not only at its beginning.
+
+Find a specific title:
+
+```sql run expect=rows:1
+select count(*) as total from book where title ilike '%Book 8 about Python%';
+```
+
+The count is 1. Look at the plan for finding the book itself:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+select book_id from book where title ilike '%Book 8 about Python%';
+```
+
+Open the full JSON value. On the original dataset, the plan usually contains a `Bitmap Index Scan` using `book_title_trgm_idx`, followed by a check of matching candidates. The plan can differ for another pattern or distribution of data.
+
+<Callout kind="analogy">
+An alphabetical catalog is convenient for searching by the beginning of a title. To find a fragment inside a title, you can build an index of short character sequences and use it to find candidates to check.
+</Callout>
+
+## BRIN and data order
+
+Orders in <T id="public.orders">orders</T> were added in increasing time order. Create a BRIN index on time:
+
+```sql apply expect=rows:0
+create index orders_created_brin_idx on orders using brin (created_at);
+```
+
+BRIN stores summaries for ranges of neighboring pages. For this time type, the default operator class can store minimum and maximum values. A page range can be skipped if it cannot contain the date in question.
+
+Count orders for June 1, 2023:
+
+```sql run expect=rows:1
+select count(*) as total from orders
+where created_at >= '2023-06-01 00:00+03' and created_at < '2023-06-02 00:00+03';
+```
+
+The count is 288 in one result row. Check the plan:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+select order_id from orders
+where created_at >= '2023-06-01 00:00+03' and created_at < '2023-06-02 00:00+03';
+```
+
+On this dataset, the planner usually chooses a `Bitmap Index Scan` on the BRIN index followed by checks of table pages. BRIN returns candidates at the level of page ranges, so `Rows Removed by Index Recheck` can include rows from other dates. Data order and range size affect efficiency; the index is compact, but maintaining it also has a cost.
+
+## Hash and other types
+
+Create a Hash index on the customer's email address:
+
+```sql apply expect=rows:0
+create index customer_email_hash_idx on customer using hash (email);
+```
+
+Check equality:
+
+```sql run expect=rows:1
+select customer_id from customer where email = 'User42@Example.com';
+```
+
+One row is returned with number 42. Hash supports indexed equality searches, but not range searches or output in key order. This dataset already has a unique B-tree on `email`, so the extra Hash index is only for practice and the planner may not choose it.
+
+The default B-tree supports equality, ranges, and sorting. GiST supports different structures and operators, such as searches on geometry and range types; some classes support nearest-neighbor searches. SP-GiST is useful for certain spatial partitions, including supported operations on IP addresses. Capabilities depend on the operator class as well as the index type.
+
+Reset restores the lesson database and removes the indexes and extension created here.
+
+## What's missing and why
+
+- ❌ 16,667 result rows from `count(*)`: the value is in one row.
+- ❌ Orders from other dates in the result: the BRIN recheck filters out nonmatching rows.
+- ❌ A guarantee that every created index is used: the planner compares available options.
+
+## Traps
+
+<Callout kind="trap">
+BRIN stores page summaries, not an exact list of all matching rows. The weaker the relationship between values and row locations, the more extra pages may need checking.
+</Callout>
+
+<Callout kind="tip">
+Choose the type and operator class for the query conditions. Compare plans on your own data and account for space and index maintenance costs on writes.
+</Callout>
+
+## Check yourself
+
+1. Why use `pg_trgm` and a GIN index for a substring search in titles?
+2. Why can BRIN return candidates that fail a recheck?
+3. Why might the practice Hash index on email be redundant?
+
+<Cheatsheet>
+- B-tree supports equality, ranges, and ordered output.
+- GIN supports searching elements of composite values with an appropriate operator class.
+- BRIN stores summaries of page ranges; Hash supports equality.
+- GiST and SP-GiST serve specialized tasks; available operations depend on the operator class.
+</Cheatsheet>
