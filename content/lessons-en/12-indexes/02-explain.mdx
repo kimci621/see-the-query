@@ -1,0 +1,137 @@
+---
+id: explain
+title: EXPLAIN and EXPLAIN ANALYZE
+chapter: indexes
+number: "12.2"
+order: 2
+dataset: big_bookstore
+board:
+  tables: [public.orders]
+initialQuery: |
+  select order_id from orders where customer_id = 42 order by order_id;
+docs:
+  - url: https://www.postgresql.org/docs/current/using-explain.html
+    title: Reading a query plan
+  - url: https://www.postgresql.org/docs/current/sql-explain.html
+    title: EXPLAIN
+course: ["12.19"]
+tags: [explain, analyze, plan, buffers, cost]
+---
+
+<TlDr>EXPLAIN shows PostgreSQL's plan and estimates. EXPLAIN ANALYZE executes the statement and adds actual counts.</TlDr>
+
+## The data
+
+<T id="public.orders">orders</T> contains 100,000 orders. Customer 42 has five orders; the original dataset has no separate index on `customer_id`. Start with an ordinary search:
+
+```sql run expect=rows:5
+select order_id from orders where customer_id = 42 order by order_id;
+```
+
+The result has five rows. The Plan tab shows PostgreSQL's execution tree for this `SELECT`. On the original dataset, the `Seq Scan` node examines 100,000 rows and five pass the filter. Hover over or focus the node to highlight its related step on the timeline.
+
+## Plan before execution
+
+A **query plan** is a tree of operations chosen by the planner. Lower nodes usually read input data; higher nodes use their output, for example to sort rows. The Plan tab is built for supported `SELECT` queries on the large dataset; it does not automatically repeat queries with arbitrary functions or row locks.
+
+`EXPLAIN` without `ANALYZE` shows estimates without executing the statement itself. Request the machine-readable JSON format:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (format json) select order_id from orders where customer_id = 42 order by order_id;
+```
+
+One row containing a JSON plan is returned. Click the underlined cell to open the full value; you can scroll the dialog and close it with Esc. In the original plan, the scan node contains `Plan Rows`, the estimated number of rows it will pass on per loop. `Total Cost` is an estimate in arbitrary cost units, not milliseconds. The board shows the final result of `EXPLAIN` without a step-by-step trace.
+
+<Callout kind="analogy">
+Before a trip, a navigator estimates a route from the map and available information. Afterwards, you can compare the estimate with the actual time and distance. The map helps choose a route, but it is not a record of a completed trip.
+</Callout>
+
+## Measure execution
+
+`EXPLAIN ANALYZE` executes the statement and reports actual values. Add `BUFFERS` to see buffer accesses:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, buffers, format json)
+select order_id from orders where customer_id = 42 order by order_id;
+```
+
+Again, one row contains JSON. Look for `Actual Rows` in the scan node: five rows per loop. `Rows Removed by Filter` shows 99,995 discarded rows. Together that is 100,000 rows examined when the node runs once.
+
+Compare `Plan Rows` and `Actual Rows`. A large difference can suggest an estimation or statistics problem, but does not by itself prove the cause. Timing depends on the machine, load, and cache state, so an exact number from one run does not carry over to another.
+
+## Loops and buffers
+
+If a node runs several times, `Actual Loops` shows the number of loops, while actual rows and time are reported as averages per loop. To approximate the total, multiply the average by `Actual Loops`. Averaging and rounding can reduce precision.
+
+`Shared Hit Blocks` counts accesses to shared buffers where the needed block was already cached; `Shared Read Blocks` counts blocks read into buffers. Repeated accesses count too. Parent counts include child nodes, so do not add together every level of the tree.
+
+Compare a range search on the primary key:
+
+```sql run expect=rows:10
+select order_id from orders where order_id between 5000 and 5009 order by order_id;
+```
+
+Ten rows are returned. Open the Plan tab and compare the scan node with the earlier `Seq Scan`. Request the same plan as JSON:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, buffers, format json)
+select order_id from orders where order_id between 5000 and 5009 order by order_id;
+```
+
+The JSON occupies one result row. The planner may use the primary key index; actual buffer counts and time depend on the run. Do not treat them as a count of unique pages or fixed disk access time.
+
+## ANALYZE really executes the command
+
+Check the status of order 1:
+
+```sql run expect=rows:1
+select order_id, status from orders where order_id = 1;
+```
+
+The status is `new`. The next command measures an `UPDATE` that temporarily changes it to `cancelled`:
+
+{/* final-only: EXPLAIN UPDATE не имеет пошаговой трассы */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json)
+update orders set status = 'cancelled' where order_id = 1;
+```
+
+`ANALYZE` executed the `UPDATE`, but Show on board runs the preview in a transaction that is rolled back. The status therefore remains unchanged after the example:
+
+```sql run expect=rows:1
+select order_id, status from orders where order_id = 1;
+```
+
+It is `new` again. Do not press Apply for this example unless you want to save the change. On a regular server, `EXPLAIN ANALYZE` also executes the command; rolling back the transaction does not undo every possible side effect, such as sequence values issued or external actions taken by a function.
+
+## What's missing and why
+
+- ❌ Actual timing in ordinary `EXPLAIN`: without `ANALYZE`, it shows estimates only.
+- ❌ A changed status after the preview: the transaction containing the `UPDATE` was rolled back.
+- ❌ The sum of buffers at every level as a count of distinct pages: accesses can repeat and are included in parent counts.
+
+## Traps
+
+<Callout kind="trap">
+`EXPLAIN ANALYZE` is not read-only merely because it begins with `EXPLAIN`. It executes the underlying statement. Before measuring a data change, plan for rollback and side effects.
+</Callout>
+
+<Callout kind="tip">
+Start with the section that actually costs the most and compare estimates with results. Repeat measurements under comparable conditions and account for cache, loops, and index maintenance costs.
+</Callout>
+
+## Check yourself
+
+1. How does `Plan Rows` differ from `Actual Rows`?
+2. How many rows did the original `Seq Scan` for customer 42 examine and return?
+3. Why did the order's status remain unchanged after the `EXPLAIN ANALYZE UPDATE` preview?
+
+<Cheatsheet>
+- `EXPLAIN` shows the chosen plan and estimates.
+- `EXPLAIN ANALYZE` executes the statement and adds actual data.
+- `Actual Loops` helps interpret per-loop averages for a node.
+- `BUFFERS` shows buffer accesses; do not blindly add counts across nodes.
+</Cheatsheet>
