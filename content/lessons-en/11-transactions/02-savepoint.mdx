@@ -1,0 +1,141 @@
+---
+id: savepoint
+title: SAVEPOINT
+chapter: transactions
+number: "11.2"
+order: 2
+dataset: bookstore
+board:
+  tables: [public.book, public.customer]
+initialQuery: |
+  select title, price from book where book_id = 3;
+docs:
+  - url: https://www.postgresql.org/docs/current/sql-savepoint.html
+    title: SAVEPOINT
+  - url: https://www.postgresql.org/docs/current/sql-rollback-to.html
+    title: ROLLBACK TO SAVEPOINT
+  - url: https://www.postgresql.org/docs/current/sql-release-savepoint.html
+    title: RELEASE SAVEPOINT
+course: ["12.11"]
+tags: [savepoint, rollback, transaction, checkpoint]
+---
+
+<TlDr>SAVEPOINT creates a marker inside a transaction. ROLLBACK TO discards changes made after that marker and lets the transaction continue.</TlDr>
+
+## The data
+
+In <T id="public.book">book</T>, book 3, The Fate of a Man, costs 350.00. Use it to explore a partial rollback. In <T id="public.customer">customer</T>, customer 2 has bonus 0; a constraint forbids negative values.
+
+```sql run expect=rows:1
+select title, price from book where book_id = 3;
+```
+
+The board shows one book at 350.00. Run the examples below in order. Apply runs the entire block and keeps committed changes in the lesson database.
+
+## Return to a savepoint
+
+A **savepoint** marks a state inside an open transaction. `ROLLBACK TO SAVEPOINT` discards changes made after it without ending the transaction. You can then run more commands and `COMMIT`.
+
+```sql apply expect=rows:1
+begin;
+savepoint s1;
+update book set price = 1 where book_id = 3;
+rollback to savepoint s1;
+update book set price = 999 where book_id = 3;
+commit;
+select title, price from book where book_id = 3;
+```
+
+The final query returns 999.00. Rolling back to `s1` discarded the price 1; the later change was committed. Check with a separate read:
+
+```sql run expect=rows:1
+select title, price from book where book_id = 3;
+```
+
+The board shows one row at 999.00. Reset restores the original price of 350.00.
+
+<Callout kind="analogy">
+Save a draft agreement before a difficult edit. If the edit does not work, return to the saved version and keep working. You send the finished agreement only after checking all the changes.
+</Callout>
+
+## An error inside a transaction
+
+During a batch load, a row can violate a constraint. If there is a savepoint before it, the application can handle the error, roll back to the savepoint and continue. The rollback discards all changes after the savepoint, including successful ones, not only the failed command.
+
+In this prepared scene, session A receives a constraint error, rolls back to `s1` and then reads six customers. The scene does not change the lesson database:
+
+<TwoSessions id="savepoint" />
+
+Now try the error in the sandbox:
+
+```sql apply expectError=23514
+begin;
+savepoint s1;
+update customer set bonus = bonus - 500 where customer_id = 2;
+rollback to savepoint s1;
+commit;
+```
+
+Error `23514` appears: the bonus cannot be negative. The sandbox stops the block at its first error and rolls back the open transaction; commands after the error in this block do not run. The scene above shows how an application can continue after `ROLLBACK TO`.
+
+```sql run expect=rows:1
+select customer_id, bonus from customer where customer_id = 2;
+```
+
+One row returns with bonus 0. The failed change was not saved.
+
+## Release a savepoint
+
+`RELEASE SAVEPOINT` removes a savepoint without committing the transaction. Changes made after it remain part of the transaction and can still be discarded by a full `ROLLBACK`:
+
+```sql apply expect=rows:1
+begin;
+savepoint s1;
+update book set price = 901 where book_id = 1;
+release savepoint s1;
+rollback;
+select title, price from book where book_id = 1;
+```
+
+Book 1's price is again 890.00. `RELEASE` freed the savepoint; the later full rollback discarded the price change.
+
+A transaction can have several savepoints. Rolling back to an earlier one removes later savepoints, but the target remains available for reuse. Releasing a savepoint also releases savepoints created after it. If several have the same name, PostgreSQL addresses the newest one first; distinct names are easier to follow.
+
+```sql apply expectError=3B001
+begin;
+savepoint s1;
+savepoint s2;
+rollback to savepoint s1;
+rollback to savepoint s2;
+```
+
+The final command raises `3B001`: after rolling back to `s1`, `s2` no longer exists. The sandbox rolls back the remaining open transaction.
+
+## What is missing from the result
+
+- ❌ Price 1 for book 3: the rollback to `s1` discarded it.
+- ❌ A negative bonus: the constraint rejected the change.
+- ❌ Price 901 for book 1: `RELEASE` is not `COMMIT`, and the full `ROLLBACK` discarded the change.
+
+## Traps
+
+<Callout kind="trap">
+`ROLLBACK TO` discards everything done after the savepoint, including successful commands. If earlier changes must survive a failed row, create the savepoint immediately before that row.
+</Callout>
+
+<Callout kind="tip">
+After an error, the application must explicitly run `ROLLBACK TO SAVEPOINT` before continuing in that transaction. Create a savepoint where you intend to handle an error and continue.
+</Callout>
+
+## Check yourself
+
+1. What price for book 3 remains after the rollback to `s1` and the later `COMMIT`?
+2. What happens to successful changes made after a savepoint when you use `ROLLBACK TO`?
+3. Why did the full `ROLLBACK` still discard price 901 after `RELEASE SAVEPOINT`?
+
+<Cheatsheet>
+- `SAVEPOINT name` creates a marker in an open transaction.
+- `ROLLBACK TO SAVEPOINT name` discards changes after the marker while keeping the transaction open.
+- `RELEASE SAVEPOINT name` releases the marker without committing the transaction.
+- `COMMIT` saves the remaining changes; a full `ROLLBACK` discards the entire transaction.
+</Cheatsheet>
