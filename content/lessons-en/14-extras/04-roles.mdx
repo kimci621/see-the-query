@@ -1,0 +1,144 @@
+---
+id: roles
+title: Roles and privileges
+chapter: extras
+number: "14.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.review]
+initialQuery: |
+  select review_id, book_id, rating from review order by review_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/user-manag.html
+    title: PostgreSQL roles
+  - url: https://www.postgresql.org/docs/18/ddl-priv.html
+    title: Object privileges
+  - url: https://www.postgresql.org/docs/18/sql-grant.html
+    title: Granting privileges
+  - url: https://www.postgresql.org/docs/18/sql-set-role.html
+    title: Switching roles
+  - url: https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html
+    title: Default privileges
+course: ["11.12", "12.49"]
+tags: [role, privileges, grant, revoke, security]
+---
+
+<TlDr>A role should receive only the privileges it needs. We'll create a role that can read reviews and verify it cannot insert them.</TlDr>
+
+## The data
+
+<T id="public.review">review</T> contains ten reviews. The current role can read the table:
+
+```sql run expect=rows:1
+select count(*) as reviews from review;
+```
+
+The board shows one row with 10. Check access to the same table for a new role.
+
+## Roles and privileges
+
+A **role** can own objects and receive privileges. A role with `LOGIN` can be used to connect; a role without it can still receive privileges, own objects, and be granted to other roles.
+
+Create a practice role without login:
+
+```sql apply expect=rows:0
+create role auditor nologin;
+```
+
+Check whether it can read and insert into `review`:
+
+```sql run expect=rows:1
+select has_table_privilege('auditor', 'public.review', 'select') as can_read,
+       has_table_privilege('auditor', 'public.review', 'insert') as can_insert;
+```
+
+Both values on the board are `false`. The result accounts for the role's effective privileges, including those from membership and `PUBLIC`. The new role has not yet received access to the table here.
+
+<Callout kind="analogy">
+A privilege on an object is like access to a folder: permission to read documents does not give permission to add new ones. You may also need access to the schema containing the table.
+</Callout>
+
+## Grant read access
+
+Grant `SELECT` on the table:
+
+```sql apply expect=rows:0
+grant select on public.review to auditor;
+```
+
+Check both privileges again:
+
+```sql run expect=rows:1
+select has_table_privilege('auditor', 'public.review', 'select') as can_read,
+       has_table_privilege('auditor', 'public.review', 'insert') as can_insert;
+```
+
+Now `can_read` is `true` and `can_insert` remains `false`. Try reading reviews under this role:
+
+```sql apply expect=rows:1
+set local role auditor;
+select current_user, count(*) as reviews from public.review;
+```
+
+The result shows `auditor` and 10 reviews. `SET LOCAL ROLE` lasts within the block's transaction; the previous role is restored when it ends. The sandbox runs the command from a role with sufficient privileges. On a regular server, switching requires appropriate membership with the `SET` option or superuser privileges.
+
+## Attempt a write
+
+Try to add a review under the auditor role:
+
+```sql apply expectError=42501
+set local role auditor;
+insert into public.review (book_id, customer_id, rating, body)
+values (1, 1, 5, 'New review');
+```
+
+PostgreSQL returns `42501`: there is no privilege to insert into the table. The code and original error text appear in a notification. The error rolls back the block, so no row is added and the role does not remain switched. Check:
+
+```sql run expect=rows:1
+select current_user, count(*) as reviews from review;
+```
+
+The board again shows 10 reviews and the original role, not `auditor`. Do not check privileges only through application buttons: restrictions should also apply to direct database queries.
+
+## Revoke access
+
+```sql apply expect=rows:0
+revoke select on public.review from auditor;
+```
+
+```sql run expect=rows:1
+select has_table_privilege('auditor', 'public.review', 'select') as can_read;
+```
+
+After revocation the board shows `false`. Reset restores the original database and removes the practice role.
+
+`GRANT` and `REVOKE` also work with other objects, such as schemas and functions, but the available privileges differ. `PUBLIC` means all roles; some object types grant privileges to `PUBLIC` by default. `ALTER DEFAULT PRIVILEGES` changes initial privileges for future objects created by the selected role, not privileges on existing tables.
+
+## What's missing and why
+
+- ❌ A new review after the auditor's attempt: the role lacks `INSERT`, so the block failed.
+- ❌ Read access after `REVOKE`: it was revoked and this example has no other source for it.
+
+## Traps
+
+<Callout kind="trap">
+Revoking a privilege from one role does not remove access obtained through `PUBLIC` or membership in another role. Check the effective privilege, as in the `has_table_privilege` query.
+</Callout>
+
+<Callout kind="tip">
+Use a separate application role with the minimum privileges needed. Account for privileges on schemas and sequences, role membership, and row-level security; avoid connecting as the owner unless necessary.
+</Callout>
+
+## Check yourself
+
+1. Which privileges does `auditor` have immediately after `GRANT` in the example?
+2. Why did the review count remain 10 after the error?
+3. Does `REVOKE` from one role guarantee the absence of access through `PUBLIC`?
+
+<Cheatsheet>
+- Roles can log in, own objects, and receive privileges depending on their settings.
+- `GRANT` grants a privilege; `REVOKE` removes it from the specified source.
+- `SET LOCAL ROLE` temporarily switches role within a transaction; use of the command is restricted.
+- Check effective privileges and give an application only those it needs.
+</Cheatsheet>
