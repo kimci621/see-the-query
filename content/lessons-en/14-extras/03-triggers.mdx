@@ -1,0 +1,149 @@
+---
+id: triggers
+title: Triggers
+chapter: extras
+number: "14.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book where book_id = 1;
+docs:
+  - url: https://www.postgresql.org/docs/18/trigger-definition.html
+    title: How triggers work
+  - url: https://www.postgresql.org/docs/18/plpgsql-trigger.html
+    title: PL/pgSQL trigger functions
+  - url: https://www.postgresql.org/docs/18/sql-createtrigger.html
+    title: Creating a trigger
+course: ["12.43"]
+tags: [trigger, plpgsql, log]
+---
+
+<TlDr>A trigger invokes a function when an event occurs on a table. We'll change a price and write a log entry in one transaction.</TlDr>
+
+## The data
+
+In <T id="public.book">book</T>, And Quiet Flows the Don costs 890:
+
+```sql run expect=rows:1
+select book_id, title, price from book where book_id = 1;
+```
+
+The board shows one row. Create a change log and a trigger that adds the old and new price to it.
+
+## The log and function
+
+A **trigger** connects an event to a function: PostgreSQL calls it automatically when an operation meets the trigger's conditions. First create the log table:
+
+```sql apply expect=rows:0
+create table price_log (
+  book_id bigint,
+  old_price numeric,
+  new_price numeric,
+  changed_at timestamptz default now()
+);
+```
+
+Now create a trigger function. In a row-level trigger, `OLD` contains the old row and `NEW` the new one:
+
+```sql apply expect=rows:0
+create function log_price_change() returns trigger
+language plpgsql as $$
+begin
+  insert into price_log (book_id, old_price, new_price)
+  values (new.book_id, old.price, new.price);
+  return new;
+end;
+$$;
+```
+
+The function is ready, but is not attached to a table on its own. Add a trigger:
+
+```sql apply expect=rows:0
+create trigger book_price_log after update on book
+for each row when (old.price is distinct from new.price)
+execute function log_price_change();
+```
+
+`AFTER UPDATE` sets the event and timing. `FOR EACH ROW` means a separate call for every qualifying row. `WHEN` skips the function if the price did not change; `IS DISTINCT FROM` also compares `NULL` correctly.
+
+<Callout kind="analogy">
+A trigger is like a log entry made when a price is revised: the book record changes, and a separate entry records the old and new values. Both operations are part of one transaction.
+</Callout>
+
+## Preview first
+
+Run the change on the board:
+
+```sql run expect=rows:1
+update book set price = price + 10 where book_id = 1 returning title, price;
+```
+
+The board shows the new price of 900 and the added `price_log` row. The label names `book_price_log` as a possible trigger: it shows a matching trigger and an observed change, but does not prove a causal link for arbitrary code. The preview rolls back both writes. Check the log:
+
+```sql run expect=rows:1
+select count(*) as entries from price_log;
+```
+
+The count is zero. Now execute and save the same change:
+
+```sql apply expect=rows:1
+update book set price = price + 10 where book_id = 1 returning title, price;
+```
+
+```sql run expect=rows:1
+select book_id, old_price, new_price from price_log;
+```
+
+One log row records the change from 890.00 to 900.00. The recorded time depends on when it runs. If the transaction rolls back, both the price update and the trigger's log entry roll back.
+
+## When the price stays the same
+
+Update the same row without changing its price:
+
+```sql apply expect=rows:1
+update book set price = price where book_id = 1 returning title, price;
+```
+
+The row is updated, but the `WHEN` condition is false. Check the number of entries:
+
+```sql run expect=rows:1
+select count(*) as entries from price_log;
+```
+
+There is still one. Reset restores the initial data and removes the log and trigger.
+
+## BEFORE, AFTER, and call level
+
+A row-level `BEFORE` trigger fires before the operation. For `INSERT` or `UPDATE`, its function can return a modified `NEW` or return `NULL` to skip the operation for that row. `AFTER` fires after the operation; its return value is ignored. Both execute in the same transaction, so an error or rollback can cancel the whole operation.
+
+`FOR EACH ROW` runs for every affected row. `FOR EACH STATEMENT` runs once per statement, even if it affected no rows. A statement-level trigger does not have separate `OLD` and `NEW` records for each row.
+
+## What's missing and why
+
+- ❌ A log entry after preview: it rolls back both the price change and the log insertion.
+- ❌ A second entry after `price = price`: the `WHEN` condition was false.
+
+## Traps
+
+<Callout kind="trap">
+An `UPDATE` can affect a row even when a column's value stays the same. For a change log, compare the old and new values as in our `WHEN` condition.
+</Callout>
+
+<Callout kind="tip">
+Document trigger side effects and test transaction rollback. For simple constraints, first consider `NOT NULL`, `CHECK`, `UNIQUE`, and foreign keys.
+</Callout>
+
+## Check yourself
+
+1. How many rows appear in the log after previewing the price change? Why?
+2. Why did `UPDATE ... SET price = price` add no entry?
+3. How does `FOR EACH ROW` differ from `FOR EACH STATEMENT` when a statement affects no rows?
+
+<Cheatsheet>
+- A trigger specifies an event, timing, call level, and function.
+- In a row-level `UPDATE`, `OLD` and `NEW` are available; `WHEN` can compare them.
+- A row-level `BEFORE` trigger can change `NEW` or skip the row; an `AFTER` trigger's return value is ignored.
+- The trigger and the statement that invoked it participate in one transaction.
+</Cheatsheet>
