@@ -1,0 +1,140 @@
+---
+id: full-text-search
+title: Full-text search
+chapter: extras
+number: "14.1"
+order: 1
+dataset: bookstore
+board:
+  tables: [public.review, public.book]
+initialQuery: |
+  select review_id, book_id, body from review order by review_id;
+docs:
+  - url: https://www.postgresql.org/docs/18/textsearch-intro.html
+    title: Full-text search in PostgreSQL
+  - url: https://www.postgresql.org/docs/18/textsearch-controls.html
+    title: Parsing queries and ranking
+  - url: https://www.postgresql.org/docs/18/textsearch-tables.html
+    title: Searching tables and indexes
+course: ["12.29"]
+tags: [full-text search, tsvector, tsquery, gin]
+---
+
+<TlDr>Full-text search compares normalized lexemes from text and a query. The configuration determines how words are parsed, and GIN can speed up the search.</TlDr>
+
+## The data
+
+<T id="public.review">review</T> contains ten book reviews. See how PostgreSQL parses the first review:
+
+```sql run expect=rows:1
+select to_tsvector('english', 'A great novel about the Don Cossacks. Hard to put down.') as vector;
+```
+
+The result is one `tsvector` row. Click the underlined cell to see the full value. The vector contains lexemes and their positions; for example, `cossack` corresponds to “Cossacks”, while “the” is absent as a stop word.
+
+The scene uses the same PostgreSQL: step from the original text to the vector. The parser can identify overlapping tokens, and the dictionary decides which lexemes to keep.
+
+<LexemeScene text="A great novel about the Don Cossacks. Hard to put down." config="english" />
+
+## Query lexemes
+
+`plainto_tsquery` turns ordinary query text into search lexemes. The `@@` operator checks whether a vector matches. Find reviews containing “science fiction”:
+
+```sql run expect=rows:2
+select book_id, rating from review
+where to_tsvector('english', body) @@ plainto_tsquery('english', 'science fiction')
+order by book_id;
+```
+
+Two reviews are returned, for books 6 and 8. Search compares lexemes according to the chosen configuration. It does not understand the meaning of text or provide universal synonym or typo matching.
+
+<Callout kind="analogy">
+In a subject index, different forms of a word can lead to the same entry. A vector is like such an index with positions in the document, and a search query looks for matching entries.
+</Callout>
+
+## Store a vector and add an index
+
+Create a generated column for review text:
+
+```sql apply expect=rows:0
+alter table review add column body_tsv tsvector
+  generated always as (to_tsvector('english', body)) stored;
+```
+
+Press Apply. PostgreSQL computes the stored vector when the row is written. Add a GIN index:
+
+```sql apply expect=rows:0
+create index review_body_tsv_idx on review using gin (body_tsv);
+```
+
+Now find reviews that match both search lexemes:
+
+```sql run expect=rows:1
+select book_id, rating from review
+where body_tsv @@ plainto_tsquery('english', 'book python')
+order by book_id;
+```
+
+One review is returned for book 2 with rating 5. `plainto_tsquery` joins recognized words with AND; their order in this kind of query does not need to match their order in the text. The index can help with larger data, but for ten rows the planner may choose a sequential scan.
+
+## Ranking
+
+`ts_rank` calculates a score for how a vector matches a query. Show the three reviews with the highest scores:
+
+```sql run expect=rows:3
+select book_id, round(ts_rank(body_tsv, plainto_tsquery('english', 'book python'))::numeric, 4) as rank
+from review order by rank desc, book_id, review_id limit 3;
+```
+
+The first row belongs to book 2. The next rows have zero scores because the query did not filter out nonmatches with `@@`. The score compares results under the chosen formula; it is not a percentage of meaning.
+
+## The vector updates when the text changes
+
+Replace the text of review 2:
+
+```sql apply expect=rows:1
+update review set body = 'Learning to write queries.' where review_id = 2;
+```
+
+After Apply, the stored vector for this row is recomputed. Repeat the search:
+
+```sql run expect=rows:0
+select book_id, rating from review
+where body_tsv @@ plainto_tsquery('english', 'book python')
+order by book_id;
+```
+
+There are no matches now. Reset restores the original reviews and removes the practice column and index.
+
+## Words and substrings
+
+`LIKE` and `ILIKE` search character patterns; full-text search works with lexemes and dictionary settings. For part of a word or similar strings, `pg_trgm`, used in the index types lesson, may be suitable. The choice depends on what the user needs to find.
+
+## What's missing and why
+
+- ❌ The word “the” in the vector: the dictionary recognizes it as a stop word.
+- ❌ The review after its text is replaced: the new vector no longer matches both search lexemes.
+- ❌ A guarantee that GIN is used on a small table: the planner chooses an access method based on estimates.
+
+## Traps
+
+<Callout kind="trap">
+Different configurations can produce different lexemes. Align the document, query, and index configurations; do not mistake stemming for synonym search or typo correction.
+</Callout>
+
+<Callout kind="tip">
+Test search with real text and expected queries. An index takes space and adds work to writes, so compare plans and measurements at an appropriate data volume.
+</Callout>
+
+## Check yourself
+
+1. What does `to_tsvector` do with the stop word “the” in the example?
+2. Why did the query “book python” find one review and then stop finding it after the text changed?
+3. Why do `ILIKE`, `pg_trgm`, and full-text search solve different problems?
+
+<Cheatsheet>
+- `to_tsvector` creates a vector of lexemes and positions using the chosen configuration.
+- `plainto_tsquery` parses ordinary query text; `@@` checks for a match.
+- A stored generated column updates when its row is written; GIN can speed up search.
+- `ts_rank` produces a score for sorting, not a guarantee of semantic similarity.
+</Cheatsheet>
