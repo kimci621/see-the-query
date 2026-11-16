@@ -1,0 +1,143 @@
+---
+id: partitioning
+title: Table partitioning
+chapter: extras
+number: "14.5"
+order: 5
+dataset: empty
+initialQuery: |
+  select 1;
+docs:
+  - url: https://www.postgresql.org/docs/18/ddl-partitioning.html
+    title: Table partitioning
+  - url: https://www.postgresql.org/docs/18/ddl-system-columns.html
+    title: System columns
+  - url: https://www.postgresql.org/docs/18/sql-createtable.html
+    title: Creating tables and partitions
+course: ["12.34"]
+tags: [partitioning, partition, range]
+---
+
+<TlDr>A partitioned table brings together physical partitions. PostgreSQL routes each row to a partition based on its key.</TlDr>
+
+## The data
+
+Start with an empty database. Create a measurements table and two monthly partitions. Then insert rows into the parent and check where they went.
+
+## Parent and partitions
+
+**Partitioning** divides one logical table into partitions that store its rows. Create a parent with `logdate` as its key and a `RANGE` rule:
+
+```sql apply expect=rows:0
+create table measurement (
+  city_id integer not null,
+  logdate date not null,
+  peaktemp integer
+) partition by range (logdate);
+```
+
+The parent itself does not store rows. Add partitions for May and June:
+
+```sql apply expect=rows:0
+create table measurement_2024_05 partition of measurement
+for values from ('2024-05-01') to ('2024-06-01');
+```
+
+```sql apply expect=rows:0
+create table measurement_2024_06 partition of measurement
+for values from ('2024-06-01') to ('2024-07-01');
+```
+
+The lower range bound is inclusive and the upper bound is exclusive. June 1 belongs to the June partition, not May's. Ranges of partitions with the same parent cannot overlap.
+
+<Callout kind="analogy">
+Monthly folders in an archive sit under one shared section: a record goes into the folder for its date, while a query to the section can read all folders at once.
+</Callout>
+
+## Insert routing
+
+Preview two rows:
+
+```sql run expect=rows:2
+insert into measurement values
+  (1, '2024-05-10', 20), (1, '2024-06-15', 25);
+```
+
+The board shows how PostgreSQL routed the rows to different partitions. The preview is rolled back. Save the same rows:
+
+```sql apply expect=rows:2
+insert into measurement values
+  (1, '2024-05-10', 20), (1, '2024-06-15', 25);
+```
+
+Check the partitions using the `tableoid` system column:
+
+{/* final-only: чтение секционированного родителя показывает результат без пошагового разбора */}
+```sql run expect=rows:2 trace=final-only
+select tableoid::regclass as section, city_id, logdate, peaktemp
+from measurement order by logdate;
+```
+
+One row is in `measurement_2024_05`, the other in `measurement_2024_06`. `tableoid` identifies the physical table containing the row; casting to `regclass` shows its name.
+
+## No matching partition
+
+April does not fit anywhere yet:
+
+```sql run expectError=23514
+insert into measurement values (1, '2024-04-01', 18);
+```
+
+PostgreSQL returns error `23514`: no partition matches, so the row is not inserted. Create a default partition:
+
+```sql apply expect=rows:0
+create table measurement_default partition of measurement default;
+```
+
+Now the insert succeeds:
+
+```sql apply expect=rows:1
+insert into measurement values (1, '2024-04-01', 18);
+```
+
+{/* final-only: чтение секционированного родителя показывает результат без пошагового разбора */}
+```sql run expect=rows:3 trace=final-only
+select tableoid::regclass as section, city_id, logdate, peaktemp
+from measurement order by logdate;
+```
+
+There are now three rows. April went into `measurement_default`; the others remain in their partitions. Reset removes the practice tables.
+
+## When partitioning helps
+
+When a query condition allows partitions to be excluded, PostgreSQL can avoid reading them. This is called **partition pruning**. Dropping or detaching an entire old partition can also be more convenient than a bulk `DELETE`, but requires planning for locks and data retention.
+
+Besides `RANGE`, PostgreSQL supports `LIST` for specified values and `HASH` by hash remainder. Partitioning does not automatically speed up every query: check plans and measure the workload. Too many partitions add overhead as well.
+
+## What's missing and why
+
+- ❌ April before `DEFAULT` was created: the date was outside every range.
+- ❌ Data after only a preview: the sandbox rolled the insertion back before Apply.
+
+## Traps
+
+<Callout kind="trap">
+The upper `RANGE` bound is not included in a partition. A primary or unique key on a partitioned parent must include all partition key columns; expressions in the partition key impose additional restrictions.
+</Callout>
+
+<Callout kind="tip">
+Choose a key based on actual queries and the data lifecycle. Plan future partitions and monitor `DEFAULT`: before adding a new range, you may need to move matching rows out of it.
+</Callout>
+
+## Check yourself
+
+1. Which partition receives June 1? Verify by inserting it and querying `tableoid`.
+2. What happened to the April row before `DEFAULT` was created?
+3. Why does partition pruning not guarantee that every query is faster?
+
+<Cheatsheet>
+- `PARTITION BY RANGE` sets the parent's key and partitioning method.
+- `FROM` includes the lower bound; `TO` excludes the upper bound.
+- `DEFAULT` accepts values that do not match other partitions.
+- `tableoid::regclass` shows the physical table containing a row.
+</Cheatsheet>
