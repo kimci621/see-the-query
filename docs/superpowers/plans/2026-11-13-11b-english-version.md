@@ -271,7 +271,7 @@
 - [x] 11.2 `savepoint`: `content/lessons-en/11-transactions/02-savepoint.mdx`
 - [x] 11.3 `mvcc`: `content/lessons-en/11-transactions/03-mvcc.mdx`
 - [x] 11.4 `isolation`: `content/lessons-en/11-transactions/04-isolation.mdx`
-- [ ] 11.5 `locks`: `content/lessons-en/11-transactions/05-locks.mdx`
+- [x] 11.5 `locks`: `content/lessons-en/11-transactions/05-locks.mdx`
 
 **12-indexes**
 

@@ -1,0 +1,120 @@
+---
+id: locks
+title: Locks and deadlocks
+chapter: transactions
+number: "11.5"
+order: 5
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book where book_id = 1;
+docs:
+  - url: https://www.postgresql.org/docs/current/explicit-locking.html
+    title: Explicit locking
+  - url: https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE
+    title: Row locks in SELECT
+course: ["12.17"]
+tags: [lock, for update, nowait, skip locked, deadlock]
+---
+
+<TlDr>Locks protect rows during concurrent work. PostgreSQL detects a deadlock and aborts one transaction with error 40P01.</TlDr>
+
+## The data
+
+In <T id="public.book">book</T>, book 1, And Quiet Flows the Don, costs 890.00. Let's lock its row and see what happens to a query in another session.
+
+```sql run expect=rows:1
+select book_id, title, price from book where book_id = 1;
+```
+
+The board shows one book. An ordinary `SELECT` reads the appropriate row version from its snapshot; below we add an explicit lock to the read.
+
+## Lock a row
+
+A **lock** restricts concurrent actions on an object. PostgreSQL also acquires locks automatically, for example during an `UPDATE`. With `SELECT FOR UPDATE`, you can lock selected rows before changing them.
+
+```sql apply expect=rows:1
+begin;
+select book_id, title from book where book_id = 1 for update;
+```
+
+The query returns one row. Apply executes the whole block and closes the open transaction afterwards, so the sandbox has already released the lock. In an ordinary client, hold it within a transaction and end the work with `COMMIT` or `ROLLBACK`.
+
+In the scene, A holds a lock on book 1 while B tries to acquire an incompatible lock on the same row. B waits until A ends its transaction, then gets the row. The prepared scene does not change the lesson database.
+
+<TwoSessions id="lock-for-update" />
+
+An ordinary read without `FOR UPDATE` does not conflict with a row lock and uses MVCC. Some table locks can delay even an ordinary `SELECT`, so do not assume every read is independent of all locks.
+
+<Callout kind="analogy">
+An editor takes a card to correct it and marks it as being edited. Another editor waits for the card to be returned. A visitor can still read the published catalog.
+</Callout>
+
+## Other ways to handle waiting
+
+`NOWAIT` reports an error immediately if the required row lock cannot be acquired. No other session holds this row in the lesson database, so the query returns the book:
+
+```sql apply expect=rows:1
+begin;
+select book_id, title from book where book_id = 1 for update nowait;
+```
+
+One row is returned. There is no wait here because there is no conflict; `NOWAIT` does not remove the need for other types of locks.
+
+`FOR SHARE` takes a less restrictive row lock: it is compatible with some other read locks, but prevents conflicting changes to the row.
+
+```sql apply expect=rows:1
+begin;
+select book_id, title from book where book_id = 1 for share;
+```
+
+Again, one row is returned and the sandbox closes the transaction. The exact conflicts depend on the lock mode; check the documentation for the complete list.
+
+`SKIP LOCKED` skips rows locked by another transaction. This can be useful for multiple queue workers, but the result can be incomplete and is unsuitable for a general consistent report:
+
+```sql apply expect=rows:2
+begin;
+select book_id, title from book where book_id in (1, 2) order by book_id for update skip locked;
+```
+
+Both rows are free in this sandbox, so the result contains two books. A matching row may be skipped when there is a conflict.
+
+## Deadlocks
+
+A **deadlock** occurs when transactions form a cycle of waiting: A waits for B's resource and B waits for A's. In the scene, each session first changes its own book and then tries to change the other session's book.
+
+<TwoSessions id="deadlock" />
+
+PostgreSQL detects the cycle and aborts one transaction with code `40P01` so the other can continue. B is chosen in this prepared scene, but in general you cannot rely on a particular side being chosen. Detection intervals in the scene are configured for a repeatable result.
+
+To reduce deadlocks, try to acquire needed locks in the same order throughout the application. This lowers the risk but does not replace error handling and retrying the whole transaction when appropriate.
+
+## What's missing and why
+
+- ❌ Other books in the first query: the condition selected only `book_id = 1`.
+- ❌ Skipped rows in the `SKIP LOCKED` example: no other session holds the selected books.
+- ❌ A guarantee that B will be aborted in every deadlock: PostgreSQL may choose the other transaction.
+
+## Traps
+
+<Callout kind="trap">
+A row lock lasts within the transaction. If the client commits immediately after `SELECT FOR UPDATE`, the lock is released before the next separate command. In the sandbox this happens after every Apply block.
+</Callout>
+
+<Callout kind="tip">
+Select only the rows you need and end the transaction when finished. Do not hold a lock while waiting for a user or an external service. You can limit waiting with `lock_timeout` in the server or transaction settings.
+</Callout>
+
+## Check yourself
+
+1. Why does B wait in the first scene, and when does the wait end?
+2. What does `SKIP LOCKED` return if another transaction holds one of the matching rows?
+3. What does `40P01` mean, and why does the order in which rows are accessed matter?
+
+<Cheatsheet>
+- `FOR UPDATE` locks selected rows against conflicting changes and locks.
+- `NOWAIT` reports a conflict immediately; `SKIP LOCKED` skips locked rows.
+- Locks are normally released at the end of a transaction; rolling back to a savepoint can release locks acquired after it sooner.
+- A deadlock produces `40P01`; avoid taking the same resources in different orders.
+</Cheatsheet>
