@@ -1,0 +1,138 @@
+---
+id: selectivity
+title: Selectivity and statistics
+chapter: indexes
+number: "12.5"
+order: 5
+dataset: big_bookstore
+board:
+  tables: [public.orders]
+initialQuery: |
+  select count(*) as total from orders where status = 'paid';
+docs:
+  - url: https://www.postgresql.org/docs/18/planner-stats.html
+    title: Planner statistics
+  - url: https://www.postgresql.org/docs/18/sql-analyze.html
+    title: ANALYZE
+course: ["12.23", "12.30"]
+tags: [selectivity, statistics, analyze, planner]
+---
+
+<TlDr>The planner estimates the fraction of matching rows and the cost of each option using statistics. ANALYZE updates statistics, and EXPLAIN shows the chosen plan.</TlDr>
+
+## How many rows match
+
+<T id="public.orders">orders</T> contains 100,000 orders. Count those that are paid:
+
+```sql run expect=rows:1
+select count(*) as total from orders where status = 'paid';
+```
+
+The single result row contains 67,000. Now count new orders:
+
+```sql run expect=rows:1
+select count(*) as total from orders where status = 'new';
+```
+
+The count here is 3000. PostgreSQL documentation defines a condition's **selectivity** as the fraction of rows that match it: in the original dataset these are 0.67 and 0.03. Other sources sometimes use “high selectivity” for the opposite property, how narrow the selection is. To avoid confusion, compare the fractions themselves.
+
+## One index, different plans
+
+Create an index on status:
+
+```sql apply expect=rows:0
+create index orders_status_idx on orders (status);
+```
+
+Press Apply. Examine the actual plan for finding paid orders:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json) select order_id from orders where status = 'paid';
+```
+
+Open the full JSON value. On the original dataset, the planner usually chooses a `Seq Scan`: 67,000 rows match the condition. Compare the search for new orders:
+
+{/* final-only: EXPLAIN возвращает план, но не анимируется как SELECT */}
+```sql run expect=rows:1 trace=final-only
+explain (analyze, format json) select order_id from orders where status = 'new';
+```
+
+This plan usually shows a `Bitmap Index Scan` and a `Bitmap Heap Scan`, returning 3000 rows. The index is the same, but the fraction of matching orders differs. The exact plan depends on statistics, operation costs, and the state of the database; a fraction alone does not guarantee a particular access method.
+
+<Callout kind="analogy">
+In a paper directory, an index is useful when you need a few entries. If you need almost the whole directory, reading sequentially may be cheaper than repeatedly following the index.
+</Callout>
+
+## What the planner knows
+
+The planner uses approximate information about table size and value distribution. You can inspect it through the `pg_stats` view. Find the estimated number of distinct customers and how value order relates to physical row order:
+
+{/* final-only: системное представление не показано на учебной доске */}
+```sql run expect=rows:1 trace=final-only
+select n_distinct, correlation from pg_stats
+where schemaname = 'public' and tablename = 'orders' and attname = 'customer_id';
+```
+
+One row is returned. `n_distinct` around -0.2 estimates the number of distinct values at about 20% of the table's size; it is not a negative number of customers. `correlation` near zero indicates little relationship between value order and physical row order. Estimates depend on the statistics sample.
+
+Compare the order creation time:
+
+{/* final-only: системное представление не показано на учебной доске */}
+```sql run expect=rows:1 trace=final-only
+select correlation from pg_stats
+where schemaname = 'public' and tablename = 'orders' and attname = 'created_at';
+```
+
+For the original dataset, correlation is close to 1: orders were inserted in time order. This can be useful when considering a BRIN index, but does not guarantee it will help every query.
+
+Statistics also store common values and estimated frequencies:
+
+{/* final-only: системное представление не показано на учебной доске */}
+```sql run expect=rows:1 trace=final-only
+select most_common_vals, most_common_freqs from pg_stats
+where schemaname = 'public' and tablename = 'orders' and attname = 'status';
+```
+
+One row lists statuses and approximate frequencies in corresponding order. The estimate is around 0.67 for `paid` and 0.03 for `new`. These can differ slightly from the exact fractions found with `count(*)`.
+
+## Update statistics
+
+Statistics can become stale after large changes. Update them for orders:
+
+```sql apply expect=rows:0
+analyze orders;
+```
+
+Apply saves the updated statistics in the lesson database. Estimates may change slightly after collection: for a large table, `ANALYZE` usually takes a sample. In a regular PostgreSQL installation, autovacuum also runs analysis as data changes; after a large load, running it manually can be useful.
+
+Do not confuse this command with `EXPLAIN ANALYZE`: the first collects table statistics, while the second executes a query and adds actual measurements to the plan. Reset restores the original dataset and removes the index.
+
+## What's missing and why
+
+- ❌ 67,000 result rows from `count(*)`: the count is in one row.
+- ❌ A plan guaranteed by the size of the selection alone: the planner considers other cost estimates too.
+- ❌ An exact census in `pg_stats`: statistics are approximate and can become stale.
+
+## Traps
+
+<Callout kind="trap">
+A large difference between `Plan Rows` and `Actual Rows` is a reason to investigate estimates and statistics, not proof of one particular cause. Account for `Actual Loops` when there are multiple passes.
+</Callout>
+
+<Callout kind="tip">
+Compare plans and actual counts on suitable data. After a large change, check whether statistics are current and run `ANALYZE` if needed.
+</Callout>
+
+## Check yourself
+
+1. What fraction of orders is `paid`, and why does `count(*)` return one row?
+2. What does a negative `n_distinct` mean?
+3. How does the `ANALYZE` command differ from `EXPLAIN ANALYZE`?
+
+<Cheatsheet>
+- PostgreSQL documentation uses condition selectivity for the estimated fraction of matching rows.
+- `pg_stats` shows approximate distribution statistics.
+- `ANALYZE` updates statistics; `EXPLAIN ANALYZE` executes a query and measures its plan.
+- One index can produce different plans for different conditions.
+</Cheatsheet>
