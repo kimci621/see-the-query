@@ -296,7 +296,7 @@
 - [x] 14.3 `triggers`: `content/lessons-en/14-extras/03-triggers.mdx`
 - [x] 14.4 `roles`: `content/lessons-en/14-extras/04-roles.mdx`
 - [x] 14.5 `partitioning`: `content/lessons-en/14-extras/05-partitioning.mdx`
-- [ ] 14.6 `sizes-catalogs`: `content/lessons-en/14-extras/06-sizes-catalogs.mdx`
+- [x] 14.6 `sizes-catalogs`: `content/lessons-en/14-extras/06-sizes-catalogs.mdx`
 
 ## Task 8: Сквозная проверка и закрытие фазы
 
