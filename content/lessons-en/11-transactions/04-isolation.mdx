@@ -1,0 +1,133 @@
+---
+id: isolation
+title: Transaction isolation levels
+chapter: transactions
+number: "11.4"
+order: 4
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select title, price from book where book_id = 1;
+docs:
+  - url: https://www.postgresql.org/docs/current/transaction-iso.html
+    title: Transaction isolation
+  - url: https://www.postgresql.org/docs/current/mvcc-serialization-failure-handling.html
+    title: Handling serialization failures
+course: ["12.13", "12.14", "12.15", "12.16"]
+tags: [isolation, read committed, repeatable read, serializable, snapshot]
+---
+
+<TlDr>The isolation level determines which concurrent changes a transaction can see and which results are allowed. After a serialization failure, retry the whole transaction.</TlDr>
+
+## The data
+
+In <T id="public.book">book</T>, book 1, And Quiet Flows the Don, costs 890.00. Two prepared scenes show how that price appears to one session when another session updates it. The scenes do not change the lesson database.
+
+```sql run expect=rows:1
+select title, price from book where book_id = 1;
+```
+
+The board shows one book at 890.00. Both scenes start with this price.
+
+## Read Committed
+
+An **isolation level** sets the rules for how a transaction sees concurrent changes. PostgreSQL uses `Read Committed` by default. An ordinary `SELECT` gets a snapshot at the start of the query, and a later `SELECT` in the same transaction can see more recent data.
+
+{/* final-only: SHOW возвращает настройку без пошаговой трассы */}
+```sql run expect=rows:1 trace=final-only
+show transaction_isolation;
+```
+
+The single result is `read committed`, the current setting in the lesson database. The board shows the final result for `SHOW` without a step-by-step trace.
+
+In the first scene, B reads the book twice in one transaction. Between the reads, A commits a new price. B's second query sees 1.00 instead of 890.00. This change in a repeated read is called a **nonrepeatable read**.
+
+<TwoSessions id="non-repeatable-read" />
+
+An ordinary `SELECT` also sees earlier changes made by its own transaction, even before they are committed. Another session cannot read those uncommitted changes.
+
+## Repeatable Read
+
+At `Repeatable Read`, the transaction's snapshot is taken when its first statement needs one, not at `BEGIN`. Later ordinary reads use the same snapshot and do not see newer commits from other transactions. The transaction can still see its own changes.
+
+```sql apply expect=rows:1
+begin isolation level repeatable read;
+select current_setting('transaction_isolation') as isolation;
+```
+
+The last query returns `repeatable read`. Here the sandbox automatically closes the open transaction after the Apply block, so its setting does not carry over to later examples. In an application, end the transaction explicitly with `COMMIT` or `ROLLBACK`.
+
+In the second scene, B first reads 890.00. A commits a price of 1.00, but B's second read still shows 890.00 from its original snapshot. B then tries to update the same row and receives serialization failure `40001`: the row changed after B's snapshot.
+
+<TwoSessions id="repeatable-read" />
+
+PostgreSQL's `Repeatable Read` also prevents phantom reads, but other serialization anomalies are possible when concurrent transactions work with different rows. Repeated reads returning the same results do not prove that the transactions are equivalent to a serial execution.
+
+## Serializable
+
+`Serializable` checks concurrent transactions so that successfully committed serializable transactions have an effect compatible with some serial order. PostgreSQL may abort a transaction with error `40001` when it detects a conflict.
+
+```sql apply expect=rows:1
+begin isolation level serializable;
+select current_setting('transaction_isolation') as isolation;
+```
+
+The last query returns `serializable`. As in the previous block, the sandbox closes the transaction after execution.
+
+<Callout kind="analogy">
+Imagine two requests to change a shared schedule. Each starts from its own copy. Before approval, a check must ensure the combined result is consistent with some order of approval. If it cannot, one request needs to be prepared again using the current schedule.
+</Callout>
+
+After `40001`, roll back the failed transaction and retry it in full, including its reads and the logic that chooses values. Retrying only the last command can reuse an outdated decision. Under heavy contention, several attempts may be needed.
+
+## Set an isolation level
+
+You can specify the level when starting a transaction. Try `Read Committed` explicitly:
+
+```sql apply expect=rows:1
+begin isolation level read committed;
+select current_setting('transaction_isolation') as isolation;
+```
+
+The last query returns `read committed`. The sandbox closes this block automatically. In an ordinary client, the transaction stays open until it is ended.
+
+After these blocks, check the setting of the next transaction:
+
+{/* final-only: SHOW возвращает настройку без пошаговой трассы */}
+```sql run expect=rows:1 trace=final-only
+show transaction_isolation;
+```
+
+The result is `read committed` again: the settings of the previous transactions did not change the default.
+
+You can also request `Read Uncommitted`, but PostgreSQL treats it as `Read Committed`. Choose a level based on which concurrent results your task permits, and account for the cost of retries.
+
+## What's missing and why
+
+- ❌ A's uncommitted price in B's ordinary read: PostgreSQL does not allow dirty reads.
+- ❌ The new price in the second `Repeatable Read` query: B still uses the earlier snapshot.
+- ❌ A guarantee of serial results from `Repeatable Read` alone: some anomalies remain possible.
+
+## Traps
+
+<Callout kind="trap">
+`BEGIN` itself does not establish the `Repeatable Read` snapshot. If another transaction commits before the first statement that takes a snapshot, its changes can be included.
+</Callout>
+
+<Callout kind="tip">
+Handle `40001` at the boundary of the whole transaction. Retry both the queries and the logic that chooses values. `Read Committed` may be enough for short operations; choose a stricter level when the data rules require it.
+</Callout>
+
+## Check yourself
+
+1. Why do B's two reads in the `Read Committed` scene return different prices?
+2. When is the `Repeatable Read` snapshot taken, and what happens on a conflicting update?
+3. What must you retry after error `40001`?
+
+<Cheatsheet>
+- `Read Committed`: a new snapshot for each ordinary `SELECT`.
+- `Repeatable Read`: a shared snapshot from the first statement that needs one; error `40001` is possible.
+- `Serializable`: successful serializable transactions are compatible with a serial order; conflicts require a retry.
+- PostgreSQL treats `Read Uncommitted` as `Read Committed`.
+</Cheatsheet>
