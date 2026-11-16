@@ -1,0 +1,118 @@
+---
+id: mvcc
+title: MVCC and row versions
+chapter: transactions
+number: "11.3"
+order: 3
+dataset: bookstore
+board:
+  tables: [public.book]
+initialQuery: |
+  select book_id, title, price from book where book_id = 1;
+docs:
+  - url: https://www.postgresql.org/docs/current/mvcc-intro.html
+    title: Multiversion concurrency control
+  - url: https://www.postgresql.org/docs/current/ddl-system-columns.html
+    title: System columns
+  - url: https://www.postgresql.org/docs/current/routine-vacuuming.html
+    title: Routine vacuuming
+course: ["12.12"]
+tags: [mvcc, row version, xmin, xmax, ctid, vacuum]
+---
+
+<TlDr>MVCC maintains row versions and lets a query read the versions visible to its snapshot. VACUUM can reclaim space from old versions when they are no longer needed.</TlDr>
+
+## The data
+
+In <T id="public.book">book</T>, book 1, And Quiet Flows the Don, costs 890.00. Change its price and inspect the system information for the row version. Run the examples in order: Apply changes the lesson database until Reset.
+
+```sql run expect=rows:1
+select book_id, title, price from book where book_id = 1;
+```
+
+The board shows one book at 890.00. An ordinary query sees the row version visible to it, not every previous state of that row.
+
+## Snapshots and versions
+
+**MVCC** stands for multiversion concurrency control. Each statement sees data according to the snapshot rules of its transaction. An ordinary read does not wait for another transaction's row update and does not show that transaction's uncommitted write. Explicit locks follow separate rules.
+
+An `UPDATE` creates a new version of the changed row. Another snapshot may still need the old version, so it need not disappear immediately. The next lesson compares when different isolation levels obtain snapshots.
+
+<Callout kind="analogy">
+A library is preparing a new edition of a catalog card. Before it is published, a visitor reads the old one. The old card is kept while it is still needed by someone already using it.
+</Callout>
+
+## System columns
+
+Tables have system columns even though `SELECT *` does not show them. `ctid` identifies a version's physical location within its table, `xmin` identifies the transaction that created it, and `xmax` can contain information about a deletion, replacement or lock. Exact transaction IDs depend on the run.
+
+```sql run expect=rows:1
+select book_id, ctid, xmin, xmax from book where book_id = 1;
+```
+
+There is one row. Note its `ctid` and `xmin`, then change the price:
+
+```sql apply expect=rows:1
+update book set price = price + 10 where book_id = 1 returning title, price;
+```
+
+Apply commits the change. The price is now 900.00. Read the system columns again:
+
+```sql run expect=rows:1
+select book_id, ctid, xmin, xmax from book where book_id = 1;
+```
+
+The query returns the visible new version. Compare its `ctid` and `xmin` with the earlier values: the update created a new version at a different location in a new transaction. `ctid` is not a permanent book identifier; use the primary key.
+
+## What remains on the page
+
+The scene below uses a separate temporary database and reads real page items with `pageinspect`. It does not change the lesson data. Its steps show an insert, update, delete, rolled-back change, foreign-key lock marker and cleanup. “Versions on the page” shows physical versions; “Visible to SELECT” shows an ordinary read.
+
+<MvccPage />
+
+An old version is not necessarily visible to an ordinary query, even if it still occupies space on the page. A nonzero `xmax` is not simply a “deleted” label: it can reflect an uncommitted or rolled-back operation or a lock. The scene uses additional page information to distinguish them.
+
+## Reclaiming space
+
+When no snapshot needs an old version, `VACUUM` can make its space available for reuse. Ordinary `VACUUM` does not promise to shrink the table's disk file. On a PostgreSQL server, autovacuum usually performs this maintenance; the scene runs cleanup explicitly.
+
+```sql apply expect=rows:0
+vacuum book;
+```
+
+This is a separate command: `VACUUM` cannot run inside a transaction block. The book remains after cleanup:
+
+```sql run expect=rows:1
+select book_id, title, price from book where book_id = 1;
+```
+
+There is one row at 900.00. Cleanup removes unnecessary versions, not the book's current row.
+
+## What is missing from the result
+
+- ❌ The old price 890.00 in the read after `UPDATE`: the current query sees the new version.
+- ❌ The entire version history in an ordinary `SELECT`: it returns versions visible to its snapshot.
+- ❌ A permanent row identifier in `ctid`: a version's location can change.
+
+## Traps
+
+<Callout kind="trap">
+A nonzero `xmax` alone does not prove that a row was deleted. Consider the transaction state and lock information. Identify the book with `book_id`, not `ctid` or a transaction ID.
+</Callout>
+
+<Callout kind="tip">
+Do not leave transactions open without a reason: old snapshots can delay cleanup of versions. Inspect autovacuum settings and long-running transactions on the server rather than relying on a single `xmax` value.
+</Callout>
+
+## Check yourself
+
+1. What happens to the old row version after an update, and why can it not always be removed immediately?
+2. How did the book's `ctid` and price change after `UPDATE`?
+3. Why is a nonzero `xmax` insufficient to declare a row deleted?
+
+<Cheatsheet>
+- MVCC lets queries read row versions visible to their snapshots.
+- `xmin` identifies the creating transaction; interpret `xmax` with transaction state and version flags.
+- `ctid` identifies a version's location, not a permanent primary key.
+- `VACUUM` makes space from unnecessary versions available for reuse.
+</Cheatsheet>
