@@ -1,0 +1,128 @@
+---
+id: btree-seq-vs-index
+title: B-tree, Seq Scan, and Index Scan
+chapter: indexes
+number: "12.1"
+order: 1
+dataset: big_bookstore
+board:
+  tables: [public.orders]
+initialQuery: |
+  select order_id, customer_id from orders where order_id = 5000;
+docs:
+  - url: https://www.postgresql.org/docs/current/indexes-intro.html
+    title: Introduction to indexes
+  - url: https://www.postgresql.org/docs/current/indexes-types.html
+    title: Index types
+  - url: https://www.postgresql.org/docs/current/using-explain.html
+    title: Reading a query plan
+course: ["12.18"]
+tags: [index, btree, seq scan, index scan]
+---
+
+<TlDr>A Seq Scan reads the table sequentially. A B-tree helps find matching keys in a sorted index and reach rows in the table.</TlDr>
+
+## The data
+
+In the large practice dataset, <T id="public.orders">orders</T> contains 100,000 orders. Its primary key <C id="public.orders.order_id">order_id</C> already has a unique B-tree index, `orders_pkey`. First, find order 5000:
+
+```sql run expect=rows:1
+select order_id, customer_id from orders where order_id = 5000;
+```
+
+The result contains one row. The board shows a compact representation of the large table instead of loading all 100,000 rows into the node. Open the Plan tab below the editor: PostgreSQL shows its chosen access method and actual counts.
+
+## Sequential scan
+
+A **Seq Scan** reads table rows and checks the condition. To find all matches on an unindexed column, it may need to scan the entire table. Find the orders for customer 42, who has no separate index yet:
+
+```sql run expect=rows:5
+select order_id from orders where customer_id = 42 order by order_id;
+```
+
+There are five orders. In the Plan tab, find the `Seq Scan` node: on the original dataset it shows 100,000 rows examined and five returned. Hover over the node name or focus it with the keyboard to highlight the related step.
+
+The number of returned rows alone does not tell you how much work the query did: the result is small, but the condition was checked across the table. Counts and the chosen plan depend on the data, indexes, and statistics.
+
+## How B-tree helps
+
+A **B-tree** stores ordered keys on tree pages. PostgreSQL uses separators on internal pages to choose a path to a leaf, where an entry points to a row version in the table. Some queries can obtain the required data from the index itself; that separate access method is called an `Index Only Scan`.
+
+The scene reads real pages of `orders_pkey` from the lesson database. The first step shows table pages, and the second forces a `Seq Scan` for key 5000. Then expand the root and leaves and follow the path to the same key. The last step shows the plan the optimizer chose for that query without forcing a scan type.
+
+<BTreeScene table="orders" index="orders_pkey" column="order_id" value="5000" />
+
+The scene's `ctid` refers to a row version, not a permanent order identifier. Page and buffer counts come from the current run. Buffer counts include repeated accesses, so they are not the number of distinct pages.
+
+<Callout kind="analogy">
+Imagine an ordered catalog of parts in a warehouse. First find the relevant range of part numbers in the index, then the card and location of the part. If you need to inspect nearly everything in the warehouse, walking through the shelves may be easier than following the index.
+</Callout>
+
+## Equality and ranges
+
+A B-tree works for more than one value. It can find a range and return rows in key order:
+
+```sql run expect=rows:10
+select order_id from orders where order_id between 5000 and 5009 order by order_id;
+```
+
+Ten orders are returned. Look at the plan: the optimizer can use the primary key index for the range. An index does not force the planner to choose it for every condition or result size.
+
+## Add a customer index
+
+Create a separate index on <C id="public.orders.customer_id">customer_id</C>:
+
+```sql apply expect=rows:0
+create index orders_customer_idx on orders (customer_id);
+```
+
+Apply saves the index in the lesson database. It takes space and must be maintained as data changes. Press Reset to remove the practice changes and return to the original dataset.
+
+Now repeat the same search for five orders:
+
+```sql run expect=rows:5
+select order_id from orders where customer_id = 42 order by order_id;
+```
+
+The result still contains five rows. In the Plan tab, compare the chosen access method with the earlier `Seq Scan`. On this dataset, PostgreSQL usually chooses a search through the new index, but the exact plan can change with statistics and execution conditions.
+
+```sql run expect=rows:10
+select order_id, customer_id from orders where customer_id in (42, 43) order by order_id;
+```
+
+The two customers have ten orders. Look at the nodes in the plan and how many rows they returned. Creating the index did not change the number of orders.
+
+```sql run expect=rows:1
+select count(*) as total_orders from orders;
+```
+
+The count returns one row with 100,000. For an operation over the whole table, sequential reading can be cheaper than many lookups through an index.
+
+## What's missing and why
+
+- ❌ Other customers' orders in the query for customer 42: the `WHERE` condition filters them out.
+- ❌ New orders after creating an index: an index changes how rows are found, not the contents of the table.
+- ❌ A promise that an index is always faster: the decision depends on the fraction of rows, statistics, and access costs.
+
+## Traps
+
+<Callout kind="trap">
+`ctid` describes the location of a specific row version and can change after an update. Use `order_id` as a permanent reference to an order.
+</Callout>
+
+<Callout kind="tip">
+Create indexes for real query conditions and check the plan on suitable data. Every additional index takes space and adds work to writes, so weigh its benefit against its maintenance cost.
+</Callout>
+
+## Check yourself
+
+1. How many rows does the customer 42 query return, and how many does the original `Seq Scan` examine?
+2. What path does the search for key 5000 follow in the scene?
+3. Why does the result remain the same after creating the index even though the plan may change?
+
+<Cheatsheet>
+- `Seq Scan` reads table rows sequentially.
+- A B-tree stores ordered keys and supports equality and range searches.
+- `CREATE INDEX` adds a search structure but does not guarantee the planner will choose it.
+- The Plan tab shows actual counts for a supported `SELECT`.
+</Cheatsheet>

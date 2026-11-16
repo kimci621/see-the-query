@@ -275,7 +275,7 @@
 
 **12-indexes**
 
-- [ ] 12.1 `btree-seq-vs-index`: `content/lessons-en/12-indexes/01-btree-seq-vs-index.mdx`
+- [x] 12.1 `btree-seq-vs-index`: `content/lessons-en/12-indexes/01-btree-seq-vs-index.mdx`
 - [ ] 12.2 `explain`: `content/lessons-en/12-indexes/02-explain.mdx`
 - [ ] 12.3 `composite-indexes`: `content/lessons-en/12-indexes/03-composite-indexes.mdx`
 - [ ] 12.4 `index-variants`: `content/lessons-en/12-indexes/04-index-variants.mdx`
