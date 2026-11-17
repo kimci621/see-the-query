@@ -142,7 +142,7 @@ where kind = 'paid'
 order by happened_at;
 ```
 
-PostgreSQL reports code `42P20`: `frame starting from following row cannot have preceding rows`. The lesson editor currently flags this query as incomplete before sending it to PostgreSQL. A frame around the current row can use `rows between 1 preceding and 1 following`; a frame from the current row onward can use `rows between current row and unbounded following`.
+PostgreSQL reports code `42P20`: `frame starting from following row cannot have preceding rows`. A frame around the current row can use `rows between 1 preceding and 1 following`; a frame from the current row onward can use `rows between current row and unbounded following`.
 </Callout>
 
 <Callout kind="tip">

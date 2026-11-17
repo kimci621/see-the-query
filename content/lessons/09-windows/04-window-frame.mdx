@@ -56,6 +56,8 @@ order by happened_at;
 
 Первая строка показывает 1730, потому что до неё платежей нет. Последняя показывает 17430, потому что в рамку попали все семь платежей.
 
+Рамка по умолчанию `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` включает и ровесников текущей строки: все строки с тем же временем. У платежей время разное, поэтому совпадений нет.
+
 На доске по строкам едет рамка от первой строки до текущей, и в колонке `total` появляется сумма того, что рамка накрыла. Подпись стадии показывает `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`: это рамка по умолчанию, когда в окне есть `ORDER BY`, но нет явной рамки.
 
 ## Вся партиция без накопления
@@ -107,6 +109,8 @@ order by happened_at;
 
 `RANGE` смотрит на значение ключа сортировки, а не на номер строки. Как только рамка дошла до времени `23:55`, в неё попали оба события с этой секундой. Поэтому и у `paid`, и у `cancelled` счётчик равен 3, хотя физически они идут друг за другом.
 
+`ROWS` и `RANGE` работают внутри партиции. `ROWS` считает позиции строк, `RANGE` сравнивает значения ключа сортировки. Поэтому смещение в `RANGE` задаётся в единицах ключа, а не в строках, и для него нужен ровно один ключ `ORDER BY`.
+
 На доске рамка едет по строкам партиции, а значения в `range_cnt` считает Postgres: у обеих строк с одной секундой стоит 3.
 
 ## Скользящее окно на три платежа
@@ -152,7 +156,9 @@ where kind = 'paid'
 order by happened_at;
 ```
 
-Postgres отвечает кодом `42P20`: `frame starting from following row cannot have preceding rows`. Сначала идёт начало, потом конец: `rows between 1 preceding and 1 following`. Если нужна рамка от текущей строки вперёд, пиши `rows between current row and unbounded following`.
+Postgres отвечает кодом `42P20`: `frame starting from following row cannot have preceding rows`. Сначала идёт начало, потом конец: `rows between 1 preceding and 1 following`.
+
+Допустимые границы: начало - `unbounded preceding`, `n preceding`, `current row` или `n following`; конец - `n preceding`, `current row`, `n following` или `unbounded following`. Начало не может стоять позже конца. Для `RANGE` со смещением нужен ровно один ключ `ORDER BY` подходящего типа: смещение считается в его единицах. Если нужна рамка от текущей строки вперёд, пиши `rows between current row and unbounded following`.
 </Callout>
 
 <Callout kind="tip">
@@ -172,5 +178,6 @@ Postgres отвечает кодом `42P20`: `frame starting from following row
 - `RANGE`: включает все строки с равным ключом сортировки, 1, 3, 3.
 - `rows between 2 preceding and current row`: скользящее окно на три строки.
 - `rows between unbounded preceding and unbounded following`: вся партиция.
-- Начало рамки не может быть позже конца, иначе `42P20`.
+- `ROWS` считает позиции строк, `RANGE` - значения ключа сортировки; смещение `RANGE` задаётся в единицах ключа.
+- Начало рамки не может быть позже конца, иначе `42P20`. Для `RANGE` со смещением нужен ровно один ключ `ORDER BY`.
 </Cheatsheet>
