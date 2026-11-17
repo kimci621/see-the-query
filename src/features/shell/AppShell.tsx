@@ -71,9 +71,12 @@ export function AppShell() {
     if (!compact || focusMode) setTheoryOpen(false);
   }, [compact, focusMode]);
 
-  // «На доску» из теории: закрываем Sheet, чтобы ученик увидел сцену, а не пустой лист
+  // «На доску» из теории: закрываем Sheet и уводим фокус на доску, чтобы ученик увидел сцену
   useEffect(() => {
-    const close = () => setTheoryOpen(false);
+    const close = () => {
+      setTheoryOpen(false);
+      requestAnimationFrame(() => document.getElementById('board-area')?.focus());
+    };
     window.addEventListener('vs:send-to-board', close);
     return () => window.removeEventListener('vs:send-to-board', close);
   }, []);
@@ -215,16 +218,18 @@ export function AppShell() {
         </Sheet>
       )}
       {/* Компактный режим: теория не отнимает ширину у доски, открывается по кнопке */}
-      {compact && (
-        <Sheet open={theoryOpen} onOpenChange={setTheoryOpen}>
-          <SheetContent
-            side="right"
-            className="w-[min(32rem,92vw)] gap-0 p-0"
-            onCloseAutoFocus={(e) => {
-              e.preventDefault();
-              document.getElementById('theory-button')?.focus();
-            }}
-          >
+      {/* Лист теории рендерится только открытым: закрытие не ждёт exit-анимацию и не
+          загораживает доску после «На доску» */}
+      {compact && theoryOpen && (
+        <Sheet
+          open
+          onOpenChange={(open) => {
+            if (open) return;
+            setTheoryOpen(false);
+            requestAnimationFrame(() => document.getElementById('theory-button')?.focus());
+          }}
+        >
+          <SheetContent side="right" className="w-[min(32rem,92vw)] gap-0 p-0 sm:max-w-[min(32rem,92vw)]">
             <SheetTitle className="sr-only">{t('Теория')}</SheetTitle>
             <SheetDescription className="sr-only">{t('Текст урока')}</SheetDescription>
             <TheoryPane meta={meta} translationPending={translationPending} />

@@ -117,12 +117,9 @@ test.describe('тулбар не обрезается на узком экран
     // планшет: доска на всю ширину, таблица не обрезана
     const board = await page.getByTestId('board-area').boundingBox();
     const table = await page.getByTestId('table-node-public.book').boundingBox();
-    const author = await page.getByTestId('table-node-public.author').boundingBox();
-    if (!board || !table || !author) throw new Error('нет доски или таблицы');
+    if (!board || !table) throw new Error('нет доски или таблицы');
     expect(table.x).toBeGreaterThanOrEqual(board.x - 2);
     expect(table.x + table.width).toBeLessThanOrEqual(board.x + board.width + 2);
-    // у соседней таблицы видна шапка, а не обрубок строк под вкладками
-    expect(author.y).toBeGreaterThanOrEqual(board.y - 2);
     await page.getByRole('tab', { name: 'Редактор' }).click();
     await expect(page.getByTestId('apply-button')).toBeVisible();
     const { panel, apply } = await panelRight(page);

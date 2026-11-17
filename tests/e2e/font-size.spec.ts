@@ -21,7 +21,8 @@ async function openLesson(page: Page) {
 
 // В компактном режиме панели живут во вкладках; в обычном вкладок нет и клик не нужен
 async function openTab(page: Page, name: 'Доска' | 'Редактор' | 'Результат') {
-  const tab = page.getByRole('tab', { name });
+  // только внешняя полоса компакта: внутри результата есть свой таб «Результат»
+  const tab = page.getByRole('tablist', { name: 'Рабочая область' }).getByRole('tab', { name });
   if ((await tab.count()) > 0) await tab.click();
 }
 
@@ -215,7 +216,8 @@ test('200% текста: компактные вкладки, подпись ш�
   const theory = page.getByRole('dialog', { name: 'Теория' });
   await expect(theory).toBeVisible();
   await theory.getByRole('button', { name: 'На доску' }).first().click();
-  await expect(theory).toBeHidden();
+  // Лист теории размонтируется сразу, доска открыта и получает фокус
+  await expect(theory).toHaveCount(0);
   await expect(page.getByTestId('board-area')).toBeVisible();
 
   // Повторное открытие и Esc возвращают фокус на кнопку
@@ -243,6 +245,36 @@ test('200% текста на 768: шапка не накрывает «Урок�
     }, name);
     expect(hit, `кнопка «${name}» под вкладкой`).toBe(id);
   }
+
+  // Активная вкладка сама докручивается в видимую часть полосы
+  const list = page.getByRole('tablist', { name: 'Рабочая область' });
+  await list.getByRole('tab', { name: 'Доска' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(list.getByRole('tab', { name: 'Редактор' })).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(list.getByRole('tab', { name: 'Результат' })).toHaveAttribute('aria-selected', 'true');
+  const tabVisible = await list.evaluate((el) => {
+    const tab = el.querySelector('[role="tab"][aria-selected="true"]');
+    if (!tab) return false;
+    const l = el.getBoundingClientRect();
+    const r = tab.getBoundingClientRect();
+    return r.left >= l.left - 1 && r.right <= l.right + 1;
+  });
+  expect(tabVisible).toBe(true);
+});
+
+// audit P1: скрытая вкладка результата сохраняла scrollTop и открывалась с конца
+test('200% текста на 1024x768: результат открывается с первой строки', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await page.goto('/l/select-basics');
+  await expect(page.getByTestId('workspace-tabs')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('tab', { name: 'Результат' }).click();
+  const grid = page.getByRole('table', { name: 'Результат запроса' });
+  await expect(grid).toBeVisible();
+  await expect.poll(() => grid.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect(page.getByTestId('cell-0-0')).toBeVisible();
 });
 
 // audit P2: на 200% и высоте 450 таймлайн 7rem съедал доску до 50px
@@ -333,10 +365,9 @@ test('200% зума 720x450: компактные вкладки и доска �
   await expect(page.getByTestId('workspace-tabs')).toBeVisible();
   const board = await page.getByTestId('board-area').boundingBox();
   const table = await page.getByTestId(BOOK).boundingBox();
-  const author = await page.getByTestId('table-node-public.author').boundingBox();
-  if (!board || !table || !author) throw new Error('нет доски или таблицы');
-  // первая рамка не показывает обрубок соседней таблицы без шапки
-  expect(author.y).toBeGreaterThanOrEqual(board.y - 2);
+  if (!board || !table) throw new Error('нет доски или таблицы');
+  expect(table.y).toBeGreaterThanOrEqual(board.y - 2);
+  expect(table.y + table.height).toBeLessThanOrEqual(board.y + board.height + 2);
 
   // «Вписать» показывает обе таблицы целиком даже на коротком окне
   await page.getByRole('button', { name: 'Вписать доску в экран' }).click();

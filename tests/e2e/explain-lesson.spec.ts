@@ -42,15 +42,32 @@ test('урок EXPLAIN: оценки, фактический план и отк�
         await expect(dialog).toContainText('Rows Removed by Filter');
         await expect(dialog).toContainText('99995');
         await page.screenshot({ path: testInfo.outputPath('full-json.png'), animations: 'disabled' });
+        await page.keyboard.press('Escape');
+        await expect(open).toBeFocused();
+
+        // Узкий экран — компактные вкладки: открываем ту же ячейку в «Результате»
         await page.setViewportSize({ width: 640, height: 800 });
-        const content = dialog.getByLabel('Полное значение');
+        await page
+          .getByRole('tablist', { name: 'Рабочая область' })
+          .getByRole('tab', { name: 'Результат' })
+          .click();
+        const narrowOpen = page.getByRole('button', {
+          name: 'Строка 1, столбец 1: показать полное значение',
+        });
+        await narrowOpen.focus();
+        await page.keyboard.press('Enter');
+        const narrowDialog = page.getByRole('dialog', { name: 'Значение ячейки' });
+        const content = narrowDialog.getByLabel('Полное значение');
         await content.focus();
         await page.keyboard.press('PageDown');
         await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-        await page.screenshot({ path: testInfo.outputPath('full-json-narrow.png'), animations: 'disabled' });
-        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.screenshot({
+          path: testInfo.outputPath('full-json-narrow.png'),
+          animations: 'disabled',
+        });
         await page.keyboard.press('Escape');
-        await expect(open).toBeFocused();
+        await expect(narrowOpen).toBeFocused();
+        await page.setViewportSize({ width: 1440, height: 900 });
       }
     } else {
       const count = index === 0 ? '5 строк' : index === 3 ? '10 строк' : '1 строка';

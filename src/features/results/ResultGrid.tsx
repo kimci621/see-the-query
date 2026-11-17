@@ -2,7 +2,7 @@
 // biome-ignore-all lint/a11y/useFocusableInteractive: фокус нужен только контейнеру прокрутки, строки и ячейки не интерактивны
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: контейнер прокрутки фокусируется ради прокрутки с клавиатуры
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,21 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
     overscan: 12,
     initialRect: { width: 800, height: 400 },
   });
+
+  // Компактные вкладки держат панель смонтированной, пока она скрыта: при возврате сетка
+  // открывалась прокрученной вниз. Показываем результат с первой строки
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    let wasVisible = el.offsetParent !== null;
+    const observer = new IntersectionObserver(([entry]) => {
+      const visible = entry?.isIntersecting ?? false;
+      if (visible && !wasVisible) el.scrollTop = 0;
+      wasVisible = visible;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   if (rows.length === 0) {
     return (

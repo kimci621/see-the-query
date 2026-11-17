@@ -55,10 +55,10 @@ function union(a: Rect, b: Rect): Rect {
   };
 }
 
-// Трассы, для которых начальную видимость сцены уже решили. Переживает пересоздание OverlayLayer:
-// при смене раскладки (крупный шрифт, компактные вкладки) доска монтируется заново, но сцена
-// не должна прятаться только из-за этого (P8.112)
-const seenTraces = new WeakSet<object>();
+// SQL, для которых начальную видимость сцены уже решили. Переживает пересоздание OverlayLayer:
+// при смене раскладки (крупный шрифт, компактные вкладки) доска и редактор монтируются заново,
+// трасса приходит новым объектом с тем же SQL, и сцена не должна прятаться (P8.112)
+const seenTraceSql = new Set<string>();
 
 export function OverlayLayer() {
   const trace = useSceneStore((s) => s.trace);
@@ -101,8 +101,8 @@ export function OverlayLayer() {
       return;
     }
     builtFor.current = { trace, schema };
-    const firstTime = !seenTraces.has(trace);
-    seenTraces.add(trace);
+    const firstTime = !seenTraceSql.has(trace.sql);
+    seenTraceSql.add(trace.sql);
     const wasHidden = scene.hidden;
     scene.setPlayback(playback);
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,

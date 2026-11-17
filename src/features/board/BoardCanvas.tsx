@@ -98,25 +98,33 @@ function sceneOwnsCamera(ids: string[]): boolean {
 
 // Кадры камеры. Фокус (и стартовый кадр урока): таблицы запроса крупно, не ближе зума 1.
 // Отступ 0.1: при 0.3 свёрнутая book (756) на доске 719 px получала зум 0.73 и мелкий текст
-const focusFrame = (ids: string[], duration = animationMs(400)) => ({
+const focusFrame = (ids: string[], duration = animationMs(400), compact = false) => ({
   nodes: ids.map((id) => ({ id })),
-  padding: { x: 0.1, top: 0.1, bottom: chromeBottom() },
+  padding: { x: 0.1, top: 0.1, bottom: chromeBottom(compact) },
   minZoom: FIT_MIN_ZOOM,
   maxZoom: 1,
   duration,
 });
 // Вся доска: все таблицы с запасом по краям
-const boardFrame = (nodes: { id: string; type?: string }[], duration = animationMs(300)) => ({
+const boardFrame = (
+  nodes: { id: string; type?: string }[],
+  duration = animationMs(300),
+  compact = false,
+) => ({
   nodes: tablesOf(nodes),
-  padding: { x: 0.15, top: 0.15, bottom: chromeBottom() },
+  padding: { x: 0.15, top: 0.15, bottom: chromeBottom(compact) },
   minZoom: FIT_MIN_ZOOM,
   duration,
 });
 
 // Явное «Вписать»: разрешаем мельче 0.6, иначе на крупном тексте кнопка обещает весь мир,
 // а камера упирается в пол и молча обрезает половину доски
-const fitAllFrame = (nodes: { id: string; type?: string }[], duration = animationMs(300)) => ({
-  ...boardFrame(nodes, duration),
+const fitAllFrame = (
+  nodes: { id: string; type?: string }[],
+  duration = animationMs(300),
+  compact = false,
+) => ({
+  ...boardFrame(nodes, duration, compact),
   minZoom: FIT_ALL_MIN_ZOOM,
 });
 
@@ -368,31 +376,36 @@ function useCamera(
     startFold.current = { fold: foldKey(), keep: false };
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
-    // Компакт: кадр по всем таблицам урока, иначе соседняя таблица торчит из-под шапки обрубком
-    fitFrame(flow, store, compact || ids.length === 0 ? boardFrame(all, 0) : focusFrame(ids, 0));
+    // Кадр по таблицам стартового запроса: подпись урока говорит о них, а соседние таблицы
+    // не должны торчать обрубком. Компакт лишь не резервирует скрытый хром
+    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids, 0, compact) : boardFrame(all, 0, compact));
   }, [nodeKey, lessonId, startRequest, flow, store, locale, compact]);
 
   useEffect(() => {
     if (fitRequest === 0) return;
     startFold.current = null;
-    fitFrame(flow, store, fitAllFrame(flow.getNodes()));
-  }, [fitRequest, flow, store]);
+    fitFrame(flow, store, fitAllFrame(flow.getNodes(), undefined, compact));
+  }, [fitRequest, flow, store, compact]);
 
   useEffect(() => {
     if (frameRequest === 0) return;
     startFold.current = null;
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
-    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids) : boardFrame(all));
-  }, [frameRequest, flow, store]);
+    fitFrame(
+      flow,
+      store,
+      ids.length > 0 ? focusFrame(ids, undefined, compact) : boardFrame(all, undefined, compact),
+    );
+  }, [frameRequest, flow, store, compact]);
 
   useEffect(() => {
     const ids = useBoardStore.getState().focused;
     if (focusRequest > 0 && ids.length > 0 && !sceneOwnsCamera(ids)) {
       startFold.current = null;
-      fitFrame(flow, store, focusFrame(ids));
+      fitFrame(flow, store, focusFrame(ids, undefined, compact));
     }
-  }, [focusRequest, flow, store]);
+  }, [focusRequest, flow, store, compact]);
 
   // Свёртка изменила ширину таблицы (разворот по select *): перевписываем камеру, как при фокусе.
   // Цель рефита - focused: при смене урока это новый стартовый кадр. Первый замер ноды
@@ -413,8 +426,12 @@ function useCamera(
     if (!start) startFold.current = null;
     const ids = useBoardStore.getState().focused;
     const duration = start ? 0 : undefined;
-    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids, duration) : boardFrame(nodes, duration));
-  }, [tableWidths, nodes, flow, store]);
+    fitFrame(
+      flow,
+      store,
+      ids.length > 0 ? focusFrame(ids, duration, compact) : boardFrame(nodes, duration, compact),
+    );
+  }, [tableWidths, nodes, flow, store, compact]);
 
   // Режим фокуса меняет ширину панели доски. Размер контейнера React Flow обновляет ResizeObserver
   // уже после раскладки, поэтому вписываем не сразу, а когда придёт новая ширина. Кадр тот же,
@@ -431,8 +448,12 @@ function useCamera(
     pendingFit.current = false;
     startFold.current = null;
     const ids = useBoardStore.getState().focused;
-    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids) : boardFrame(flow.getNodes()));
-  }, [width, flow, store]);
+    fitFrame(
+      flow,
+      store,
+      ids.length > 0 ? focusFrame(ids, undefined, compact) : boardFrame(flow.getNodes(), undefined, compact),
+    );
+  }, [width, flow, store, compact]);
 
   // ⌘0 / Ctrl+0: по event.code, на русской раскладке key другой; preventDefault гасит сброс зума браузера.
   // Перехватываем только когда курсор над доской или фокус внутри неё, иначе ломаем сброс зума страницы

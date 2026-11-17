@@ -1,5 +1,5 @@
 import { Maximize } from 'lucide-react';
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -127,12 +127,27 @@ function CompactWorkspace({
   onOpenTheory?: () => void;
 }) {
   const t = useMessages();
+  const [tab, setTab] = useState('board');
+  const listRef = useRef<HTMLDivElement>(null);
+  // Крупный текст: полоса вкладок прокручивается, активную вкладку докручиваем в видимую часть
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tab служит триггером, DOM читаем после рендера
+  useEffect(() => {
+    listRef.current
+      ?.querySelector('[role="tab"][aria-selected="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
   return (
-    <Tabs defaultValue="board" data-testid="workspace-tabs" className="flex h-full min-h-0 flex-col">
+    <Tabs
+      value={tab}
+      onValueChange={setTab}
+      data-testid="workspace-tabs"
+      className="flex h-full min-h-0 flex-col"
+    >
       <div className="flex items-center gap-1 border-b px-2 py-1">
         {/* Крупный текст: вкладки прокручиваются в своей полосе, кнопки не сжимаются и не
             накрывают друг друга (P8.112, audit 200% x 768) */}
         <TabsList
+          ref={listRef}
           aria-label={t('Рабочая область')}
           className="h-auto min-w-0 flex-1 justify-start gap-1 overflow-x-auto rounded-none bg-transparent p-0 [scrollbar-width:thin]"
         >
