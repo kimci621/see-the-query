@@ -14,6 +14,8 @@ const CASES: Record<string, string> = {
   undefinedColumn: 'select nme from author',
   noFrom: 'select title, pr',
   subqueryColumn: 'select nme from (select 1 as x) t',
+  outerDerivedMissingColumn:
+    'select * from (select category_id, avg(price) as avg_price from book group by category_id) s where price > 500',
   doubleQuoted: 'select * from author where name = "Жюль Верн"',
   ambiguous: 'select name from author join customer on true',
   ambiguousAliased: 'select author_id from book b join author as a on b.author_id = a.author_id',
@@ -294,7 +296,16 @@ describe('explainError', () => {
       title: 'Колонки nme нет',
       body: 'Postgres искал её в author.',
     });
-    expect(explain('subqueryColumn')).toMatchObject({ title: 'Колонки nme нет', body: '' });
+    expect(explain('subqueryColumn')).toMatchObject({
+      title: 'Колонки nme нет',
+      body: 'Снаружи от подзапроса видна таблица t: в ней x. Колонки nme там нет.',
+    });
+    expect(explain('outerDerivedMissingColumn')).toMatchObject({
+      title: 'Колонки price нет',
+      body: 'Снаружи от подзапроса видна таблица s: в ней category_id, avg_price. Колонки price там нет.',
+      suggestion: 'Добавь price в SELECT подзапроса или исправь имя.',
+      highlight: { tableIds: [], columns: [] },
+    });
     expect(explain('doubleQuoted').body).toBe('В двойных кавычках Postgres видит имя колонки, а не строку.');
   });
 

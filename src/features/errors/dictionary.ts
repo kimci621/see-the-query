@@ -132,6 +132,65 @@ function groupedAt(sql: string, position: number | undefined): boolean {
   return visit(parsed.statements[0].ast, false) ?? (top != null && grouped(top));
 }
 
+// Таблица из подзапроса, внутри которой стоит позиция ошибки: имя и колонки SELECT
+function derivedAt(sql: string, position: number | undefined): { alias: string; columns: string[] } | null {
+  const parsed = isParserReady() ? parseSql(sql) : null;
+  if (!parsed?.ok || !parsed.statements.length || position == null) return null;
+  const at = charToByte(
+    sql,
+    Array.from(sql)
+      .slice(0, position - 1)
+      .join('').length,
+  );
+  const out: { scope: Record<string, unknown> | null } = { scope: null };
+  const visit = (node: unknown, select: Record<string, unknown> | null) => {
+    if (out.scope || node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, select);
+      return;
+    }
+    const rec = node as Record<string, unknown>;
+    if (rec.location === at) {
+      out.scope = select;
+      return;
+    }
+    for (const [key, value] of Object.entries(rec)) {
+      const next =
+        key === 'SelectStmt' || key === 'larg' || key === 'rarg'
+          ? (value as Record<string, unknown>)
+          : select;
+      visit(value, next);
+    }
+  };
+  visit(parsed.statements[0].ast, null);
+  const from = (out.scope as { fromClause?: unknown[] } | null)?.fromClause;
+  if (!Array.isArray(from) || from.length !== 1) return null;
+  const sub = (
+    from[0] as {
+      RangeSubselect?: {
+        alias?: { aliasname?: string };
+        subquery?: { SelectStmt?: { targetList?: unknown[] } };
+      };
+    }
+  ).RangeSubselect;
+  const alias = sub?.alias?.aliasname;
+  if (!sub || !alias) return null;
+  const targets = sub.subquery?.SelectStmt?.targetList;
+  const columns = Array.isArray(targets)
+    ? targets.flatMap((t) => {
+        const rt = (t as { ResTarget?: { name?: string; val?: Record<string, unknown> } }).ResTarget;
+        if (!rt) return [];
+        if (rt.name) return [rt.name];
+        const fields =
+          (rt.val as { ColumnRef?: { fields?: Array<{ String?: { sval?: string } }> } })?.ColumnRef?.fields ??
+          [];
+        const last = fields[fields.length - 1]?.String?.sval;
+        return last ? [last] : [];
+      })
+    : [];
+  return { alias, columns };
+}
+
 const columnId = (t: { schema?: string; table?: string }, column: string) =>
   `${t.schema ?? 'public'}.${t.table}.${column}`;
 const tableId = (err: DbError) => `${err.schema ?? 'public'}.${err.table}`;
@@ -252,6 +311,28 @@ export const DICTIONARY: Record<string, Entry> = {
           tableIds: owners.map((t) => t.id),
           columns: owners.map((t) => `${t.id}.${name}`),
         },
+      };
+    }
+    const derived = derivedAt(ctx.sql, err.position);
+    if (derived) {
+      const guess = closest(name, derived.columns);
+      const list = derived.columns.length ? `: в ней ${derived.columns.join(', ')}` : '';
+      return {
+        title: tr(ctx, `Колонки ${name} нет`, `Column ${name} does not exist`),
+        body: tr(
+          ctx,
+          `Снаружи от подзапроса видна таблица ${derived.alias}${list}. Колонки ${name} там нет.`,
+          `The outer query sees the subquery's table ${derived.alias}${derived.columns.length ? ` with ${derived.columns.join(', ')}` : ''}. Column ${name} is not in it.`,
+        ),
+        suggestion: guess
+          ? tr(ctx, `Может, ${guess}?`, `Did you mean ${guess}?`)
+          : tr(
+              ctx,
+              `Добавь ${name} в SELECT подзапроса или исправь имя.`,
+              `Add ${name} to the subquery's SELECT or fix the name.`,
+            ),
+        fix: guess ? { from: name, to: guess } : undefined,
+        highlight: none,
       };
     }
     const tables = tablesInSql(ctx);
