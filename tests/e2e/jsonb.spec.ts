@@ -8,7 +8,7 @@ test('урок о JSONB: операторы и раскрытие объекто
     );
   });
   await page.goto('/l/jsonb');
-  await expect(page.getByRole('heading', { name: 'JSON и JSONB', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'JSON и JSONB', exact: true })).toBeVisible();
   await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
   const examples = [
     {

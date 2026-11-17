@@ -37,6 +37,9 @@ test('урок транзакций: фиксация, откат и ошибк�
         timeout: 15_000,
       });
     } else {
+      // Курсор в конец блока: превью должно показать последний SELECT, а не BEGIN из начала
+      await page.locator('.cm-content').click();
+      await page.keyboard.press('ControlOrMeta+End');
       if (example.apply)
         await expect(page.getByTestId('apply-button')).toContainText('Применено', { timeout: 15_000 });
       await expect(page.getByTestId('result-count')).toHaveText(example.count as string, { timeout: 15_000 });
