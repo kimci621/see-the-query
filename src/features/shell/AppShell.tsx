@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { useLessonSandbox } from '@/features/db/useLessonSandbox';
 import { getLesson } from '@/features/lessons/registry';
-import { useMediaQuery, useViewportWidth } from '@/hooks/use-media-query';
+import { useMediaQuery, useViewportSize } from '@/hooks/use-media-query';
 import { useMessages } from '@/hooks/use-messages';
 import { remToPx, useRootFont } from '@/hooks/use-root-font';
 import { useLessonStore } from '@/stores/lesson';
@@ -42,11 +42,18 @@ export function AppShell() {
   // настройку шрифта браузера, но не html { font-size }: при крупном корне добавляем проверку в px.
   // Заглушка ниже 640px в px, чтобы крупный шрифт на десктопе её не включал
   const rootFont = useRootFont();
-  const viewportWidth = useViewportWidth();
+  const { width: viewportWidth, height: viewportHeight } = useViewportSize();
   const narrow = useMediaQuery('(max-width: 80em)') || (rootFont > 16 && viewportWidth < 80 * rootFont);
+  // Крупный текст или низкое окно: четыре вертикальные панели не помещаются, правая колонка
+  // переходит в компактный режим с вкладками (P8.112)
+  const compact =
+    viewportWidth < 900 ||
+    viewportHeight < 600 ||
+    (rootFont >= 24 && (viewportWidth < 80 * rootFont || viewportHeight < 45 * rootFont));
   const phone = useMediaQuery('(max-width: 639px)');
   const [forceOpen, setForceOpen] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
+  const [theoryOpen, setTheoryOpen] = useState(false);
   // Урок, при котором открыли Sheet: по нему решаем, куда вернуть фокус после закрытия
   const openedFor = useRef(lessonId);
 
@@ -54,6 +61,10 @@ export function AppShell() {
   // над теорией или сам откроется при возврате на узкий экран
   // biome-ignore lint/correctness/useExhaustiveDependencies: закрываем именно при смене урока и ширины
   useEffect(() => setLessonsOpen(false), [lessonId, narrow]);
+
+  // Теория в Sheet компактного режима закрывается вместе со сменой урока
+  // biome-ignore lint/correctness/useExhaustiveDependencies: закрываем именно при смене урока
+  useEffect(() => setTheoryOpen(false), [lessonId]);
 
   // Посещение считает оболочка: в режиме фокуса теории (LessonView) нет, а урок открыт
   useEffect(() => {
@@ -96,12 +107,12 @@ export function AppShell() {
         orientation="horizontal"
         // В режиме фокуса и на узком экране панелей меньше: такую раскладку не сохраняем, иначе потеряем ширины
         onLayoutChanged={(layout, { isUserInteraction }) => {
-          if (isUserInteraction && !focusMode && !narrow)
+          if (isUserInteraction && !focusMode && !narrow && !compact)
             setMainLayout(MAIN_PANELS.map((id) => layout[id] ?? 0));
         }}
       >
         {/* Режим фокуса (спека 3.1): без сайдбара и теории, доска на всю ширину */}
-        {!narrow && !focusMode && (
+        {!narrow && !focusMode && !compact && (
           <>
             {/* Минимум в rem растёт с размером текста: при 200% «Поиск» и названия уроков не обрезаются */}
             <ResizablePanel
@@ -117,7 +128,7 @@ export function AppShell() {
             <ResizableHandle aria-label={t('Ширина списка уроков')} />
           </>
         )}
-        {!focusMode && (
+        {!focusMode && !compact && (
           <>
             {/* Минимум в rem: при крупном тексте строка урока не короче ~30 знаков. Уступает доска */}
             <ResizablePanel
@@ -138,11 +149,15 @@ export function AppShell() {
         )}
         <ResizablePanel id="workspace" defaultSize={`${mainLayout[2]}%`} minSize="25%">
           <PanelErrorBoundary name={t('Доска')} locale={locale}>
-            <BoardPane />
+            <BoardPane
+              compact={compact}
+              onOpenLessons={compact && !focusMode ? openLessons : undefined}
+              onOpenTheory={compact && !focusMode ? () => setTheoryOpen(true) : undefined}
+            />
           </PanelErrorBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>
-      {/* Узкий экран и режим фокуса: теории с кнопкой «Уроки» нет, кнопка остаётся над доской */}
+      {/* Режим фокуса: теории и вкладок нет, кнопка «Уроки» остаётся над доской */}
       {focusMode && (
         <Button
           id="lessons-button"
@@ -154,7 +169,7 @@ export function AppShell() {
           <Menu className="size-4" aria-hidden /> {t('Уроки')}
         </Button>
       )}
-      {(narrow || focusMode) && (
+      {(narrow || focusMode || compact) && (
         <Sheet open={lessonsOpen} onOpenChange={setLessonsOpen}>
           <SheetContent
             side="left"
@@ -178,6 +193,23 @@ export function AppShell() {
                 setCommandOpen(true);
               }}
             />
+          </SheetContent>
+        </Sheet>
+      )}
+      {/* Компактный режим: теория не отнимает ширину у доски, открывается по кнопке */}
+      {compact && (
+        <Sheet open={theoryOpen} onOpenChange={setTheoryOpen}>
+          <SheetContent
+            side="right"
+            className="w-[min(32rem,92vw)] gap-0 p-0"
+            onCloseAutoFocus={(e) => {
+              e.preventDefault();
+              document.getElementById('theory-button')?.focus();
+            }}
+          >
+            <SheetTitle className="sr-only">{t('Теория')}</SheetTitle>
+            <SheetDescription className="sr-only">{t('Текст урока')}</SheetDescription>
+            <TheoryPane meta={meta} translationPending={translationPending} />
           </SheetContent>
         </Sheet>
       )}

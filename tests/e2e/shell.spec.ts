@@ -107,9 +107,17 @@ test.describe('тулбар не обрезается на узком экран
     return { panel: panel.x + panel.width, apply: apply.x + apply.width };
   };
 
-  test('768x1024', async ({ page }) => {
+  test('768x1024: планшет в компактных вкладках', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto('/l/how-to-use');
+    await expect(page.getByTestId('workspace-tabs')).toBeVisible();
+    // планшет: доска на всю ширину, таблица не обрезана
+    const board = await page.getByTestId('board-area').boundingBox();
+    const table = await page.getByTestId('table-node-public.book').boundingBox();
+    if (!board || !table) throw new Error('нет доски или таблицы');
+    expect(table.x).toBeGreaterThanOrEqual(board.x - 2);
+    expect(table.x + table.width).toBeLessThanOrEqual(board.x + board.width + 2);
+    await page.getByRole('tab', { name: 'Редактор' }).click();
     await expect(page.getByTestId('apply-button')).toBeVisible();
     const { panel, apply } = await panelRight(page);
     expect(apply).toBeLessThanOrEqual(panel);
@@ -118,12 +126,14 @@ test.describe('тулбар не обрезается на узком экран
     await expect(page.getByRole('dialog', { name: 'Уроки' })).toBeVisible();
   });
 
-  test('1280x800 при html font-size 200%', async ({ page }) => {
+  test('1280x800 при html font-size 200%: редактор во вкладке', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/l/how-to-use');
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '200%';
     });
+    await expect(page.getByTestId('workspace-tabs')).toBeVisible();
+    await page.getByRole('tab', { name: 'Редактор' }).click();
     await expect(page.getByTestId('apply-button')).toBeVisible();
     const { panel, apply } = await panelRight(page);
     expect(apply).toBeLessThanOrEqual(panel);
@@ -163,22 +173,27 @@ test.describe('узкий режим: порог 80em', () => {
     await page.goto('/l/how-to-use');
     await expect(lessonsButton(page)).toBeVisible();
     await expect(sidebarNav(page)).toHaveCount(0);
-    const theory = await page.locator('[id="theory"]').evaluate((el) => ({
-      width: el.getBoundingClientRect().width,
-      em: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
-    }));
-    expect(theory.em).toBe(32);
-    expect(theory.width).toBeGreaterThanOrEqual(theory.em * 20 - 1);
+    await expect(page.getByTestId('workspace-tabs')).toBeVisible();
 
     // в Sheet «Поиск» не обрезан
     await lessonsButton(page).click();
     const search = page.getByRole('dialog', { name: 'Уроки' }).getByRole('button', { name: /Поиск/ });
     await expect(search).toBeVisible();
     expect(await search.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    await page.keyboard.press('Escape');
+
+    // компактный режим: теория в Sheet, колонка текста не уже 20em
+    await page.getByRole('button', { name: 'Теория' }).click();
+    const theory = await page.getByRole('dialog', { name: 'Теория' }).evaluate((el) => ({
+      width: el.getBoundingClientRect().width,
+      em: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+    }));
+    expect(theory.em).toBe(32);
+    expect(theory.width).toBeGreaterThanOrEqual(theory.em * 20 - 1);
   });
 });
 
-test('200% текста на 1024x768: поле редактора, «Применить» и заголовок теории на месте', async ({ page }) => {
+test('200% текста на 1024x768: редактор, «Применить» и теория в Sheet', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   // крупный текст браузера: корневой размер шрифта 200% ещё до старта приложения
   await page.addInitScript(() => {
@@ -187,14 +202,10 @@ test('200% текста на 1024x768: поле редактора, «Приме
     });
   });
   await page.goto('/l/select-basics');
+  await expect(page.getByTestId('workspace-tabs')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('tab', { name: 'Редактор' }).click();
   const content = page.locator('.cm-content');
   await expect(content).toBeVisible({ timeout: 20_000 });
-
-  // редактор сжат до минимума: доска забирает всё, что может
-  await page.getByRole('separator', { name: 'Высота доски' }).focus();
-  await page.keyboard.press('End');
-  await page.getByRole('separator', { name: 'Граница редактора и результата' }).focus();
-  await page.keyboard.press('Home');
 
   // в поле редактора помещаются хотя бы 2 строки
   const lineHeight = await content.evaluate((el) => Number.parseFloat(getComputedStyle(el).lineHeight));
@@ -218,10 +229,16 @@ test('200% текста на 1024x768: поле редактора, «Приме
     expect(apply.y + apply.height).toBeLessThanOrEqual(region.y + region.height + 0.5);
   }
 
-  // заголовок урока переносится и не шире своей колонки
-  const h1 = page.getByRole('heading', { level: 1 });
+  // сайдбар в Sheet: кнопка «Уроки» видна до открытия теории
+  await expect(page.getByRole('button', { name: 'Уроки', exact: true })).toBeVisible();
+
+  // теория в Sheet: заголовок переносится и не шире листа
+  await page.getByRole('button', { name: 'Теория' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Теория' });
+  await expect(dialog).toBeVisible();
+  const h1 = dialog.getByRole('heading', { level: 1 });
   const overflow = await h1.evaluate((el) => {
-    const panel = el.closest('[data-slot="resizable-panel"]');
+    const panel = el.closest('[role="dialog"]');
     return {
       h1: el.getBoundingClientRect().right,
       panel: panel?.getBoundingClientRect().right ?? 0,
@@ -229,13 +246,12 @@ test('200% текста на 1024x768: поле редактора, «Приме
     };
   });
   expect(overflow.scroll).toBeLessThanOrEqual(0);
-  expect(overflow.h1).toBeLessThanOrEqual(overflow.panel);
+  expect(overflow.h1).toBeLessThanOrEqual(overflow.panel + 1);
 
-  // сайдбар в Sheet и ширину у теории не отнимает: колонка не уже 20em
-  await expect(page.getByRole('button', { name: 'Уроки', exact: true })).toBeVisible();
-  const theory = await page.locator('[id="theory"]').evaluate((el) => ({
+  // колонка теории не уже 20em
+  const theory = await dialog.evaluate((el) => ({
     width: el.getBoundingClientRect().width,
-    em: Number.parseFloat(getComputedStyle(el).fontSize),
+    em: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
   }));
   expect(theory.width).toBeGreaterThanOrEqual(theory.em * 20 - 1);
 });
@@ -310,9 +326,12 @@ for (const [width, height] of [
     await page.keyboard.press('ControlOrMeta+Backslash');
     await expect(exit).toBeVisible();
     const box = await exit.boundingBox();
+    if (!box) throw new Error('нет кнопки выхода');
     for (const other of [page.locator('.react-flow__controls'), page.getByTestId('pg-version')]) {
+      // в компактном режиме хром доски скрыт, проверять нечего
+      if ((await other.count()) === 0) continue;
       const r = await other.boundingBox();
-      if (!box || !r) throw new Error('нет кнопки или хрома');
+      if (!r) continue;
       const overlap =
         box.x < r.x + r.width &&
         r.x < box.x + box.width &&

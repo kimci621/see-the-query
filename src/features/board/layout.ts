@@ -114,8 +114,12 @@ export function foldWidth(f: Fold): number {
 }
 
 // Шапка + заголовки колонок + видимые строки + строка «+ ещё N» или «пусто»
+// Крупный текст: 15 строк на доске не влезают даже в компактную вкладку, показываем 5.
+// Полный результат остаётся в панели «Результат», сцена по-прежнему играет все строки
+export const maxVisibleRows = () => (rootFont >= 24 ? COMPRESSED_ROWS : MAX_VISIBLE_ROWS);
+
 export function tableHeight(t: TableInfo): number {
-  const visible = Math.min(t.sampleRows.length, isCompressed(t) ? COMPRESSED_ROWS : MAX_VISIBLE_ROWS);
+  const visible = Math.min(t.sampleRows.length, isCompressed(t) ? COMPRESSED_ROWS : maxVisibleRows());
   const footer = t.rowCount > visible || t.rowCount === 0 ? ROW_HEIGHT : 0;
   const definition = t.kind === 'view' || t.kind === 'matview' ? ROW_HEIGHT : 0;
   return HEADER_HEIGHT + definition + COLUMN_HEADER_HEIGHT + visible * ROW_HEIGHT + footer;

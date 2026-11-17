@@ -148,15 +148,15 @@ function fitFrame(flow: ReactFlowInstance<BoardNode>, store: ReturnType<typeof u
   });
 }
 
-export function BoardCanvas() {
+export function BoardCanvas({ showControls = true }: { showControls?: boolean }) {
   return (
     <ReactFlowProvider>
-      <BoardFlow />
+      <BoardFlow showControls={showControls} />
     </ReactFlowProvider>
   );
 }
 
-function BoardFlow() {
+function BoardFlow({ showControls = true }: { showControls?: boolean }) {
   const { lessonId = null } = useParams();
   const locale = useSettingsStore((s) => s.locale);
   const t = useMessages();
@@ -246,24 +246,31 @@ function BoardFlow() {
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--board-dot)" />
         {/* Кнопки в строку: вся полоса хрома внизу, её оставляют пустой кадры (chromeBottom) */}
         {/* Своя кнопка «Вписать»: тот же кадр с якорем, что и ⌘0 (встроенная только центрирует) */}
-        <Controls showInteractive={false} showFitView={false} position="bottom-left" orientation="horizontal">
-          <ControlButton
-            className="react-flow__controls-fitview"
-            onClick={() => useBoardStore.getState().requestFit()}
-            title={ariaLabelConfig['controls.fitView.ariaLabel']}
-            aria-label={ariaLabelConfig['controls.fitView.ariaLabel']}
+        {showControls && (
+          <Controls
+            showInteractive={false}
+            showFitView={false}
+            position="bottom-left"
+            orientation="horizontal"
           >
-            <Maximize />
-          </ControlButton>
-          <ControlButton
-            onClick={() => setMiniMap((v) => !v)}
-            title={t('Миникарта')}
-            aria-label={t('Миникарта')}
-            aria-pressed={miniMap}
-          >
-            <MapIcon />
-          </ControlButton>
-        </Controls>
+            <ControlButton
+              className="react-flow__controls-fitview"
+              onClick={() => useBoardStore.getState().requestFit()}
+              title={ariaLabelConfig['controls.fitView.ariaLabel']}
+              aria-label={ariaLabelConfig['controls.fitView.ariaLabel']}
+            >
+              <Maximize />
+            </ControlButton>
+            <ControlButton
+              onClick={() => setMiniMap((v) => !v)}
+              title={t('Миникарта')}
+              aria-label={t('Миникарта')}
+              aria-pressed={miniMap}
+            >
+              <MapIcon />
+            </ControlButton>
+          </Controls>
+        )}
         {/* Справа снизу плашка версии Postgres, миникарта сверху */}
         {miniMap && <MiniMap pannable zoomable position="top-right" />}
         <OverlayLayer />

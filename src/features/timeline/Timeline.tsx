@@ -18,7 +18,7 @@ import { useSceneStore } from '@/stores/scene';
 import { useSettingsStore } from '@/stores/settings';
 import { usePlayer } from './usePlayer';
 
-export function Timeline() {
+export function Timeline({ showCaption = true }: { showCaption?: boolean }) {
   usePlayer();
   const locale = useSettingsStore((s) => s.locale);
   const trace = useSceneStore((s) => s.trace);
@@ -184,15 +184,18 @@ export function Timeline() {
           aria-label={locale === 'en' ? 'Scene position' : 'Позиция в сцене'}
         />
       ) : null}
-      {/* Длинная подпись режется по ширине панели: полный текст в подсказке, читалка слышит его целиком */}
-      <p
-        data-testid="timeline-caption"
-        aria-live="polite"
-        title={current?.caption || undefined}
-        className="truncate text-sm"
-      >
-        {current?.caption ?? ''}
-      </p>
+      {/* Длинная подпись режется по ширине панели: полный текст в подсказке, читалка слышит его целиком.
+          В компактном режиме её показывает StepCaption над доской */}
+      {showCaption && (
+        <p
+          data-testid="timeline-caption"
+          aria-live="polite"
+          title={current?.caption || undefined}
+          className="truncate text-sm"
+        >
+          {current?.caption ?? ''}
+        </p>
+      )}
     </div>
   );
 }

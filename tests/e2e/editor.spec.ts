@@ -2,9 +2,26 @@ import { expect, type Page, test } from '@playwright/test';
 
 async function openLesson(page: Page) {
   await page.goto('/l/select-basics');
-  // ждём готовности редактора и песочницы (доска поднялась)
+  // ждём готовности песочницы (доска поднялась)
+  await expect(page.getByTestId('board-area')).toBeVisible({ timeout: 20_000 });
+  const compact = (await page.getByTestId('workspace-tabs').count()) > 0;
+  // компактный режим: редактор живёт во вкладке, доска под ней уже смонтирована
+  if (compact) await page.getByRole('tab', { name: 'Редактор' }).click();
   await expect(page.locator('.cm-content')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('table-node-public.book')).toBeVisible({ timeout: 20_000 });
+  const book = page.getByTestId('table-node-public.book');
+  if (compact) await expect(book).toBeAttached({ timeout: 20_000 });
+  else await expect(book).toBeVisible({ timeout: 20_000 });
+}
+
+// Компактный режим крупного текста: редактор живёт во вкладке, доска открыта по умолчанию
+async function openCompactLesson(page: Page, font: number) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: font } });
+  await page.goto('/l/select-basics');
+  await expect(page.getByTestId('board-area')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('workspace-tabs')).toBeVisible();
+  await page.getByRole('tab', { name: 'Редактор' }).click();
+  await expect(page.locator('.cm-content')).toBeVisible({ timeout: 20_000 });
 }
 
 async function setEditorText(page: Page, text: string) {
@@ -34,6 +51,9 @@ test('широкий результат: значения под своими з
   await page.setViewportSize({ width: 700, height: 800 });
   await openLesson(page);
   await setEditorText(page, 'select * from book');
+  // 700px — компактный режим, результат открывается вкладкой
+  if ((await page.getByRole('tab', { name: 'Результат' }).count()) > 0)
+    await page.getByRole('tab', { name: 'Результат' }).click();
   await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 5000 });
   const grid = page.getByRole('table', { name: 'Результат запроса' });
   // 700px: панель уже 864px (9 колонок по 96px), результат прокручивается
@@ -245,10 +265,9 @@ test('применить, отменить и применить всё', async 
 });
 
 test('крупный шрифт браузера: строка результата не обрезает ячейку', async ({ page }) => {
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await openLesson(page);
+  await openCompactLesson(page, 32);
   await setEditorText(page, 'select title from book');
+  await page.getByRole('tab', { name: 'Результат' }).click();
   await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 5000 });
   const { row, content } = await page.getByTestId('cell-0-0').evaluate((el) => ({
     row: el.parentElement?.getBoundingClientRect().height ?? 0,
@@ -258,9 +277,7 @@ test('крупный шрифт браузера: строка результа�
 });
 
 test('крупный шрифт браузера: текст редактора растёт вместе с ним', async ({ page }) => {
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await openLesson(page);
+  await openCompactLesson(page, 32);
   const size = await page
     .locator('.cm-editor')
     .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));

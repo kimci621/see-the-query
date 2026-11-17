@@ -19,15 +19,22 @@ function subscribe(listener: () => void) {
     probe.setAttribute('aria-hidden', 'true');
     probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;width:1rem;height:0';
     document.body.append(probe);
+    let frame = 0;
     const observer = new ResizeObserver(() => {
       const px = readRootFont();
       if (px === current) return;
       current = px;
-      for (const l of listeners) l();
+      // Слушатели перекладывают панели и доску: делаем это вне колбэка ResizeObserver,
+      // иначе браузер пишет «ResizeObserver loop completed with undelivered notifications»
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        for (const l of listeners) l();
+      });
     });
     observer.observe(probe);
     stop = () => {
       observer.disconnect();
+      cancelAnimationFrame(frame);
       probe.remove();
     };
   }

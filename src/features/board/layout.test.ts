@@ -7,6 +7,7 @@ import {
   foldColumns,
   foldWidth,
   GROUP_PADDING,
+  maxVisibleRows,
   ROW_HEIGHT,
   rem,
   SCHEMA_GAP,
@@ -56,6 +57,18 @@ describe('размеры таблицы', () => {
   it('ширина по числу колонок, не меньше TABLE_WIDTH', () => {
     expect(tableWidth(book)).toBe(6 * COLUMN_WIDTH);
     expect(tableWidth(table('public.one', [col('id', 'int')]))).toBe(TABLE_WIDTH);
+  });
+
+  // P8.112: при крупном тексте 15 строк не влезают даже в компактную вкладку
+  it('крупный текст: на доске 5 строк вместо 15', () => {
+    setRootFont(32);
+    try {
+      expect(maxVisibleRows()).toBe(5);
+      const rows = Array.from({ length: 15 }, (_, i) => [i]);
+      expect(tableHeight(table('public.big', [col('id', 'int')], rows, 40))).toBe(72 + 80 + 5 * 48 + 48);
+    } finally {
+      setRootFont(16);
+    }
   });
 });
 

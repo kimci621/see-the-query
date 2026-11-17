@@ -55,6 +55,11 @@ function union(a: Rect, b: Rect): Rect {
   };
 }
 
+// Трассы, для которых начальную видимость сцены уже решили. Переживает пересоздание OverlayLayer:
+// при смене раскладки (крупный шрифт, компактные вкладки) доска монтируется заново, но сцена
+// не должна прятаться только из-за этого (P8.112)
+const seenTraces = new WeakSet<object>();
+
 export function OverlayLayer() {
   const trace = useSceneStore((s) => s.trace);
   const playback = useSceneStore((s) => s.playback);
@@ -96,10 +101,13 @@ export function OverlayLayer() {
       return;
     }
     builtFor.current = { trace, schema };
+    const firstTime = !seenTraces.has(trace);
+    seenTraces.add(trace);
+    const wasHidden = scene.hidden;
     scene.setPlayback(playback);
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
-    // таймлайн и плеер её вернут
-    if (lessonStart() || !userDrivesScene()) scene.hide();
+    // таймлайн и плеер её вернут. При повторном монтировании той же трассы сохраняем видимость
+    if (firstTime ? lessonStart() || !userDrivesScene() : wasHidden) scene.hide();
   }, [trace, schema, rf, expanded, rootFont, locale]);
 
   const active = !!playback && playback.phases.length > 0 && !hidden;

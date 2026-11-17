@@ -19,7 +19,7 @@ import {
   foldColumns,
   foldWidth,
   HEADER_HEIGHT,
-  MAX_VISIBLE_ROWS,
+  maxVisibleRows,
   ownColumns,
   ROW_HEIGHT,
   STUB_WIDTH,
@@ -144,7 +144,7 @@ export const TableNode = memo(function TableNode({ id, data }: NodeProps<TableFl
   // Подсвеченная колонка свёрнута: подсвечиваем заглушку, размер ноды не меняется
   const stubHighlighted = fold.hidden.some((c) => highlighted.includes(c.name));
   const rows = table.sampleRows
-    .slice(0, isCompressed(table) ? COMPRESSED_ROWS : MAX_VISIBLE_ROWS)
+    .slice(0, isCompressed(table) ? COMPRESSED_ROWS : maxVisibleRows())
     .map((values, i) => ({
       key: table.sampleCtids[i] ?? String(i),
       values,

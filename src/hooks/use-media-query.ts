@@ -19,14 +19,17 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-// Ширина окна для порогов, которые зависят от корневого шрифта: media query em считается от
+// Размер окна для порогов, которые зависят от корневого шрифта: media query em считается от
 // начального размера шрифта, а не от html { font-size }, поэтому её одной мало
-export function useViewportWidth(): number {
-  const [width, setWidth] = useState(() => window.innerWidth);
+export function useViewportSize(): { width: number; height: number } {
+  const [size, setSize] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
+    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  return width;
+  return size;
 }

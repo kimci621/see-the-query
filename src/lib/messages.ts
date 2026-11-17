@@ -37,6 +37,8 @@ const EN = {
   'Всё равно открыть': 'Open anyway',
   Темы: 'Topics',
   Теория: 'Theory',
+  'Текст урока': 'Lesson text',
+  'Рабочая область': 'Workspace',
   Доска: 'Board',
   'Ширина списка уроков': 'Lesson list width',
   'Граница теории и доски': 'Boundary between theory and board',

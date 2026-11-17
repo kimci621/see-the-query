@@ -13,7 +13,15 @@ export function pgVersionLabel(version: string | null, locale: Locale = 'ru'): s
 }
 
 // Слои поверх доски: загрузка, пустая схема, сбой, версия Postgres
-export function BoardStatus({ status, version }: { status: Sandbox['status']; version: string | null }) {
+export function BoardStatus({
+  status,
+  version,
+  showVersion = true,
+}: {
+  status: Sandbox['status'];
+  version: string | null;
+  showVersion?: boolean;
+}) {
   const schema = useBoardStore((s) => s.schema);
   const visible = useBoardStore((s) => s.visibleTables);
   const dimmed = useBoardStore((s) => s.dimmed);
@@ -59,7 +67,7 @@ export function BoardStatus({ status, version }: { status: Sandbox['status']; ve
           </p>
         </div>
       )}
-      {label && (
+      {label && showVersion && (
         <Badge
           variant="outline"
           data-testid="pg-version"

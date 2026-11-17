@@ -1,18 +1,22 @@
+import { Maximize } from 'lucide-react';
 import { type ReactNode, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BoardCanvas } from '@/features/board/BoardCanvas';
 import { BoardStatus } from '@/features/board/BoardStatus';
 import { useBoardHotkeys } from '@/features/board/useBoardHotkeys';
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { EditorPane } from '@/features/editor/EditorPane';
 import { ResultsPanel } from '@/features/results/ResultsPanel';
+import { StepCaption } from '@/features/timeline/StepCaption';
 import { Timeline } from '@/features/timeline/Timeline';
 import { useMessages } from '@/hooks/use-messages';
 import { remToPx, useRootFont } from '@/hooks/use-root-font';
 import type { Message } from '@/lib/messages';
 import { modKey } from '@/lib/utils';
+import { useBoardStore } from '@/stores/board';
 import { useSettingsStore } from '@/stores/settings';
 import { useSchemaSync } from './useSchemaSync';
 
@@ -44,7 +48,13 @@ const PANELS = [
   { id: 'results', title: 'Результат', hint: 'Результат запроса и сообщения', minSize: '8%', handle: null },
 ] as const;
 
-function BoardSlot() {
+function BoardSlot({
+  showVersion = true,
+  showControls = true,
+}: {
+  showVersion?: boolean;
+  showControls?: boolean;
+}) {
   useSchemaSync();
   const { status, version } = useSandbox();
   const boardRef = useRef<HTMLDivElement>(null);
@@ -59,8 +69,8 @@ function BoardSlot() {
       data-testid="board-area"
       className="relative h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <BoardCanvas />
-      <BoardStatus status={status} version={version} />
+      <BoardCanvas showControls={showControls} />
+      <BoardStatus status={status} version={version} showVersion={showVersion} />
       {/* Режим фокуса (спека 3.1): видимый выход, не только ⌘\. В полосе хрома снизу: её кадры камеры держат пустой.
           Кнопка исчезает вместе с режимом, фокус уходит на доску */}
       {focusMode && (
@@ -88,9 +98,99 @@ const SLOTS: Partial<Record<string, ReactNode>> = {
   results: <ResultsPanel />,
 };
 
-export function BoardPane() {
+// Компактный режим крупного текста и низкого окна (P8.112): одна панель на экране вместо четырёх.
+// Доска получает всю высоту, подпись шага живёт над ней, плеер остаётся внизу вкладки
+function CompactWorkspace({
+  onOpenLessons,
+  onOpenTheory,
+}: {
+  onOpenLessons?: () => void;
+  onOpenTheory?: () => void;
+}) {
+  const t = useMessages();
+  return (
+    <Tabs defaultValue="board" data-testid="workspace-tabs" className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1">
+        <TabsList
+          aria-label={t('Рабочая область')}
+          className="h-auto min-w-0 flex-1 justify-start gap-1 rounded-none bg-transparent p-0"
+        >
+          <TabsTrigger value="board" className="text-sm">
+            {t('Доска')}
+          </TabsTrigger>
+          <TabsTrigger value="editor" className="text-sm">
+            {t('Редактор')}
+          </TabsTrigger>
+          <TabsTrigger value="results" className="text-sm">
+            {t('Результат')}
+          </TabsTrigger>
+        </TabsList>
+        {onOpenLessons && (
+          <Button id="lessons-button" variant="outline" size="sm" onClick={onOpenLessons}>
+            {t('Уроки')}
+          </Button>
+        )}
+        {onOpenTheory && (
+          <Button id="theory-button" variant="outline" size="sm" onClick={onOpenTheory}>
+            {t('Теория')}
+          </Button>
+        )}
+        {/* Встроенные контролы React Flow прячутся под таблицей на крупном тексте: вписывание
+            остаётся кнопкой в шапке, кнопки зума — жестами и клавиатурой */}
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={t('Вписать доску в экран')}
+          title={t('Вписать доску в экран')}
+          onClick={() => useBoardStore.getState().requestFit()}
+        >
+          <Maximize className="size-4" aria-hidden />
+        </Button>
+      </div>
+      {/* Вкладки не размонтируют панели: трейс из редактора и сцена доски живут,
+          пока пользователь ходит по вкладкам */}
+      <TabsContent
+        forceMount
+        value="board"
+        className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
+      >
+        <StepCaption />
+        <div className="min-h-0 flex-1">
+          {/* На крупном тексте плашка Postgres шире таблицы и ложится на строки (P8.112):
+              версию показываем в обычной раскладке, здесь доска важнее */}
+          <BoardSlot showVersion={false} showControls={false} />
+        </div>
+        <div className="h-[7rem] shrink-0 border-t">
+          <Timeline showCaption={false} />
+        </div>
+      </TabsContent>
+      <TabsContent forceMount value="editor" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
+        <section aria-label={t('Редактор')} className="h-full min-h-0">
+          <EditorPane />
+        </section>
+      </TabsContent>
+      <TabsContent forceMount value="results" className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
+        <section aria-label={t('Результат')} className="h-full min-h-0">
+          <ResultsPanel />
+        </section>
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+export function BoardPane({
+  compact = false,
+  onOpenLessons,
+  onOpenTheory,
+}: {
+  compact?: boolean;
+  onOpenLessons?: () => void;
+  onOpenTheory?: () => void;
+}) {
   const rightLayout = useSettingsStore((s) => s.rightLayout);
   const setRightLayout = useSettingsStore((s) => s.setRightLayout);
+
+  if (compact) return <CompactWorkspace onOpenLessons={onOpenLessons} onOpenTheory={onOpenTheory} />;
 
   return (
     <ResizablePanelGroup
