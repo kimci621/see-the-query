@@ -25,13 +25,35 @@ const tr = (ctx: ErrorContext, ru: string, en: string) => (ctx.locale === 'en' ?
 // Первое имя в кавычках из текста ошибки: relation "books" → books
 const quoted = (message: string) => /"([^"]+)"/.exec(message)?.[1] ?? '';
 
-// Аргумент GROUPING по позиции Postgres: grouping(price) → price
-function groupingColumn(sql: string, position: number | undefined): string | undefined {
+// Текст аргумента GROUPING по позиции Postgres: grouping(b.price) → b.price
+function groupingArgumentText(sql: string, position: number | undefined): string | undefined {
   if (position == null) return undefined;
   const at = Array.from(sql)
-    .slice(position - 1)
-    .join('');
-  return /^[a-z_][a-z0-9_]*/i.exec(at)?.[0];
+    .slice(0, position - 1)
+    .join('').length;
+  const before = sql.slice(0, at + 1);
+  const call = /(?:^|[^\w$])grouping\s*\(/gi;
+  let match: RegExpExecArray | null = null;
+  for (let m = call.exec(before); m; m = call.exec(before)) match = m;
+  if (!match) return undefined;
+  const open = match.index + match[0].lastIndexOf('(');
+  if (open >= at) return undefined;
+  let depth = 0;
+  let quote: "'" | '"' | null = null;
+  for (let i = open; i < sql.length; i++) {
+    const ch = sql[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === '(') depth++;
+    else if (ch === ')' && --depth === 0) {
+      const arg = sql.slice(open + 1, i).trim();
+      return arg || undefined;
+    }
+  }
+  return undefined;
 }
 
 function distance(a: string, b: string): number {
@@ -191,6 +213,16 @@ function derivedAt(sql: string, position: number | undefined): { alias: string; 
   return { alias, columns };
 }
 
+type SetOpBranch = { targetList?: unknown[]; larg?: SetOpBranch; rarg?: SetOpBranch };
+type SetOpNode = SetOpBranch & { op?: string };
+
+// Левая ветвь трёх и более UNION сама может быть SETOP без targetList: спускаемся до первого SELECT
+function setOpBranchColumns(branch: SetOpBranch | undefined): number {
+  if (!branch) return 0;
+  if (Array.isArray(branch.targetList)) return branch.targetList.length;
+  return setOpBranchColumns(branch.larg);
+}
+
 // Число колонок в ветвях верхнего UNION/INTERSECT/EXCEPT
 function setOpColumns(sql: string): { op: string; left: number; right: number } | null {
   const parsed = isParserReady() ? parseSql(sql) : null;
@@ -205,16 +237,12 @@ function setOpColumns(sql: string): { op: string; left: number; right: number } 
       return null;
     }
     const rec = node as Record<string, unknown>;
-    const sel = (rec.SelectStmt ?? rec) as {
-      op?: string;
-      larg?: { targetList?: unknown[] };
-      rarg?: { targetList?: unknown[] };
-    };
+    const sel = (rec.SelectStmt ?? rec) as SetOpNode;
     if (sel.op && sel.op !== 'SETOP_NONE' && sel.larg && sel.rarg) {
       return {
         op: sel.op.replace('SETOP_', ''),
-        left: Array.isArray(sel.larg.targetList) ? sel.larg.targetList.length : 0,
-        right: Array.isArray(sel.rarg.targetList) ? sel.rarg.targetList.length : 0,
+        left: setOpBranchColumns(sel.larg),
+        right: setOpBranchColumns(sel.rarg),
       };
     }
     for (const value of Object.values(rec)) {
@@ -463,32 +491,56 @@ export const DICTIONARY: Record<string, Entry> = {
         highlight: none,
       };
     if (err.message.startsWith('arguments to GROUPING must be grouping expressions')) {
-      const column = groupingColumn(ctx.sql, err.position);
-      const owner = column
-        ? tablesInSql(ctx).find((t) => t.columns.some((c) => c.name === column))
-        : undefined;
+      const arg = groupingArgumentText(ctx.sql, err.position);
       return {
-        title: tr(ctx, 'GROUPING не видит колонку', 'GROUPING cannot see the column'),
+        title: tr(ctx, 'GROUPING не видит выражение', 'GROUPING cannot see the expression'),
         body: tr(
           ctx,
-          `Аргумент GROUPING должен быть выражением из GROUP BY.${column ? ` Колонки ${column} в GROUP BY нет.` : ''}`,
-          `An argument to GROUPING must be a grouping expression.${column ? ` ${column} is not in GROUP BY.` : ''}`,
+          arg
+            ? `Аргумент GROUPING: выражение «${arg}». Его нет в GROUP BY.`
+            : 'Аргумент GROUPING должен быть выражением из GROUP BY.',
+          arg
+            ? `The GROUPING argument is the expression “${arg}”. It is not in GROUP BY.`
+            : 'An argument to GROUPING must be a grouping expression.',
         ),
         suggestion: tr(
           ctx,
-          column
-            ? `Добавь ${column} в GROUP BY или убери её из GROUPING.`
-            : 'Бери в GROUPING только колонки из GROUP BY.',
-          column
-            ? `Add ${column} to GROUP BY or remove it from GROUPING.`
-            : 'Pass only GROUP BY columns to GROUPING.',
+          arg
+            ? `Добавь «${arg}» в GROUP BY или убери из GROUPING.`
+            : 'Бери в GROUPING только выражения из GROUP BY.',
+          arg
+            ? `Add “${arg}” to GROUP BY or remove it from GROUPING.`
+            : 'Pass only GROUP BY expressions to GROUPING.',
         ),
-        highlight: {
-          tableIds: owner ? [owner.id] : [],
-          columns: owner && column ? [`${owner.id}.${column}`] : [],
-        },
+        highlight: none,
       };
     }
+    if (err.message.startsWith('grouping operations are not allowed in JOIN conditions'))
+      return {
+        title: tr(ctx, 'GROUPING в JOIN', 'GROUPING in JOIN'),
+        body: tr(
+          ctx,
+          'GROUPING вычисляется на шаге группировки, а JOIN идёт раньше. В условии JOIN его использовать нельзя.',
+          'GROUPING is evaluated during grouping, while JOIN runs before it. It cannot appear in a JOIN condition.',
+        ),
+        suggestion: tr(ctx, 'Перенеси условие в HAVING.', 'Move the condition to HAVING.'),
+        highlight: none,
+      };
+    if (err.message.startsWith('grouping operations are not allowed in GROUP BY'))
+      return {
+        title: tr(ctx, 'GROUPING в GROUP BY', 'GROUPING in GROUP BY'),
+        body: tr(
+          ctx,
+          'GROUPING вычисляется после группировки, а GROUP BY задаёт её уровни. Внутри GROUP BY его нет.',
+          'GROUPING is evaluated after grouping, while GROUP BY defines the levels. It cannot appear inside GROUP BY.',
+        ),
+        suggestion: tr(
+          ctx,
+          'Используй GROUPING в SELECT, HAVING или ORDER BY.',
+          'Use GROUPING in SELECT, HAVING or ORDER BY.',
+        ),
+        highlight: none,
+      };
     // Тот же код без колонки в тексте: aggregate functions are not allowed in WHERE, вложенный агрегат и т.п.
     if (!quoted(err.message))
       return /not allowed in WHERE/.test(err.message)
@@ -541,25 +593,45 @@ export const DICTIONARY: Record<string, Entry> = {
   },
 
   '42P20': (err, ctx) => ({
-    title: tr(ctx, 'Недопустимая рамка окна', 'Invalid window frame'),
-    body: err.message.startsWith('frame starting from following row')
-      ? tr(
-          ctx,
-          'Начало рамки не может стоять позже её конца. Сначала идёт начало, потом конец.',
-          'The frame start cannot come after its end. The start comes before the end.',
-        )
-      : err.message.startsWith('frame starting from current row')
+    title: err.message.startsWith('RANGE with offset')
+      ? tr(ctx, 'RANGE со смещением', 'RANGE with an offset')
+      : tr(ctx, 'Недопустимая рамка окна', 'Invalid window frame'),
+    body: err.message.startsWith('RANGE with offset')
+      ? err.message.includes('exactly one ORDER BY column')
         ? tr(
             ctx,
-            'Рамка, которая начинается с текущей строки, не может заканчиваться раньше неё.',
-            'A frame starting at the current row cannot end before it.',
+            'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. У тебя их несколько.',
+            'A RANGE offset is measured along the ordering key, so it needs exactly one ORDER BY column. This window has more.',
           )
-        : tr(ctx, 'Границы рамки окна недопустимы.', 'The window frame bounds are invalid.'),
-    suggestion: tr(
-      ctx,
-      'Задай начало раньше конца, например rows between 1 preceding and 1 following.',
-      'Put the start before the end, for example rows between 1 preceding and 1 following.',
-    ),
+        : tr(
+            ctx,
+            'Смещение в RANGE не подходит к типу ключа сортировки.',
+            'The RANGE offset does not fit the ordering column type.',
+          )
+      : err.message.startsWith('frame starting from following row')
+        ? tr(
+            ctx,
+            'Начало рамки не может стоять позже её конца. Сначала идёт начало, потом конец.',
+            'The frame start cannot come after its end. The start comes before the end.',
+          )
+        : err.message.startsWith('frame starting from current row')
+          ? tr(
+              ctx,
+              'Рамка, которая начинается с текущей строки, не может заканчиваться раньше неё.',
+              'A frame starting at the current row cannot end before it.',
+            )
+          : tr(ctx, 'Границы рамки окна недопустимы.', 'The window frame bounds are invalid.'),
+    suggestion: err.message.startsWith('RANGE with offset')
+      ? tr(
+          ctx,
+          'Оставь один ключ в ORDER BY окна или используй ROWS, если нужны строки.',
+          'Keep one ORDER BY column in the window or use ROWS when you mean row positions.',
+        )
+      : tr(
+          ctx,
+          'Задай начало раньше конца, например rows between 1 preceding and 1 following.',
+          'Put the start before the end, for example rows between 1 preceding and 1 following.',
+        ),
     highlight: none,
   }),
 

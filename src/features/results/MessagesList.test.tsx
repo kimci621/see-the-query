@@ -81,6 +81,22 @@ describe('MessagesList', () => {
     }
   });
 
+  it('42P20 в trace.error: красная карточка с объяснением рамки', () => {
+    useBoardStore.getState().setSchema(SCHEMA);
+    render(
+      <MessagesList
+        trace={traceWith({
+          code: '42P20',
+          message: 'frame starting from following row cannot have preceding rows',
+          position: 61,
+        })}
+      />,
+    );
+    expect(screen.getByTestId('pg-error')).toHaveTextContent('42P20');
+    expect(screen.getByTestId('pg-error')).toHaveAttribute('data-tone', 'error');
+    expect(screen.getByTestId('pg-explain-title')).toHaveTextContent('Недопустимая рамка окна');
+  });
+
   it('карточка ошибки разбора нейтральная, как плашка «Недописан» (P8.15)', () => {
     act(() => {
       useEditorStore.getState().setText('select title from book where');

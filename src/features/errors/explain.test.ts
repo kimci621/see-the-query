@@ -39,8 +39,16 @@ const CASES: Record<string, string> = {
   aggregateInWhere: 'select title from book where price = max(price)',
   nestedAggregate: 'select max(count(*)) from book',
   groupingArgument: 'select grouping(price) from book group by rollup(category_id)',
+  groupingQualifiedArgument: 'select grouping(b.price) from book b group by rollup(b.category_id)',
+  groupingExpressionArgument: 'select grouping(price + 1) from book group by rollup(category_id)',
   groupingInWhere:
     'select category_id, count(*) from book where grouping(category_id) = 0 group by rollup(category_id)',
+  groupingInJoin:
+    'select * from book join book b on grouping(book.category_id) = 0 group by rollup(book.category_id)',
+  groupingInGroupBy: 'select category_id from book group by grouping(category_id)',
+  rangeOffset:
+    'select sum(price) over (order by category_id, author_id range between 1 preceding and current row) from book',
+  unionThree: 'select 1 as x union select 2 as x union select 3 as x, 4 as y',
   formTypo: 'select title form book',
   commaBeforeFrom: 'select title, from book',
   unionColumns:
@@ -153,7 +161,7 @@ describe('explainError', () => {
     },
   );
 
-  it('покрывает 31 SQLSTATE настоящими ошибками', () => {
+  it('покрывает 32 SQLSTATE настоящими ошибками', () => {
     expect([...new Set([...errors.values()].map((e) => e.code))].sort()).toEqual([
       '0A000',
       '21000',
@@ -185,6 +193,7 @@ describe('explainError', () => {
       '42P07',
       '42P10',
       '42P16',
+      '42P20',
       '55000',
     ]);
   });
@@ -400,22 +409,52 @@ describe('explainError', () => {
     expect(explain('groupingInSubquery').body).toMatch(/^После GROUP BY/);
   });
 
-  it('42803: GROUPING с колонкой вне GROUP BY объясняет аргумент, а не «агрегат здесь нельзя»', () => {
+  it('42803: GROUPING с выражением вне GROUP BY объясняет аргумент, а не «агрегат здесь нельзя»', () => {
     expect(errors.get('groupingArgument')?.code).toBe('42803');
     expect(explain('groupingArgument')).toMatchObject({
-      title: 'GROUPING не видит колонку',
-      body: 'Аргумент GROUPING должен быть выражением из GROUP BY. Колонки price в GROUP BY нет.',
-      suggestion: 'Добавь price в GROUP BY или убери её из GROUPING.',
-      highlight: { tableIds: ['public.book'], columns: ['public.book.price'] },
+      title: 'GROUPING не видит выражение',
+      body: 'Аргумент GROUPING: выражение «price». Его нет в GROUP BY.',
+      suggestion: 'Добавь «price» в GROUP BY или убери из GROUPING.',
+      highlight: { tableIds: [], columns: [] },
     });
   });
 
-  it('42803: GROUPING в WHERE не называет GROUPING агрегатом', () => {
+  it('42803: GROUPING с квалифицированной колонкой и выражением называет весь аргумент', () => {
+    expect(explain('groupingQualifiedArgument')).toMatchObject({
+      title: 'GROUPING не видит выражение',
+      body: 'Аргумент GROUPING: выражение «b.price». Его нет в GROUP BY.',
+      suggestion: 'Добавь «b.price» в GROUP BY или убери из GROUPING.',
+    });
+    expect(explain('groupingExpressionArgument')).toMatchObject({
+      title: 'GROUPING не видит выражение',
+      body: 'Аргумент GROUPING: выражение «price + 1». Его нет в GROUP BY.',
+      suggestion: 'Добавь «price + 1» в GROUP BY или убери из GROUPING.',
+    });
+  });
+
+  it('42803: GROUPING в WHERE, JOIN и GROUP BY не называют агрегатом', () => {
     expect(explain('groupingInWhere')).toMatchObject({
       title: 'GROUPING в WHERE',
       suggestion: 'Перенеси условие в HAVING.',
     });
     expect(explain('groupingInWhere').body).toMatch(/^GROUPING вычисляется/);
+    expect(explain('groupingInJoin')).toMatchObject({
+      title: 'GROUPING в JOIN',
+      suggestion: 'Перенеси условие в HAVING.',
+    });
+    expect(explain('groupingInGroupBy')).toMatchObject({
+      title: 'GROUPING в GROUP BY',
+      suggestion: 'Используй GROUPING в SELECT, HAVING или ORDER BY.',
+    });
+  });
+
+  it('42P20: RANGE со смещением и двумя ключами ORDER BY объясняет причину', () => {
+    expect(errors.get('rangeOffset')?.code).toBe('42P20');
+    expect(explain('rangeOffset')).toMatchObject({
+      title: 'RANGE со смещением',
+      body: 'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. У тебя их несколько.',
+      suggestion: 'Оставь один ключ в ORDER BY окна или используй ROWS, если нужны строки.',
+    });
   });
 
   it('42803 без колонки в тексте: агрегат в WHERE и вложенный агрегат', () => {
@@ -441,6 +480,10 @@ describe('explainError', () => {
       title: 'Разное число колонок',
       body: 'В ветвях UNION разное число колонок: слева 1, справа 2.',
       suggestion: 'Добавь или убери колонку, чтобы списки совпали.',
+    });
+    expect(explain('unionThree')).toMatchObject({
+      title: 'Разное число колонок',
+      body: 'В ветвях UNION разное число колонок: слева 1, справа 2.',
     });
   });
 
