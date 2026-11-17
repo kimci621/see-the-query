@@ -600,8 +600,8 @@ export const DICTIONARY: Record<string, Entry> = {
       ? err.message.includes('exactly one ORDER BY column')
         ? tr(
             ctx,
-            'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. У тебя их несколько.',
-            'A RANGE offset is measured along the ordering key, so it needs exactly one ORDER BY column. This window has more.',
+            'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. Сейчас их ноль или несколько.',
+            'A RANGE offset is measured along the ordering key, so it needs exactly one ORDER BY column. This window has zero or several.',
           )
         : tr(
             ctx,
@@ -624,8 +624,8 @@ export const DICTIONARY: Record<string, Entry> = {
     suggestion: err.message.startsWith('RANGE with offset')
       ? tr(
           ctx,
-          'Оставь один ключ в ORDER BY окна или используй ROWS, если нужны строки.',
-          'Keep one ORDER BY column in the window or use ROWS when you mean row positions.',
+          'Добавь один ключ в ORDER BY окна или оставь только один; если нужны строки, используй ROWS.',
+          'Add one ORDER BY column to the window or keep just one; use ROWS when you mean row positions.',
         )
       : tr(
           ctx,

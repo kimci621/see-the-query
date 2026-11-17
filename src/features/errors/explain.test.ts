@@ -48,6 +48,7 @@ const CASES: Record<string, string> = {
   groupingInGroupBy: 'select category_id from book group by grouping(category_id)',
   rangeOffset:
     'select sum(price) over (order by category_id, author_id range between 1 preceding and current row) from book',
+  rangeOffsetZero: 'select sum(price) over (range between 1 preceding and current row) from book',
   unionThree: 'select 1 as x union select 2 as x union select 3 as x, 4 as y',
   formTypo: 'select title form book',
   commaBeforeFrom: 'select title, from book',
@@ -448,12 +449,19 @@ describe('explainError', () => {
     });
   });
 
-  it('42P20: RANGE со смещением и двумя ключами ORDER BY объясняет причину', () => {
+  it('42P20: RANGE со смещением объясняет причину при нуле и нескольких ключах ORDER BY', () => {
     expect(errors.get('rangeOffset')?.code).toBe('42P20');
     expect(explain('rangeOffset')).toMatchObject({
       title: 'RANGE со смещением',
-      body: 'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. У тебя их несколько.',
-      suggestion: 'Оставь один ключ в ORDER BY окна или используй ROWS, если нужны строки.',
+      body: 'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. Сейчас их ноль или несколько.',
+      suggestion:
+        'Добавь один ключ в ORDER BY окна или оставь только один; если нужны строки, используй ROWS.',
+    });
+    expect(explain('rangeOffsetZero')).toMatchObject({
+      title: 'RANGE со смещением',
+      body: 'Смещение в RANGE считается по ключу сортировки, поэтому нужен ровно один ключ ORDER BY. Сейчас их ноль или несколько.',
+      suggestion:
+        'Добавь один ключ в ORDER BY окна или оставь только один; если нужны строки, используй ROWS.',
     });
   });
 
