@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { useSandbox } from '@/features/db/SandboxProvider';
 import { useLessonSandbox } from '@/features/db/useLessonSandbox';
 import { getLesson } from '@/features/lessons/registry';
-import { useMediaQuery } from '@/hooks/use-media-query';
+import { useMediaQuery, useViewportWidth } from '@/hooks/use-media-query';
 import { useMessages } from '@/hooks/use-messages';
 import { remToPx, useRootFont } from '@/hooks/use-root-font';
 import { useLessonStore } from '@/stores/lesson';
@@ -38,11 +38,12 @@ export function AppShell() {
   const toggleFocusMode = useSettingsStore((s) => s.toggleFocusMode);
   const [commandOpen, setCommandOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  // До 80em (1280px при обычном шрифте) сайдбар уезжает в Sheet (спека 3.1). Порог в em: при крупном
-  // шрифте браузера узкий режим включается раньше и теория не сжимается. Заглушка ниже 640px в px,
-  // чтобы крупный шрифт на десктопе её не включал
-  const narrow = useMediaQuery('(max-width: 80em)');
+  // До 80em (1280px при обычном шрифте) сайдбар уезжает в Sheet (спека 3.1). Порог в em ловит
+  // настройку шрифта браузера, но не html { font-size }: при крупном корне добавляем проверку в px.
+  // Заглушка ниже 640px в px, чтобы крупный шрифт на десктопе её не включал
   const rootFont = useRootFont();
+  const viewportWidth = useViewportWidth();
+  const narrow = useMediaQuery('(max-width: 80em)') || (rootFont > 16 && viewportWidth < 80 * rootFont);
   const phone = useMediaQuery('(max-width: 639px)');
   const [forceOpen, setForceOpen] = useState(false);
   const [lessonsOpen, setLessonsOpen] = useState(false);
@@ -142,7 +143,7 @@ export function AppShell() {
         </ResizablePanel>
       </ResizablePanelGroup>
       {/* Узкий экран и режим фокуса: теории с кнопкой «Уроки» нет, кнопка остаётся над доской */}
-      {narrow && focusMode && (
+      {focusMode && (
         <Button
           id="lessons-button"
           variant="outline"
@@ -153,7 +154,7 @@ export function AppShell() {
           <Menu className="size-4" aria-hidden /> {t('Уроки')}
         </Button>
       )}
-      {narrow && (
+      {(narrow || focusMode) && (
         <Sheet open={lessonsOpen} onOpenChange={setLessonsOpen}>
           <SheetContent
             side="left"

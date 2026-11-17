@@ -68,6 +68,15 @@ describe('CommandMenu', () => {
     await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'qwxqz');
     expect(screen.getByText('Ничего не нашлось')).toBeInTheDocument();
   });
+
+  it('выбранный пункт докручивается в видимую область (P8.113)', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    renderMenu();
+    await userEvent.type(screen.getByPlaceholderText('Урок, тема, ключевое слово SQL...'), 'join');
+    await waitFor(() => expect(scroll).toHaveBeenCalled());
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+  });
 });
 
 describe('CommandMenu: фокус', () => {

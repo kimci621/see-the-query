@@ -1,5 +1,5 @@
 import { useCommandState } from 'cmdk';
-import { Fragment, useLayoutEffect, useRef } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
   CommandDialog,
@@ -44,6 +44,7 @@ export function CommandMenu({
     >
       <CommandInput placeholder={t('Урок, тема, ключевое слово SQL...')} />
       <CommandList label={t('Уроки')}>
+        <SelectedIntoView />
         <CommandEmpty>{t('Ничего не нашлось')}</CommandEmpty>
         <LessonItems
           onPick={(id) => {
@@ -54,6 +55,19 @@ export function CommandMenu({
       </CommandList>
     </CommandDialog>
   );
+}
+
+// После фильтрации cmdk оставляет scrollTop от полного списка, и выбранный пункт может оказаться
+// выше видимой области: Enter ведёт в урок, которого не видно. Докручиваем выбранный пункт к краю
+function SelectedIntoView() {
+  const selected = useCommandState((s) => s.selectedItemId);
+  useEffect(() => {
+    if (!selected) return;
+    const item =
+      document.getElementById(selected) ?? document.querySelector('[cmdk-item][aria-selected="true"]');
+    item?.scrollIntoView({ block: 'nearest' });
+  }, [selected]);
+  return null;
 }
 
 // cmdk 1.1.1 сортирует пункты внутри группы, но не сами группы (ищет группу по useId, а в data-value

@@ -160,6 +160,18 @@ test('живая смена шрифта через style корня: поле �
   await expect.poll(() => editorPanel(page)).toBeGreaterThanOrEqual(9 * 32 - 1);
 });
 
+// html { font-size } не двигает em в media query: порог 80em считается от начального шрифта.
+// Поэтому узкий режим дополнительно проверяет ширину окна от корневого шрифта (P8.118)
+test('style корня 32px: сайдбар уходит в Sheet по кнопке «Уроки»', async ({ page }) => {
+  await openLesson(page);
+  await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '32px';
+  });
+  await expect(page.getByRole('button', { name: 'Уроки', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Уроки', exact: true })).toHaveCount(0);
+});
+
 // Настройка шрифта браузера (CDP): от неё зависят и rem, и em медиазапроса. Как после перезагрузки:
 // поле редактора не меньше 9rem, на 1440 порог 80em (2560px) совпадает и сайдбар уходит в Sheet
 test('живая смена шрифта браузера: поле редактора 9rem, сайдбар в Sheet', async ({ page }) => {

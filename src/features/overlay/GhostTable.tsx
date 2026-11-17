@@ -22,11 +22,12 @@ import {
 import type { GhostColumn, GhostRow, GhostTable } from './types';
 
 // Прозрачность строки по состоянию: через animate, иначе inline opacity motion перебьёт CSS
+// 0.65 - нижняя граница, при которой текст строки остаётся 4.5:1 на фоне доски и тонировке
 const STATE_OPACITY: Partial<Record<GhostRow['state'], number>> = {
-  cut: 0.35,
-  dropped: 0.45,
+  cut: 0.65,
+  dropped: 0.65,
   unknown: 0.8,
-  deleted: 0.45,
+  deleted: 0.65,
 };
 
 const ROW_LABELS_EN: Partial<Record<GhostRow['state'], string>> = {

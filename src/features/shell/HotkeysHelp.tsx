@@ -6,16 +6,17 @@ import type { Message } from '@/lib/messages';
 import { modKey } from '@/lib/utils';
 
 // Полный список из спеки 3.10; часть клавиш заработает в следующих фазах. mod: ⌘ или Ctrl по платформе
-const HOTKEYS: Array<{ keys: string[]; action: Message; soon?: true }> = [
+const HOTKEYS: Array<{ keys: string[]; action: Message }> = [
   { keys: ['mod', 'K'], action: 'Поиск по урокам' },
   { keys: ['mod', '\\'], action: 'Режим фокуса: доска на всю ширину' },
   { keys: ['mod', '⏎'], action: 'Применить запрос' },
   { keys: ['mod', 'Z'], action: 'Отменить применённый запрос' },
   { keys: ['mod', '0'], action: 'Вписать доску в экран' },
-  { keys: ['Space'], action: 'Пауза и продолжение сцены', soon: true },
-  { keys: ['←', '→'], action: 'Шаг сцены назад и вперёд', soon: true },
-  { keys: ['Esc'], action: 'Закрыть сцену', soon: true },
-  { keys: ['←', '→'], action: 'По колонкам таблицы на доске: подсказки и «+N колонки»' },
+  { keys: ['Space'], action: 'Пауза и продолжение сцены, когда фокус на доске' },
+  { keys: ['←', '→'], action: 'Шаг сцены назад и вперёд, когда фокус на доске' },
+  { keys: ['Esc'], action: 'Закрыть сцену, когда фокус на доске' },
+  { keys: ['Tab', '←', '→', 'Home/End'], action: 'По колонкам таблицы: подсказки и «+N колонки»' },
+
   { keys: ['?'], action: 'Эта шпаргалка' },
 ];
 
@@ -53,10 +54,7 @@ export function HotkeysHelp({
                   <Kbd key={k}>{k === 'mod' ? modKey() : k}</Kbd>
                 ))}
               </dt>
-              <dd>
-                {t(h.action)}
-                {h.soon && <span className="text-muted-foreground"> · {t('скоро')}</span>}
-              </dd>
+              <dd>{t(h.action)}</dd>
             </div>
           ))}
         </dl>

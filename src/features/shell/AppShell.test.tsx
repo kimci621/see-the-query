@@ -237,6 +237,15 @@ describe('AppShell', () => {
     expect(screen.getByTestId('board-area')).toHaveFocus();
   });
 
+  it('в режиме фокуса кнопка «Уроки» открывает Sheet на любой ширине (P8.115)', async () => {
+    const user = userEvent.setup();
+    renderAt('/l/how-to-use');
+    await screen.findAllByRole('button', { name: 'На доску' });
+    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
+    await user.click(await screen.findByRole('button', { name: /^Уроки$/ }));
+    expect(await screen.findByRole('dialog', { name: 'Уроки' })).toBeInTheDocument();
+  });
+
   it('ниже 80em панели сайдбара нет, уроки открываются в Sheet', async () => {
     mockMedia(['(max-width: 80em)']);
     const user = userEvent.setup();

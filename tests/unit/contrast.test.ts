@@ -81,5 +81,19 @@ describe('контраст токенов (WCAG AA)', () => {
       );
       expect(ratio, `--${fg} на ${layers.join(' + ')}: ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(min);
     });
+
+    // Строки сцены cut/dropped/deleted гаснут, но остаются данными урока: 0.65 в GhostTable
+    it('отрезанная строка сцены при opacity 0.65 ≥ 4.5', () => {
+      const ratio = contrast(withAlpha(t, 'foreground/65'), t.background as string);
+      expect(ratio, `cut: ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('отброшенная строка на тонировке dropped/18 при opacity 0.65 ≥ 4.5', () => {
+      const ratio = contrast(withAlpha(t, 'foreground/65'), [
+        t.background as string,
+        withAlpha(t, 'dropped/18'),
+      ]);
+      expect(ratio, `dropped: ${ratio.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
+    });
   });
 });

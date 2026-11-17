@@ -116,7 +116,7 @@ export function LessonSidebar({
           <div className="flex items-center gap-2 px-2">
             <div className="flex-1 space-y-1">
               <Progress value={percent} aria-label={t('Прогресс по программе')} />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-balance text-muted-foreground">
                 {locale === 'en'
                   ? `Completed ${done} of ${LESSONS.length}`
                   : `Пройдено ${done} из ${LESSONS.length}`}

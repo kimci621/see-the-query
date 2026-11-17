@@ -7,12 +7,12 @@ import { HotkeysHelp } from './HotkeysHelp';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('HotkeysHelp', () => {
-  it('клавиши, которые ещё не работают, помечены «скоро»', () => {
+  it('все перечисленные клавиши работают, пометки «скоро» нет', () => {
     render(<HotkeysHelp open onOpenChange={() => undefined} />);
-    for (const action of ['Пауза и продолжение сцены', 'Шаг сцены назад и вперёд', 'Закрыть сцену']) {
-      expect(screen.getByText(action).parentElement).toHaveTextContent('скоро');
-    }
-    expect(screen.getByText('Применить запрос').parentElement).not.toHaveTextContent('скоро');
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('скоро');
+    expect(screen.getByText(/Пауза и продолжение сцены/)).toBeInTheDocument();
+    expect(screen.getByText(/Шаг сцены назад и вперёд/)).toBeInTheDocument();
+    expect(screen.getByText(/Закрыть сцену/)).toBeInTheDocument();
   });
 
   it('на Mac модификатор ⌘, на остальных Ctrl', () => {

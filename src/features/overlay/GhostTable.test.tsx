@@ -93,7 +93,7 @@ describe('GhostTableView', () => {
     };
     render(<GhostTableView table={cut} />);
     const [c, u] = screen.getAllByTestId('ghost-row');
-    expect(c.style.opacity).toBe('0.35');
+    expect(c.style.opacity).toBe('0.65');
     expect(u.style.opacity).toBe('0.8');
   });
 
