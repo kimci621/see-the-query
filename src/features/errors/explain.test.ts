@@ -36,6 +36,9 @@ const CASES: Record<string, string> = {
   groupingNoGroupBy: 'select title, max(price) from book',
   aggregateInWhere: 'select title from book where price = max(price)',
   nestedAggregate: 'select max(count(*)) from book',
+  groupingArgument: 'select grouping(price) from book group by rollup(category_id)',
+  groupingInWhere:
+    'select category_id, count(*) from book where grouping(category_id) = 0 group by rollup(category_id)',
   formTypo: 'select title form book',
   commaBeforeFrom: 'select title, from book',
   doubleEquals: 'select title from book where price == 350',
@@ -382,6 +385,24 @@ describe('explainError', () => {
       expect(explain(name).body, name).toMatch(/^Агрегат без GROUP BY/);
     }
     expect(explain('groupingInSubquery').body).toMatch(/^После GROUP BY/);
+  });
+
+  it('42803: GROUPING с колонкой вне GROUP BY объясняет аргумент, а не «агрегат здесь нельзя»', () => {
+    expect(errors.get('groupingArgument')?.code).toBe('42803');
+    expect(explain('groupingArgument')).toMatchObject({
+      title: 'GROUPING не видит колонку',
+      body: 'Аргумент GROUPING должен быть выражением из GROUP BY. Колонки price в GROUP BY нет.',
+      suggestion: 'Добавь price в GROUP BY или убери её из GROUPING.',
+      highlight: { tableIds: ['public.book'], columns: ['public.book.price'] },
+    });
+  });
+
+  it('42803: GROUPING в WHERE не называет GROUPING агрегатом', () => {
+    expect(explain('groupingInWhere')).toMatchObject({
+      title: 'GROUPING в WHERE',
+      suggestion: 'Перенеси условие в HAVING.',
+    });
+    expect(explain('groupingInWhere').body).toMatch(/^GROUPING вычисляется/);
   });
 
   it('42803 без колонки в тексте: агрегат в WHERE и вложенный агрегат', () => {

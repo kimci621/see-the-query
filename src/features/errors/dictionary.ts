@@ -25,6 +25,15 @@ const tr = (ctx: ErrorContext, ru: string, en: string) => (ctx.locale === 'en' ?
 // Первое имя в кавычках из текста ошибки: relation "books" → books
 const quoted = (message: string) => /"([^"]+)"/.exec(message)?.[1] ?? '';
 
+// Аргумент GROUPING по позиции Postgres: grouping(price) → price
+function groupingColumn(sql: string, position: number | undefined): string | undefined {
+  if (position == null) return undefined;
+  const at = Array.from(sql)
+    .slice(position - 1)
+    .join('');
+  return /^[a-z_][a-z0-9_]*/i.exec(at)?.[0];
+}
+
 function distance(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
@@ -325,6 +334,45 @@ export const DICTIONARY: Record<string, Entry> = {
   },
 
   '42803': (err, ctx) => {
+    // GROUPING: его аргументы и место в запросе проверяются отдельно от агрегатов
+    if (err.message.startsWith('grouping operations are not allowed in WHERE'))
+      return {
+        title: tr(ctx, 'GROUPING в WHERE', 'GROUPING in WHERE'),
+        body: tr(
+          ctx,
+          'GROUPING вычисляется на шаге группировки, а WHERE идёт раньше. Проверить уровень в WHERE нельзя.',
+          'GROUPING is evaluated during grouping, while WHERE runs before it. A level cannot be tested in WHERE.',
+        ),
+        suggestion: tr(ctx, 'Перенеси условие в HAVING.', 'Move the condition to HAVING.'),
+        highlight: none,
+      };
+    if (err.message.startsWith('arguments to GROUPING must be grouping expressions')) {
+      const column = groupingColumn(ctx.sql, err.position);
+      const owner = column
+        ? tablesInSql(ctx).find((t) => t.columns.some((c) => c.name === column))
+        : undefined;
+      return {
+        title: tr(ctx, 'GROUPING не видит колонку', 'GROUPING cannot see the column'),
+        body: tr(
+          ctx,
+          `Аргумент GROUPING должен быть выражением из GROUP BY.${column ? ` Колонки ${column} в GROUP BY нет.` : ''}`,
+          `An argument to GROUPING must be a grouping expression.${column ? ` ${column} is not in GROUP BY.` : ''}`,
+        ),
+        suggestion: tr(
+          ctx,
+          column
+            ? `Добавь ${column} в GROUP BY или убери её из GROUPING.`
+            : 'Бери в GROUPING только колонки из GROUP BY.',
+          column
+            ? `Add ${column} to GROUP BY or remove it from GROUPING.`
+            : 'Pass only GROUP BY columns to GROUPING.',
+        ),
+        highlight: {
+          tableIds: owner ? [owner.id] : [],
+          columns: owner && column ? [`${owner.id}.${column}`] : [],
+        },
+      };
+    }
     // Тот же код без колонки в тексте: aggregate functions are not allowed in WHERE, вложенный агрегат и т.п.
     if (!quoted(err.message))
       return /not allowed in WHERE/.test(err.message)
