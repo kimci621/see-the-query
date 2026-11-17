@@ -79,8 +79,11 @@ interface SqlErrorLike {
 }
 
 // SqlError libpg-query: 0-based позиция курсора в кодовых точках (не UTF-16) в sqlDetails.cursorPosition
-function toParseError(e: unknown): { message: string; position: number } {
+function toParseError(e: unknown): { message: string; position: number; code?: string } {
   const err = (e ?? {}) as SqlErrorLike;
   const pos = typeof err.sqlDetails?.cursorPosition === 'number' ? err.sqlDetails.cursorPosition : 0;
-  return { message: err.message ?? String(e), position: pos };
+  const message = err.message ?? String(e);
+  // Семантические ошибки грамматики окна приходят из того же грамматического разбора, но с SQLSTATE 42P20
+  const code = /^(frame |RANGE with offset )/.test(message) ? '42P20' : undefined;
+  return { message, position: pos, ...(code ? { code } : {}) };
 }

@@ -174,6 +174,23 @@ describe('ResultsPanel: ошибка', () => {
     expect(screen.getByTestId('pg-original')).toHaveTextContent('syntax error at end of input');
     expect(screen.queryByText(/nme/)).toBeNull();
   });
+
+  it('семантическая ошибка рамки: карточка 42P20 красная, а не «недописан»', () => {
+    useBoardStore.getState().setSchema(SCHEMA);
+    useSceneStore.setState({ trace: traceWith(null), stale: true });
+    useEditorStore.setState({
+      text: 'select sum(amount) over (order by happened_at rows between 1 following and 1 preceding) from event',
+      parseError: {
+        message: 'frame starting from following row cannot have preceding rows',
+        position: 76,
+        code: '42P20',
+      },
+    });
+    render(<ResultsPanel />);
+    expect(screen.getByTestId('pg-error')).toHaveTextContent('42P20');
+    expect(screen.getByTestId('pg-error')).toHaveAttribute('data-tone', 'error');
+    expect(screen.getByTestId('pg-explain-title')).toHaveTextContent('Недопустимая рамка окна');
+  });
 });
 
 describe('ResultsPanel: live-регион', () => {

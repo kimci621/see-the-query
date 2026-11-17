@@ -227,6 +227,32 @@ describe('useLiveTrace', () => {
     expect(useSceneStore.getState().stale).toBe(true);
   });
 
+  it('семантическая ошибка рамки: запрос уходит в Postgres, 42P20 без «Недописан»', async () => {
+    const calls: string[] = [];
+    const sandbox = fakeSandbox({
+      calls,
+      error: new DbException({
+        code: '42P20',
+        message: 'frame starting from following row cannot have preceding rows',
+        position: 61,
+      }),
+    });
+    useEditorStore
+      .getState()
+      .setText(
+        'select sum(amount) over (order by happened_at rows between 1 following and 1 preceding) from event',
+      );
+
+    renderHook(() => useLiveTrace(sandbox));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(calls).toHaveLength(1);
+    expect(useEditorStore.getState().parseError).toBeNull();
+    expect(useSceneStore.getState().stale).toBe(false);
+    expect(useSceneStore.getState().trace?.error?.code).toBe('42P20');
+  });
+
   it('ошибка Postgres попадает в trace.error', async () => {
     const sandbox = fakeSandbox({
       error: new DbException({

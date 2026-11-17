@@ -13,7 +13,8 @@ export function MessagesList({
 }) {
   const t = useMessages();
   const shown = parseError ?? (trace?.error ? { error: trace.error, sql: trace.sql } : null);
-  const parse = parseError != null;
+  // Семантическая ошибка PostgreSQL (42P20) - не недописанный запрос: карточка красная
+  const parse = parseError != null && parseError.error.code === '42601';
   const notices = trace?.notices ?? [];
 
   if (!shown && notices.length === 0) {

@@ -59,6 +59,18 @@ describe('parseSql', () => {
     expect(typeof parsed.error.message).toBe('string');
   });
 
+  it('семантическая ошибка рамки: SQLSTATE 42P20, а не синтаксис 42601', () => {
+    const parsed = parseSql(
+      'select sum(amount) over (order by happened_at rows between 1 following and 1 preceding) from event',
+    );
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.error).toMatchObject({
+      code: '42P20',
+      message: 'frame starting from following row cannot have preceding rows',
+    });
+  });
+
   it('kind: insert / update / delete / ddl / tcl', () => {
     const kinds = [
       ["insert into book (title) values ('x')", 'insert'],

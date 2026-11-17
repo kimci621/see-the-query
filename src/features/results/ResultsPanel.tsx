@@ -30,7 +30,11 @@ export function ResultsPanel() {
   const parseDbError = useMemo<DbError | null>(
     () =>
       stale && parseError
-        ? { code: '42601', message: parseError.message, position: parseError.position + 1 }
+        ? {
+            code: parseError.code ?? '42601',
+            message: parseError.message,
+            position: parseError.position + 1,
+          }
         : null,
     [stale, parseError],
   );
@@ -116,7 +120,7 @@ export function ResultsPanel() {
         <TabsContent value="result" tabIndex={-1} className="mt-0 min-h-0 flex-1">
           {parseDbError ? (
             <div className="h-full overflow-auto p-2">
-              <ErrorCard error={parseDbError} sql={text} parse />
+              <ErrorCard error={parseDbError} sql={text} parse={parseDbError.code === '42601'} />
             </div>
           ) : result ? (
             <ResultGrid

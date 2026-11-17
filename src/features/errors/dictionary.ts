@@ -540,6 +540,29 @@ export const DICTIONARY: Record<string, Entry> = {
     };
   },
 
+  '42P20': (err, ctx) => ({
+    title: tr(ctx, 'Недопустимая рамка окна', 'Invalid window frame'),
+    body: err.message.startsWith('frame starting from following row')
+      ? tr(
+          ctx,
+          'Начало рамки не может стоять позже её конца. Сначала идёт начало, потом конец.',
+          'The frame start cannot come after its end. The start comes before the end.',
+        )
+      : err.message.startsWith('frame starting from current row')
+        ? tr(
+            ctx,
+            'Рамка, которая начинается с текущей строки, не может заканчиваться раньше неё.',
+            'A frame starting at the current row cannot end before it.',
+          )
+        : tr(ctx, 'Границы рамки окна недопустимы.', 'The window frame bounds are invalid.'),
+    suggestion: tr(
+      ctx,
+      'Задай начало раньше конца, например rows between 1 preceding and 1 following.',
+      'Put the start before the end, for example rows between 1 preceding and 1 following.',
+    ),
+    highlight: none,
+  }),
+
   '42601': (err, ctx) => {
     if (/each (UNION|INTERSECT|EXCEPT) query must have the same number of columns/.test(err.message)) {
       const op = /each (UNION|INTERSECT|EXCEPT) query/.exec(err.message)?.[1] ?? 'UNION';

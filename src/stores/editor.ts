@@ -7,7 +7,7 @@ export interface EditorStore {
   cursor: number;
   activeClause: ClauseName | null;
   hoveredColumn: string | null; // 'public.book.title'
-  parseError: { message: string; position: number } | null;
+  parseError: { message: string; position: number; code?: string } | null;
   // Итоги «Применить» по номеру оператора в тексте. Пока текст не правили, превью этих операторов
   // не выполняется, а повторное «Применить» ничего не делает (спека 3.9). Любая правка текста сбрасывает
   applied: Record<number, Trace>;

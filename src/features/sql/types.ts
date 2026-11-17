@@ -14,7 +14,14 @@ export interface ParsedStatement {
 
 export type ParseOutcome =
   | { ok: true; statements: ParsedStatement[] }
-  | { ok: false; error: { message: string; position: number /* кодовые точки, 0-based (не UTF-16) */ } };
+  | {
+      ok: false;
+      error: {
+        message: string;
+        position: number; // кодовые точки, 0-based (не UTF-16)
+        code?: string; // SQLSTATE известных семантических ошибок парсера
+      };
+    };
 
 export interface RangeRef {
   schema: string | null;

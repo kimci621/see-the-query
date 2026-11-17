@@ -97,6 +97,44 @@ export function appliedTrace(stmt: ParsedStatement, results: QueryResult[], timi
   };
 }
 
+// Семантическая ошибка парсера: запрос полный, но libpg-query отверг его до отправки.
+// Выполняем текст в песочнице, чтобы показать настоящий ответ Postgres, а не «Недописан».
+async function runUnparsedPreview(
+  text: string,
+  generation: number,
+  sandbox: Sandbox,
+  locale: Locale,
+  signal: AbortSignal,
+): Promise<void> {
+  const started = performance.now();
+  useEditorStore.getState().setParseError(null);
+  const base: Trace = {
+    sql: text,
+    statementType: 'other',
+    mode: 'final-only',
+    fallbackReason: locale === 'en' ? 'Step-by-step tracing is unavailable' : 'Пошаговый разбор недоступен',
+    touched: { tableIds: [], columns: [] },
+    stages: [],
+    notices: [],
+    result: null,
+    error: null,
+    timingMs: 0,
+  };
+  try {
+    const result = await sandbox.preview((db) => db.query(text), signal);
+    if (signal.aborted) return;
+    useSceneStore
+      .getState()
+      .setTrace({ ...base, result, timingMs: Math.round(performance.now() - started) }, generation);
+  } catch (e) {
+    if (signal.aborted) return;
+    const error: DbError = e instanceof DbException ? e.db : { code: 'VS000', message: String(e) };
+    useSceneStore
+      .getState()
+      .setTrace({ ...base, error, timingMs: Math.round(performance.now() - started) }, generation);
+  }
+}
+
 async function runPreview(
   text: string,
   cursor: number,
@@ -110,6 +148,10 @@ async function runPreview(
   const scene = useSceneStore.getState();
   const parsed = parseSql(text);
   if (!parsed.ok) {
+    if (parsed.error.code) {
+      await runUnparsedPreview(text, generation, sandbox, locale, signal);
+      return;
+    }
     // недописанный запрос: подчёркиваем, последняя валидная сцена остаётся и гаснет, без мигания
     editor.setParseError(parsed.error);
     scene.setStale(true);
