@@ -507,7 +507,9 @@ test('клавиатура: → с ноды на шапку колонки по�
   page,
 }) => {
   await openBookstore(page);
-  // Фокус на доске раньше трассы стартового запроса: её сцена всё равно спрятана (P8.111)
+  // Ждём итог стартового запроса: его обновление доски могло заменить кнопку «+N колонки»
+  // между фокусом и Enter (флейк CI, P11б.57)
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 20_000 });
   const node = page.locator('.react-flow__node[data-id="public.book"]');
   const hint = page.locator('[data-slot="tooltip-content"][data-state$="open"]');
   await node.focus();
@@ -529,6 +531,7 @@ test('клавиатура: → с ноды на шапку колонки по�
   await page.keyboard.press('ArrowLeft');
   await expect(node).toBeFocused();
   await page.keyboard.press('End');
+  await expect(stub).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(node.locator('[data-column]')).toHaveCount(9);
   await expect(node.getByTestId('hidden-columns')).toHaveCount(0);
