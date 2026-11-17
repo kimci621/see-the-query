@@ -180,7 +180,8 @@ describe('AppShell', () => {
     useSettingsStore.setState({ focusMode: true });
     renderAt('/l/how-to-use');
     await waitFor(() => expect(useLessonStore.getState().byId['how-to-use']?.visited).toBe(true));
-    expect(screen.queryByRole('heading', { level: 1, name: /Как пользоваться/ })).toBeNull();
+    // теория скрыта, но sr-only h1 даёт странице заголовок
+    expect(screen.getByRole('heading', { level: 1, name: /Как пользоваться/ })).toBeInTheDocument();
   });
 
   it('неизвестный урок: «Урок не найден», правая колонка жива', async () => {

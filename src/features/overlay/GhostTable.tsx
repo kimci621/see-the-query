@@ -93,7 +93,7 @@ const GhostRowView = memo(function GhostRowView({
               initial={
                 c.state === 'added' ? { opacity: 0, x: lefts[ci] + (c.fadeIn ? 0 : COL_WIDTH) } : false
               }
-              animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.35 : 1, x: lefts[ci] }}
+              animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.65 : 1, x: lefts[ci] }}
               exit={{ opacity: 0 }}
               title={row.cellNotes?.[ci] ? `${text}: ${row.cellNotes[ci]}` : text}
               tabIndex={visible && index === 0 && ci === 0 ? 0 : -1}
@@ -197,7 +197,7 @@ export const GhostTableView = memo(function GhostTableView({ table }: { table: G
               initial={
                 c.state === 'added' ? { opacity: 0, x: lefts[ci] + (c.fadeIn ? 0 : COL_WIDTH) } : false
               }
-              animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.35 : 1, x: lefts[ci] }}
+              animate={{ opacity: c.fading ? 0 : c.state === 'removed' ? 0.65 : 1, x: lefts[ci] }}
               exit={{ opacity: 0 }}
             >
               {c.name}

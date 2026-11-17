@@ -26,6 +26,9 @@ export interface BoardStore {
   frameRequest: number;
   focusRequest: number;
   startRequest: number;
+  // Клавиатурный зум: компакт скрывает контролы React Flow, кнопки доски шлют направление
+  zoomRequest: number;
+  zoomDirection: 1 | -1;
   // Корневой размер шрифта, px (board/layout, rem): смена пересобирает раскладку доски и призраки
   rootFont: number;
   setSchema(s: SchemaSnapshot | null, userTables?: string[], rowWrites?: AppliedWrite[]): void;
@@ -39,6 +42,7 @@ export interface BoardStore {
   setDimmed(v: boolean): void;
   requestFit(): void;
   requestFrame(): void;
+  requestZoom(direction: 1 | -1): void;
   setRootFont(px: number): void;
 }
 
@@ -59,6 +63,8 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   frameRequest: 0,
   focusRequest: 0,
   startRequest: 0,
+  zoomRequest: 0,
+  zoomDirection: 1,
   rootFont: 16,
   // Одно обновление: новые данные и их пометки появляются на доске вместе, без анимации
   setSchema: (schema, userTables = [], rowWrites = []) =>
@@ -83,5 +89,6 @@ export const useBoardStore = create<BoardStore>()((set) => ({
   setDimmed: (dimmed) => set({ dimmed }),
   requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
   requestFrame: () => set((s) => ({ frameRequest: s.frameRequest + 1 })),
+  requestZoom: (zoomDirection) => set((s) => ({ zoomRequest: s.zoomRequest + 1, zoomDirection })),
   setRootFont: (rootFont) => set((s) => (s.rootFont === rootFont ? s : { rootFont })),
 }));

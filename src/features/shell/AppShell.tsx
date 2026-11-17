@@ -47,7 +47,7 @@ export function AppShell() {
   // Крупный текст или низкое окно: четыре вертикальные панели не помещаются, правая колонка
   // переходит в компактный режим с вкладками (P8.112)
   const compact =
-    viewportWidth < 900 ||
+    viewportWidth < 1000 ||
     viewportHeight < 600 ||
     (rootFont >= 24 && (viewportWidth < 80 * rootFont || viewportHeight < 45 * rootFont));
   const phone = useMediaQuery('(max-width: 639px)');
@@ -65,6 +65,18 @@ export function AppShell() {
   // Теория в Sheet компактного режима закрывается вместе со сменой урока
   // biome-ignore lint/correctness/useExhaustiveDependencies: закрываем именно при смене урока
   useEffect(() => setTheoryOpen(false), [lessonId]);
+
+  // Вышли из компактного режима или ушли в фокус: лист теории больше не нужен
+  useEffect(() => {
+    if (!compact || focusMode) setTheoryOpen(false);
+  }, [compact, focusMode]);
+
+  // «На доску» из теории: закрываем Sheet, чтобы ученик увидел сцену, а не пустой лист
+  useEffect(() => {
+    const close = () => setTheoryOpen(false);
+    window.addEventListener('vs:send-to-board', close);
+    return () => window.removeEventListener('vs:send-to-board', close);
+  }, []);
 
   // Посещение считает оболочка: в режиме фокуса теории (LessonView) нет, а урок открыт
   useEffect(() => {
@@ -103,6 +115,11 @@ export function AppShell() {
 
   return (
     <main className="h-svh w-full overflow-hidden bg-background text-foreground">
+      {/* Компактный режим и фокус прячут теорию с её h1: странице нужен один заголовок.
+          Когда лист теории открыт, заголовок даёт сам урок */}
+      {(focusMode || (compact && !theoryOpen)) && (
+        <h1 className="sr-only">{meta?.title ?? workspaceMeta?.title ?? t('Урок не найден')}</h1>
+      )}
       <ResizablePanelGroup
         orientation="horizontal"
         // В режиме фокуса и на узком экране панелей меньше: такую раскладку не сохраняем, иначе потеряем ширины
@@ -151,14 +168,15 @@ export function AppShell() {
           <PanelErrorBoundary name={t('Доска')} locale={locale}>
             <BoardPane
               compact={compact}
-              onOpenLessons={compact && !focusMode ? openLessons : undefined}
+              onOpenLessons={compact ? openLessons : undefined}
               onOpenTheory={compact && !focusMode ? () => setTheoryOpen(true) : undefined}
             />
           </PanelErrorBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>
-      {/* Режим фокуса: теории и вкладок нет, кнопка «Уроки» остаётся над доской */}
-      {focusMode && (
+      {/* Режим фокуса без компакта: теории и вкладок нет, кнопка «Уроки» остаётся над доской.
+          В компакте она живёт в шапке вкладок и не накрывает первую вкладку */}
+      {focusMode && !compact && (
         <Button
           id="lessons-button"
           variant="outline"

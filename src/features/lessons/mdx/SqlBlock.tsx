@@ -18,6 +18,9 @@ export function sendToBoard(sql: string, lessonId: string | undefined): void {
   useEditorStore.getState().insertQuery(sql);
   useSceneStore.getState().setLessonQuery(sql);
   if (lessonId) useLessonStore.getState().markRanExample(lessonId);
+  // Компактный режим: теория открыта в Sheet поверх доски, после «На доску» её нужно закрыть,
+  // иначе кнопка выглядит мёртвой: запрос ушёл, а призрак остался за листом (P8.112)
+  window.dispatchEvent(new Event('vs:send-to-board'));
 }
 
 // Подменяет <pre> в MDX: SQL-блоки получают кнопки, остальные рендерятся как есть

@@ -27,7 +27,7 @@
 .vs-row[style*='--vs-group'] { box-shadow: inset 3px 0 0 var(--vs-group); }
 .vs-row-icon { position: absolute; right: 0.25rem; top: 50%; transform: translateY(-50%); font-size: 0.6875rem; }
 .vs-row-badge { position: absolute; right: 1.25rem; top: 50%; transform: translateY(-50%); font-size: 0.625rem; padding: 0 0.25rem; border-radius: 4px; background: var(--secondary); }
-.vs-col--removed { opacity: 0.35; text-decoration: line-through; }
+.vs-col--removed { opacity: 0.65; text-decoration: line-through; }
 .vs-col--error { background: color-mix(in oklab, var(--dropped) 22%, transparent); color: var(--dropped); }
 .vs-col--highlight, .vs-col--key { background: color-mix(in oklab, var(--match) 20%, transparent); }
 .vs-col--computed, .vs-col--added { background: color-mix(in oklab, var(--new) 18%, transparent); }

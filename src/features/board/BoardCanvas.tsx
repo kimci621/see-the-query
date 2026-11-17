@@ -27,7 +27,15 @@ import { useLessonStore } from '@/stores/lesson';
 import { useSceneStore } from '@/stores/scene';
 import { useSettingsStore } from '@/stores/settings';
 import { FkEdge, FkMarkers } from './FkEdge';
-import { anchorFrame, chromeBottom, FAR_ZOOM, FIT_MIN_ZOOM, rem, setRootFont } from './layout';
+import {
+  anchorFrame,
+  chromeBottom,
+  FAR_ZOOM,
+  FIT_ALL_MIN_ZOOM,
+  FIT_MIN_ZOOM,
+  rem,
+  setRootFont,
+} from './layout';
 import { type BoardNode, buildEdges, buildNodes, normalizeTableId, resolvePositions } from './model';
 import { SchemaGroupNode } from './SchemaGroupNode';
 import { moveInTable, TableNode } from './TableNode';
@@ -105,6 +113,13 @@ const boardFrame = (nodes: { id: string; type?: string }[], duration = animation
   duration,
 });
 
+// Явное «Вписать»: разрешаем мельче 0.6, иначе на крупном тексте кнопка обещает весь мир,
+// а камера упирается в пол и молча обрезает половину доски
+const fitAllFrame = (nodes: { id: string; type?: string }[], duration = animationMs(300)) => ({
+  ...boardFrame(nodes, duration),
+  minZoom: FIT_ALL_MIN_ZOOM,
+});
+
 type Frame = ReturnType<typeof focusFrame> | ReturnType<typeof boardFrame>;
 
 // Отступ кадра в px, как его считает React Flow: доля размера или строка '56px'
@@ -148,15 +163,21 @@ function fitFrame(flow: ReactFlowInstance<BoardNode>, store: ReturnType<typeof u
   });
 }
 
-export function BoardCanvas({ showControls = true }: { showControls?: boolean }) {
+export function BoardCanvas({
+  compact = false,
+  showControls = true,
+}: {
+  compact?: boolean;
+  showControls?: boolean;
+}) {
   return (
     <ReactFlowProvider>
-      <BoardFlow showControls={showControls} />
+      <BoardFlow compact={compact} showControls={showControls} />
     </ReactFlowProvider>
   );
 }
 
-function BoardFlow({ showControls = true }: { showControls?: boolean }) {
+function BoardFlow({ compact = false, showControls = true }: { compact?: boolean; showControls?: boolean }) {
   const { lessonId = null } = useParams();
   const locale = useSettingsStore((s) => s.locale);
   const t = useMessages();
@@ -198,7 +219,7 @@ function BoardFlow({ showControls = true }: { showControls?: boolean }) {
     };
   }, [schema, visible, meta, rootFont, locale]);
 
-  useCamera(lessonId, nodes, boardRef, over, locale);
+  useCamera(lessonId, nodes, boardRef, over, locale, compact);
 
   // ←/→ внутри таблицы: по шапкам колонок. Плеер берёт стрелки только на самой доске (useBoardHotkeys)
   useEffect(() => {
@@ -285,9 +306,22 @@ function useCamera(
   boardRef: RefObject<HTMLDivElement | null>,
   over: RefObject<boolean>,
   locale: 'ru' | 'en',
+  compact: boolean,
 ) {
   const flow = useReactFlow<BoardNode>();
   const store = useStoreApi();
+  // Компактный режим скрывает контролы React Flow: зум приходит с клавиатуры доски через стор
+  const zoomRequest = useBoardStore((s) => s.zoomRequest);
+  const zoomDirection = useBoardStore((s) => s.zoomDirection);
+  const lastZoom = useRef(zoomRequest);
+  useEffect(() => {
+    // Монтирование нового урока не повторяет последний зум прошлого
+    if (zoomRequest === lastZoom.current) return;
+    lastZoom.current = zoomRequest;
+    const options = { duration: animationMs(150) };
+    if (zoomDirection === 1) void flow.zoomIn(options);
+    else void flow.zoomOut(options);
+  }, [zoomRequest, zoomDirection, flow]);
   const startedFor = useRef<string | null>(null);
   // Свёртка старта урока. Пока свёртка та же (стартовый запрос и его первый трейс), её замер
   // ещё часть старта: сохранённую камеру ученика рефит не трогает (keep), без неё ставит кадр
@@ -334,13 +368,14 @@ function useCamera(
     startFold.current = { fold: foldKey(), keep: false };
     const all = flow.getNodes();
     const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
-    fitFrame(flow, store, ids.length > 0 ? focusFrame(ids, 0) : boardFrame(all, 0));
-  }, [nodeKey, lessonId, startRequest, flow, store, locale]);
+    // Компакт: кадр по всем таблицам урока, иначе соседняя таблица торчит из-под шапки обрубком
+    fitFrame(flow, store, compact || ids.length === 0 ? boardFrame(all, 0) : focusFrame(ids, 0));
+  }, [nodeKey, lessonId, startRequest, flow, store, locale, compact]);
 
   useEffect(() => {
     if (fitRequest === 0) return;
     startFold.current = null;
-    fitFrame(flow, store, boardFrame(flow.getNodes()));
+    fitFrame(flow, store, fitAllFrame(flow.getNodes()));
   }, [fitRequest, flow, store]);
 
   useEffect(() => {

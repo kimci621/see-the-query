@@ -143,6 +143,8 @@ test('200% текста: компактные вкладки, подпись ш�
   await openLesson(page);
   expect(await rootFont(page)).toBe(32);
   await expect(page.getByTestId('workspace-tabs')).toBeVisible();
+  // Странице нужен заголовок: теория спрятана в Sheet, h1 остаётся sr-only
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 
   await typeQuery(page, 'select title from book');
   await openTab(page, 'Доска');
@@ -154,6 +156,30 @@ test('200% текста: компактные вкладки, подпись ш�
   // Подпись шага не сплющена: она над доской и участвует в раскладке
   const caption = await page.getByTestId('timeline-caption').boundingBox();
   expect(caption?.height ?? 0).toBeGreaterThan(0);
+
+  // «Вписать» на крупном тексте показывает обе таблицы урока, даже мельче 0.6
+  await page.getByRole('button', { name: 'Вписать доску в экран' }).click();
+  const author = page.getByTestId('table-node-public.author');
+  await expect(author).toBeVisible();
+  // камера летит 300 мс: ждём, пока обе таблицы окажутся в кадре, а не середину полёта
+  await expect
+    .poll(async () => {
+      const b = await page.getByTestId('board-area').boundingBox();
+      const t = await page.getByTestId(BOOK).boundingBox();
+      const a = await author.boundingBox();
+      if (!b || !t || !a) return false;
+      return (
+        t.x >= b.x - 2 &&
+        t.y >= b.y - 2 &&
+        t.x + t.width <= b.x + b.width + 2 &&
+        t.y + t.height <= b.y + b.height + 2 &&
+        a.x >= b.x - 2 &&
+        a.y >= b.y - 2 &&
+        a.x + a.width <= b.x + b.width + 2 &&
+        a.y + a.height <= b.y + b.height + 2
+      );
+    })
+    .toBe(true);
 
   // Таблица целиком в кадре доски, хром доски не ложится на данные
   const board = await page.getByTestId('board-area').boundingBox();
@@ -168,6 +194,13 @@ test('200% текста: компактные вкладки, подпись ш�
   await expect(page.getByRole('button', { name: 'Вписать доску в экран' })).toBeVisible();
   expect(await boardProblems(page)).toEqual([]);
 
+  // В компакте контролы зума скрыты: + на самой доске приближает
+  await page.getByTestId('board-area').focus();
+  const viewport = page.locator('.react-flow__viewport');
+  const beforeZoom = await viewport.getAttribute('style');
+  await page.keyboard.press('+');
+  await expect.poll(() => viewport.getAttribute('style')).not.toBe(beforeZoom);
+
   // Вкладки не размонтируют панели: редактор и результат переживают переходы
   await openTab(page, 'Редактор');
   expect(await editorSizes(page)).toEqual({ editor: 26, gutter: 26 });
@@ -177,11 +210,50 @@ test('200% текста: компактные вкладки, подпись ш�
   await openTab(page, 'Доска');
   await expect(page.getByTestId(BOOK)).toBeVisible();
 
-  // Теория открывается в Sheet и возвращает фокус на кнопку
+  // «На доску» из теории закрывает Sheet: ученик видит сцену, а не пустой лист
   await page.getByRole('button', { name: 'Теория' }).click();
-  await expect(page.getByRole('dialog', { name: 'Теория' })).toBeVisible();
+  const theory = page.getByRole('dialog', { name: 'Теория' });
+  await expect(theory).toBeVisible();
+  await theory.getByRole('button', { name: 'На доску' }).first().click();
+  await expect(theory).toBeHidden();
+  await expect(page.getByTestId('board-area')).toBeVisible();
+
+  // Повторное открытие и Esc возвращают фокус на кнопку
+  await page.getByRole('button', { name: 'Теория' }).click();
+  await expect(theory).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Теория' })).toBeFocused();
+});
+
+// 200% x 768: шапка компакта - тесная полоса, кнопки не должны оказаться под вкладками
+test('200% текста на 768: шапка не накрывает «Уроки» и «Теорию»', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await page.goto('/l/select-basics');
+  await expect(page.getByTestId('workspace-tabs')).toBeVisible({ timeout: 20_000 });
+  for (const [id, name] of [
+    ['lessons-button', 'Уроки'],
+    ['theory-button', 'Теория'],
+  ] as const) {
+    const hit = await page.locator(`#${id}`).evaluate((el, label) => {
+      const b = el.getBoundingClientRect();
+      const target = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+      return target?.closest(`#${el.id}`) ? el.id : (target?.textContent ?? label);
+    }, name);
+    expect(hit, `кнопка «${name}» под вкладкой`).toBe(id);
+  }
+});
+
+// audit P2: на 200% и высоте 450 таймлайн 7rem съедал доску до 50px
+test('200% текста на 720x450: таймлайн не съедает доску', async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 450 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await page.goto('/l/select-basics');
+  await expect(page.getByTestId('workspace-tabs')).toBeVisible({ timeout: 20_000 });
+  const board = await page.getByTestId('board-area').boundingBox();
+  expect(board?.height ?? 0).toBeGreaterThan(120);
 });
 
 test('живая смена шрифта: доска, призрак и сетка пересчитываются без перезагрузки', async ({ page }) => {
@@ -261,11 +333,32 @@ test('200% зума 720x450: компактные вкладки и доска �
   await expect(page.getByTestId('workspace-tabs')).toBeVisible();
   const board = await page.getByTestId('board-area').boundingBox();
   const table = await page.getByTestId(BOOK).boundingBox();
-  if (!board || !table) throw new Error('нет доски или таблицы');
-  expect(table.x).toBeGreaterThanOrEqual(board.x - 2);
-  expect(table.y).toBeGreaterThanOrEqual(board.y - 2);
-  expect(table.x + table.width).toBeLessThanOrEqual(board.x + board.width + 2);
-  expect(table.y + table.height).toBeLessThanOrEqual(board.y + board.height + 2);
+  const author = await page.getByTestId('table-node-public.author').boundingBox();
+  if (!board || !table || !author) throw new Error('нет доски или таблицы');
+  // первая рамка не показывает обрубок соседней таблицы без шапки
+  expect(author.y).toBeGreaterThanOrEqual(board.y - 2);
+
+  // «Вписать» показывает обе таблицы целиком даже на коротком окне
+  await page.getByRole('button', { name: 'Вписать доску в экран' }).click();
+  await expect
+    .poll(async () => {
+      const b = await page.getByTestId('board-area').boundingBox();
+      const t = await page.getByTestId(BOOK).boundingBox();
+      const a = await page.getByTestId('table-node-public.author').boundingBox();
+      if (!b || !t || !a) return false;
+      return (
+        t.x >= b.x - 2 &&
+        t.y >= b.y - 2 &&
+        t.x + t.width <= b.x + b.width + 2 &&
+        t.y + t.height <= b.y + b.height + 2 &&
+        a.x >= b.x - 2 &&
+        a.y >= b.y - 2 &&
+        a.x + a.width <= b.x + b.width + 2 &&
+        a.y + a.height <= b.y + b.height + 2
+      );
+    })
+    .toBe(true);
+
   await expect(page.getByTestId('pg-version')).toHaveCount(0);
   await expect(page.locator('.react-flow__controls')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Вписать доску в экран' })).toBeVisible();

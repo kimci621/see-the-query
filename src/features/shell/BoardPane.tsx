@@ -1,5 +1,5 @@
 import { Maximize } from 'lucide-react';
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -49,9 +49,11 @@ const PANELS = [
 ] as const;
 
 function BoardSlot({
+  compact = false,
   showVersion = true,
   showControls = true,
 }: {
+  compact?: boolean;
   showVersion?: boolean;
   showControls?: boolean;
 }) {
@@ -61,6 +63,23 @@ function BoardSlot({
   const focusMode = useSettingsStore((s) => s.focusMode);
   const t = useMessages();
   useBoardHotkeys(boardRef);
+  // Компакт скрывает контролы React Flow: + и - на самой доске
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target !== e.currentTarget) return;
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        useBoardStore.getState().requestZoom(1);
+      } else if (e.key === '-') {
+        e.preventDefault();
+        useBoardStore.getState().requestZoom(-1);
+      }
+    };
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <div
       ref={boardRef}
@@ -69,7 +88,7 @@ function BoardSlot({
       data-testid="board-area"
       className="relative h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <BoardCanvas showControls={showControls} />
+      <BoardCanvas compact={compact} showControls={showControls} />
       <BoardStatus status={status} version={version} showVersion={showVersion} />
       {/* Режим фокуса (спека 3.1): видимый выход, не только ⌘\. В полосе хрома снизу: её кадры камеры держат пустой.
           Кнопка исчезает вместе с режимом, фокус уходит на доску */}
@@ -110,10 +129,12 @@ function CompactWorkspace({
   const t = useMessages();
   return (
     <Tabs defaultValue="board" data-testid="workspace-tabs" className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1">
+      <div className="flex items-center gap-1 border-b px-2 py-1">
+        {/* Крупный текст: вкладки прокручиваются в своей полосе, кнопки не сжимаются и не
+            накрывают друг друга (P8.112, audit 200% x 768) */}
         <TabsList
           aria-label={t('Рабочая область')}
-          className="h-auto min-w-0 flex-1 justify-start gap-1 rounded-none bg-transparent p-0"
+          className="h-auto min-w-0 flex-1 justify-start gap-1 overflow-x-auto rounded-none bg-transparent p-0 [scrollbar-width:thin]"
         >
           <TabsTrigger value="board" className="text-sm">
             {t('Доска')}
@@ -125,27 +146,29 @@ function CompactWorkspace({
             {t('Результат')}
           </TabsTrigger>
         </TabsList>
-        {onOpenLessons && (
-          <Button id="lessons-button" variant="outline" size="sm" onClick={onOpenLessons}>
-            {t('Уроки')}
+        <div className="flex shrink-0 gap-1">
+          {onOpenLessons && (
+            <Button id="lessons-button" variant="outline" size="sm" onClick={onOpenLessons}>
+              {t('Уроки')}
+            </Button>
+          )}
+          {onOpenTheory && (
+            <Button id="theory-button" variant="outline" size="sm" onClick={onOpenTheory}>
+              {t('Теория')}
+            </Button>
+          )}
+          {/* Встроенные контролы React Flow прячутся под таблицей на крупном тексте: вписывание
+              остаётся кнопкой в шапке, кнопки зума — жестами и клавиатурой */}
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t('Вписать доску в экран')}
+            title={t('Вписать доску в экран')}
+            onClick={() => useBoardStore.getState().requestFit()}
+          >
+            <Maximize className="size-4" aria-hidden />
           </Button>
-        )}
-        {onOpenTheory && (
-          <Button id="theory-button" variant="outline" size="sm" onClick={onOpenTheory}>
-            {t('Теория')}
-          </Button>
-        )}
-        {/* Встроенные контролы React Flow прячутся под таблицей на крупном тексте: вписывание
-            остаётся кнопкой в шапке, кнопки зума — жестами и клавиатурой */}
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={t('Вписать доску в экран')}
-          title={t('Вписать доску в экран')}
-          onClick={() => useBoardStore.getState().requestFit()}
-        >
-          <Maximize className="size-4" aria-hidden />
-        </Button>
+        </div>
       </div>
       {/* Вкладки не размонтируют панели: трейс из редактора и сцена доски живут,
           пока пользователь ходит по вкладкам */}
@@ -158,9 +181,10 @@ function CompactWorkspace({
         <div className="min-h-0 flex-1">
           {/* На крупном тексте плашка Postgres шире таблицы и ложится на строки (P8.112):
               версию показываем в обычной раскладке, здесь доска важнее */}
-          <BoardSlot showVersion={false} showControls={false} />
+          <BoardSlot compact showVersion={false} showControls={false} />
         </div>
-        <div className="h-[7rem] shrink-0 border-t">
+        {/* На коротком окне таймлайн не съедает доску: 7rem при корне 32px - это 224px */}
+        <div className="h-[min(7rem,26dvh)] shrink-0 border-t">
           <Timeline showCaption={false} />
         </div>
       </TabsContent>

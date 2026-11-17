@@ -93,7 +93,7 @@ export function ResultsPanel() {
         className="flex h-full flex-col"
       >
         <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1">
-          <TabsList className="h-7">
+          <TabsList aria-label={t('Результат и сообщения')} className="h-7">
             <TabsTrigger value="result" className="text-xs">
               {t('Результат')}
             </TabsTrigger>

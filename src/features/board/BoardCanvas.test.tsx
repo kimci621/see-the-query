@@ -28,6 +28,8 @@ vi.mock('@xyflow/react', async (importOriginal) => {
       if (holder.flow !== flow) {
         holder.flow = flow;
         vi.spyOn(flow, 'fitView');
+        vi.spyOn(flow, 'zoomIn');
+        vi.spyOn(flow, 'zoomOut');
       }
       return flow;
     },
@@ -174,6 +176,14 @@ describe('BoardCanvas', () => {
     expect(left.defaultPrevented).toBe(false);
   });
 
+  it('запрос зума с доски: + и - меняют масштаб (компакт скрывает контролы)', () => {
+    renderBoard();
+    act(() => useBoardStore.getState().requestZoom(1));
+    expect(flow().zoomIn).toHaveBeenCalled();
+    act(() => useBoardStore.getState().requestZoom(-1));
+    expect(flow().zoomOut).toHaveBeenCalled();
+  });
+
   it('⌘0 работает, когда фокус внутри доски', () => {
     renderBoard();
     const board = screen.getByTestId('board-canvas');
@@ -184,12 +194,12 @@ describe('BoardCanvas', () => {
     expect(e.defaultPrevented).toBe(true);
   });
 
-  it('fitView уважает reduced motion и minZoom', () => {
+  it('явное «Вписать» уважает reduced motion и разрешает мельче 0.6', () => {
     mockReducedMotion(true);
     renderBoard();
     act(() => useBoardStore.getState().requestFit());
     expect(flow().fitView).toHaveBeenLastCalledWith(
-      expect.objectContaining({ duration: 0, minZoom: 0.6, padding: BOARD_PAD }),
+      expect.objectContaining({ duration: 0, minZoom: 0.25, padding: BOARD_PAD }),
     );
   });
 
@@ -197,7 +207,9 @@ describe('BoardCanvas', () => {
     mockReducedMotion(false);
     renderBoard();
     act(() => useBoardStore.getState().requestFit());
-    expect(flow().fitView).toHaveBeenLastCalledWith(expect.objectContaining({ duration: 300, minZoom: 0.6 }));
+    expect(flow().fitView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ duration: 300, minZoom: 0.25 }),
+    );
   });
 
   it('кнопка «Вписать доску» вписывает тем же кадром, что и ⌘0', () => {
@@ -211,22 +223,17 @@ describe('BoardCanvas', () => {
     expect(vi.mocked(flow().fitView).mock.lastCall?.[0]).toEqual(hotkey);
   });
 
-  // Спека 3.4: не влезают на минимальном зуме - левый верхний угол у отступа, а не центр
-  it('кадр, который не влезает на минимальном зуме, держит левый верхний угол', () => {
+  // Явное «Вписать» разрешает мельче 0.6: даже маленькая панель вписывается через fitView,
+  // а якорь остаётся страховкой для сцен, которые не влезают на 0.6
+  it('явное «Вписать» на маленькой панели вписывает кадр, а не якорит его', () => {
     mockReducedMotion(true);
     paneSize(500);
     renderBoard();
     const setViewport = vi.spyOn(flow(), 'setViewport');
     vi.mocked(flow().fitView).mockClear();
     act(() => useBoardStore.getState().requestFit());
-    expect(flow().fitView).not.toHaveBeenCalled();
-    const bounds = flow().getNodesBounds(SCHEMA.tables.map((t) => t.id));
-    // отступ 0.15 по оси, как в React Flow: (500 - 500 / 1.15) / 2
-    const pad = Math.floor((500 - 500 / 1.15) * 0.5);
-    expect(setViewport).toHaveBeenLastCalledWith(
-      { x: pad - bounds.x * 0.6, y: expect.any(Number), zoom: 0.6 },
-      { duration: 0 },
-    );
+    expect(flow().fitView).toHaveBeenCalledWith(expect.objectContaining({ minZoom: 0.25, duration: 0 }));
+    expect(setViewport).not.toHaveBeenCalled();
   });
 
   it('кадр берёт только таблицы, без рамок схем', () => {

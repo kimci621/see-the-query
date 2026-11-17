@@ -18,9 +18,12 @@ test('навигация по урокам, поиск, режим фокуса'
   await expect(page).toHaveURL(/\/l\/how-to-use\?lang=ru$/);
 
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeHidden();
+  // режим фокуса точно включился: видна кнопка выхода, панели теории нет
+  await expect(page.getByRole('button', { name: /Выйти из режима фокуса/ })).toBeVisible();
+  await expect(page.locator('[id="theory"]')).toHaveCount(0);
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByRole('heading', { level: 1, name: 'Как пользоваться доской' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Выйти из режима фокуса/ })).toHaveCount(0);
+  await expect(page.locator('[id="theory"]')).toBeVisible();
 });
 
 test('раскладка и тема переживают перезагрузку', async ({ page }) => {
@@ -114,9 +117,12 @@ test.describe('тулбар не обрезается на узком экран
     // планшет: доска на всю ширину, таблица не обрезана
     const board = await page.getByTestId('board-area').boundingBox();
     const table = await page.getByTestId('table-node-public.book').boundingBox();
-    if (!board || !table) throw new Error('нет доски или таблицы');
+    const author = await page.getByTestId('table-node-public.author').boundingBox();
+    if (!board || !table || !author) throw new Error('нет доски или таблицы');
     expect(table.x).toBeGreaterThanOrEqual(board.x - 2);
     expect(table.x + table.width).toBeLessThanOrEqual(board.x + board.width + 2);
+    // у соседней таблицы видна шапка, а не обрубок строк под вкладками
+    expect(author.y).toBeGreaterThanOrEqual(board.y - 2);
     await page.getByRole('tab', { name: 'Редактор' }).click();
     await expect(page.getByTestId('apply-button')).toBeVisible();
     const { panel, apply } = await panelRight(page);

@@ -203,7 +203,8 @@ test('стартовый кадр на book крупно, ⌘0 вписывае�
   await expect.poll(() => outsideBoard(page, ['public.book', 'public.author'])).toEqual([]);
   const fitted = await zoomOf(page);
   expect(fitted).toBeLessThan(start);
-  expect(fitted).toBeGreaterThanOrEqual(0.6);
+  // явное «Вписать» разрешает мельче 0.6: иначе на 200% таблицы не влезают
+  expect(fitted).toBeGreaterThanOrEqual(0.25);
 });
 
 // how-to-use стартует со свёрнутой book (P8.13), select * разворачивает её до 1188 единиц: целиком в кадре
@@ -434,7 +435,8 @@ test('режим фокуса: доска на всю ширину, зум не 
   await expect.poll(() => outsideBoard(page, ['public.book'])).not.toContain('public.book');
   const before = await zoomOf(page);
   await page.keyboard.press('ControlOrMeta+Backslash');
-  await expect(page.getByRole('heading', { level: 1 }).first()).toBeHidden();
+  // теория скрыта, но sr-only h1 остаётся: проверяем саму панель теории
+  await expect(page.locator('[id="theory"]')).toHaveCount(0);
   const workspace = await page.locator('[id="workspace"]').boundingBox();
   expect(workspace?.width ?? 0).toBeGreaterThanOrEqual(1440 - 2);
   // рефит анимируется, ждём, пока камера осядет: book в кадре, зум не меньше прежнего
