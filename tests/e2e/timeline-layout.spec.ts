@@ -26,6 +26,9 @@ for (const { minChips, ...viewport } of [
     await page.keyboard.insertText(QUERY);
     await page.keyboard.press('Control+Space');
     await expect(page.locator('.cm-tooltip-autocomplete')).toBeVisible();
+    // Список автодополнения перекрывает чипы на 1024×768: закрываем его перед кликом
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.cm-tooltip-autocomplete')).toHaveCount(0);
     await expect(page.getByTestId('stage-chip')).toHaveText(CHIPS, { timeout: 5_000 });
 
     // лента чипов не отдаёт ширину настройкам плеера: видно не меньше minChips чипов целиком
