@@ -143,6 +143,8 @@ order by happened_at;
 ```
 
 PostgreSQL reports code `42P20`: `frame starting from following row cannot have preceding rows`. A frame around the current row can use `rows between 1 preceding and 1 following`; a frame from the current row onward can use `rows between current row and unbounded following`.
+
+Allowed bounds: the start can be `unbounded preceding`, `n preceding`, `current row` or `n following`; the end can be `n preceding`, `current row`, `n following` or `unbounded following`. The start cannot come after the end. A `RANGE` offset requires exactly one ordering column of a suitable type, and the offset is measured in its units.
 </Callout>
 
 <Callout kind="tip">
@@ -162,5 +164,6 @@ With an ordered window, the default frame uses `RANGE`, not `ROWS`. If you need 
 - In the shown `RANGE ... CURRENT ROW` frame, all peers at the current ordering value are included.
 - `rows between 2 preceding and current row`: up to three rows.
 - `rows between unbounded preceding and unbounded following`: the whole partition.
-- Some frame-bound combinations are invalid, including a following start with a preceding end.
+- `ROWS` counts row positions; `RANGE` compares ordering values. A `RANGE` offset needs exactly one ordering column and is measured in its units.
+- Some frame-bound combinations are invalid, including a starting bound after the ending bound. That raises `42P20`.
 </Cheatsheet>
