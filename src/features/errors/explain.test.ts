@@ -43,6 +43,8 @@ const CASES: Record<string, string> = {
     'select category_id, count(*) from book where grouping(category_id) = 0 group by rollup(category_id)',
   formTypo: 'select title form book',
   commaBeforeFrom: 'select title, from book',
+  unionColumns:
+    "select name from author where country = 'Россия' union select name, country from author where country = 'Франция'",
   doubleEquals: 'select title from book where price == 350',
   whereNotBool: 'select title from book where price',
   exists: 'create table author (id int)',
@@ -431,6 +433,15 @@ describe('explainError', () => {
     expect(explain('formTypo').suggestion).toBe('Похоже на опечатку: FORM вместо FROM.');
     expect(explain('commaBeforeFrom').suggestion).toBe('Лишняя запятая перед FROM.');
     expect(explain('doubleEquals').suggestion).toBe('Сравнение пишется одним знаком: =.');
+  });
+
+  it('42601: разное число колонок в UNION не считается обрывом запроса', () => {
+    expect(errors.get('unionColumns')?.code).toBe('42601');
+    expect(explain('unionColumns')).toMatchObject({
+      title: 'Разное число колонок',
+      body: 'В ветвях UNION разное число колонок: слева 1, справа 2.',
+      suggestion: 'Добавь или убери колонку, чтобы списки совпали.',
+    });
   });
 
   it('ограничения подсвечивают свои колонки', () => {

@@ -191,6 +191,41 @@ function derivedAt(sql: string, position: number | undefined): { alias: string; 
   return { alias, columns };
 }
 
+// Число колонок в ветвях верхнего UNION/INTERSECT/EXCEPT
+function setOpColumns(sql: string): { op: string; left: number; right: number } | null {
+  const parsed = isParserReady() ? parseSql(sql) : null;
+  if (!parsed?.ok || !parsed.statements.length) return null;
+  const find = (node: unknown): { op: string; left: number; right: number } | null => {
+    if (node === null || typeof node !== 'object') return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = find(item);
+        if (found) return found;
+      }
+      return null;
+    }
+    const rec = node as Record<string, unknown>;
+    const sel = (rec.SelectStmt ?? rec) as {
+      op?: string;
+      larg?: { targetList?: unknown[] };
+      rarg?: { targetList?: unknown[] };
+    };
+    if (sel.op && sel.op !== 'SETOP_NONE' && sel.larg && sel.rarg) {
+      return {
+        op: sel.op.replace('SETOP_', ''),
+        left: Array.isArray(sel.larg.targetList) ? sel.larg.targetList.length : 0,
+        right: Array.isArray(sel.rarg.targetList) ? sel.rarg.targetList.length : 0,
+      };
+    }
+    for (const value of Object.values(rec)) {
+      const found = find(value);
+      if (found) return found;
+    }
+    return null;
+  };
+  return find(parsed.statements[0].ast);
+}
+
 const columnId = (t: { schema?: string; table?: string }, column: string) =>
   `${t.schema ?? 'public'}.${t.table}.${column}`;
 const tableId = (err: DbError) => `${err.schema ?? 'public'}.${err.table}`;
@@ -506,6 +541,30 @@ export const DICTIONARY: Record<string, Entry> = {
   },
 
   '42601': (err, ctx) => {
+    if (/each (UNION|INTERSECT|EXCEPT) query must have the same number of columns/.test(err.message)) {
+      const op = /each (UNION|INTERSECT|EXCEPT) query/.exec(err.message)?.[1] ?? 'UNION';
+      const counts = setOpColumns(ctx.sql);
+      return {
+        title: tr(ctx, 'Разное число колонок', 'Different number of columns'),
+        body: counts
+          ? tr(
+              ctx,
+              `В ветвях ${op} разное число колонок: слева ${counts.left}, справа ${counts.right}.`,
+              `The ${op} branches have different column counts: ${counts.left} on the left and ${counts.right} on the right.`,
+            )
+          : tr(
+              ctx,
+              `В ветвях ${op} должно быть одинаковое число колонок.`,
+              `Both ${op} branches must have the same number of columns.`,
+            ),
+        suggestion: tr(
+          ctx,
+          'Добавь или убери колонку, чтобы списки совпали.',
+          'Add or remove a column so both lists match.',
+        ),
+        highlight: none,
+      };
+    }
     const near = quoted(err.message);
     const sql = ctx.sql;
     const suggestion = /\bform\b/i.test(sql)
