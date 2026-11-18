@@ -49,14 +49,30 @@ export function ResultGrid({ result, emptyHint }: { result: QueryResult; emptyHi
     const el = scrollRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
     let wasVisible = el.offsetParent !== null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const reset = () => {
+      // DOM scrollTop мало: виртуализатор возвращает контейнер к своему offset,
+      // поэтому сбрасываем через него, а не только элемент
+      virtualizer.scrollToOffset(0);
+      el.scrollTop = 0;
+    };
     const observer = new IntersectionObserver(([entry]) => {
       const visible = entry?.isIntersecting ?? false;
-      if (visible && !wasVisible) el.scrollTop = 0;
+      if (visible && !wasVisible) {
+        reset();
+        requestAnimationFrame(reset);
+        // Тано-виртуализатор после раскладки строк возвращает offset к концу
+        clearTimeout(timer);
+        timer = setTimeout(reset, 200);
+      }
       wasVisible = visible;
     });
     observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [virtualizer]);
 
   if (rows.length === 0) {
     return (

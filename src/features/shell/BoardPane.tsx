@@ -59,7 +59,7 @@ function BoardSlot({
 }) {
   useSchemaSync();
   const { status, version } = useSandbox();
-  const boardRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLElement>(null);
   const focusMode = useSettingsStore((s) => s.focusMode);
   const t = useMessages();
   useBoardHotkeys(boardRef);
@@ -81,10 +81,11 @@ function BoardSlot({
     return () => el.removeEventListener('keydown', onKey);
   }, []);
   return (
-    <div
+    <section
       ref={boardRef}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: доска принимает фокус ради клавиш плеера
       tabIndex={0}
+      aria-label={t('Доска запроса')}
       data-testid="board-area"
       className="relative h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -105,7 +106,7 @@ function BoardSlot({
           {t('Выйти из режима фокуса')} <Kbd>{modKey()} \</Kbd>
         </Button>
       )}
-    </div>
+    </section>
   );
 }
 

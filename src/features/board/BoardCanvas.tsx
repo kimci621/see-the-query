@@ -384,7 +384,17 @@ function useCamera(
   useEffect(() => {
     if (fitRequest === 0) return;
     startFold.current = null;
-    fitFrame(flow, store, fitAllFrame(flow.getNodes(), undefined, compact));
+    const all = flow.getNodes();
+    const ids = useBoardStore.getState().focused.filter((id) => all.some((n) => n.id === id));
+    // Компакт: на короткой доске весь мир не помещается даже на 0.25. Вписываем таблицы запроса:
+    // они и есть то, о чём говорит подпись, а не прячем book за краем
+    fitFrame(
+      flow,
+      store,
+      compact && ids.length > 0
+        ? { ...focusFrame(ids, undefined, compact), minZoom: FIT_ALL_MIN_ZOOM }
+        : fitAllFrame(all, undefined, compact),
+    );
   }, [fitRequest, flow, store, compact]);
 
   useEffect(() => {

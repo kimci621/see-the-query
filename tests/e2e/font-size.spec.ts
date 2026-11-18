@@ -158,26 +158,19 @@ test('200% текста: компактные вкладки, подпись ш�
   const caption = await page.getByTestId('timeline-caption').boundingBox();
   expect(caption?.height ?? 0).toBeGreaterThan(0);
 
-  // «Вписать» на крупном тексте показывает обе таблицы урока, даже мельче 0.6
+  // «Вписать» в компакте держит таблицу запроса: весь мир на короткой доске не читается
   await page.getByRole('button', { name: 'Вписать доску в экран' }).click();
-  const author = page.getByTestId('table-node-public.author');
-  await expect(author).toBeVisible();
-  // камера летит 300 мс: ждём, пока обе таблицы окажутся в кадре, а не середину полёта
+  // камера летит 300 мс: ждём, пока book окажется в кадре, а не середину полёта
   await expect
     .poll(async () => {
       const b = await page.getByTestId('board-area').boundingBox();
       const t = await page.getByTestId(BOOK).boundingBox();
-      const a = await author.boundingBox();
-      if (!b || !t || !a) return false;
+      if (!b || !t) return false;
       return (
         t.x >= b.x - 2 &&
         t.y >= b.y - 2 &&
         t.x + t.width <= b.x + b.width + 2 &&
-        t.y + t.height <= b.y + b.height + 2 &&
-        a.x >= b.x - 2 &&
-        a.y >= b.y - 2 &&
-        a.x + a.width <= b.x + b.width + 2 &&
-        a.y + a.height <= b.y + b.height + 2
+        t.y + t.height <= b.y + b.height + 2
       );
     })
     .toBe(true);
@@ -270,7 +263,13 @@ test('200% текста на 1024x768: результат открывается
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
   await page.goto('/l/select-basics');
   await expect(page.getByTestId('workspace-tabs')).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('tab', { name: 'Результат' }).click();
+  // ждём данные и паузу, как у ученика: баг проявлялся именно после раскладки строк
+  await expect(page.getByTestId('result-count')).toHaveText('11 строк', { timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await page
+    .getByRole('tablist', { name: 'Рабочая область' })
+    .getByRole('tab', { name: 'Результат' })
+    .click();
   const grid = page.getByRole('table', { name: 'Результат запроса' });
   await expect(grid).toBeVisible();
   await expect.poll(() => grid.evaluate((el) => el.scrollTop)).toBe(0);
@@ -284,8 +283,25 @@ test('200% текста на 720x450: таймлайн не съедает до�
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
   await page.goto('/l/select-basics');
   await expect(page.getByTestId('workspace-tabs')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId(BOOK)).toBeVisible({ timeout: 20_000 });
   const board = await page.getByTestId('board-area').boundingBox();
   expect(board?.height ?? 0).toBeGreaterThan(120);
+
+  // «Вписать» на этом состоянии держит таблицу запроса, а не прячет book
+  await page.getByRole('button', { name: 'Вписать доску в экран' }).click();
+  await expect
+    .poll(async () => {
+      const b = await page.getByTestId('board-area').boundingBox();
+      const t = await page.getByTestId(BOOK).boundingBox();
+      if (!b || !t) return false;
+      return (
+        t.x >= b.x - 2 &&
+        t.y >= b.y - 2 &&
+        t.x + t.width <= b.x + b.width + 2 &&
+        t.y + t.height <= b.y + b.height + 2
+      );
+    })
+    .toBe(true);
 });
 
 test('живая смена шрифта: доска, призрак и сетка пересчитываются без перезагрузки', async ({ page }) => {
@@ -366,26 +382,21 @@ test('200% зума 720x450: компактные вкладки и доска �
   const board = await page.getByTestId('board-area').boundingBox();
   const table = await page.getByTestId(BOOK).boundingBox();
   if (!board || !table) throw new Error('нет доски или таблицы');
+  // шапка таблицы не уезжает под вкладки; целиком book проверяем после «Вписать»
   expect(table.y).toBeGreaterThanOrEqual(board.y - 2);
-  expect(table.y + table.height).toBeLessThanOrEqual(board.y + board.height + 2);
 
-  // «Вписать» показывает обе таблицы целиком даже на коротком окне
+  // «Вписать» держит book: на короткой доске обе таблицы не помещаются даже на 0.25
   await page.getByRole('button', { name: 'Вписать доску в экран' }).click();
   await expect
     .poll(async () => {
       const b = await page.getByTestId('board-area').boundingBox();
       const t = await page.getByTestId(BOOK).boundingBox();
-      const a = await page.getByTestId('table-node-public.author').boundingBox();
-      if (!b || !t || !a) return false;
+      if (!b || !t) return false;
       return (
         t.x >= b.x - 2 &&
         t.y >= b.y - 2 &&
         t.x + t.width <= b.x + b.width + 2 &&
-        t.y + t.height <= b.y + b.height + 2 &&
-        a.x >= b.x - 2 &&
-        a.y >= b.y - 2 &&
-        a.x + a.width <= b.x + b.width + 2 &&
-        a.y + a.height <= b.y + b.height + 2
+        t.y + t.height <= b.y + b.height + 2
       );
     })
     .toBe(true);

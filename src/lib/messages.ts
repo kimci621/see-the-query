@@ -39,6 +39,7 @@ const EN = {
   Теория: 'Theory',
   'Текст урока': 'Lesson text',
   'Рабочая область': 'Workspace',
+  'Доска запроса': 'Query board',
   'Результат и сообщения': 'Result and messages',
   Доска: 'Board',
   'Ширина списка уроков': 'Lesson list width',
