@@ -87,7 +87,7 @@ function BoardSlot({
       tabIndex={0}
       aria-label={t('Доска запроса')}
       data-testid="board-area"
-      className="relative h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="vs-board-area relative h-full w-full outline-none"
     >
       <BoardCanvas compact={compact} showControls={showControls} />
       <BoardStatus status={status} version={version} showVersion={showVersion} />

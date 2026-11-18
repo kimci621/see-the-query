@@ -62,6 +62,18 @@ test('SQL-блок урока подсвечен и несёт мету', async 
   await expect(pre).toHaveClass(/shiki/);
 });
 
+test('фокус на доске виден: кольцо 2px внутри панели', async ({ page }) => {
+  await page.goto('/l/select-basics');
+  const board = page.getByTestId('board-area');
+  await expect(board).toBeVisible({ timeout: 20_000 });
+  await board.focus();
+  const outline = await board.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { style: s.outlineStyle, width: s.outlineWidth, offset: s.outlineOffset };
+  });
+  expect(outline).toEqual({ style: 'solid', width: '2px', offset: '-2px' });
+});
+
 test('Tab с доски фокусирует ноду таблицы с подписью', async ({ page }) => {
   // обе таблицы урока в стартовом кадре: нода вне кадра не рисуется и в порядок Tab не попадает
   await page.goto('/l/inner-join');

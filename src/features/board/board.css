@@ -1,4 +1,7 @@
 /* Рёбра FK и маркеры: цвет из токена shadcn, без анимаций */
+/* Кольцо фокуса доски внутри панели: наружное панель обрезает */
+.vs-board-area:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
 .vs-board .vs-fk-path {
   stroke: var(--muted-foreground);
   stroke-width: 1.5;
