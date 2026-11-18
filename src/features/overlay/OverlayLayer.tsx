@@ -110,7 +110,9 @@ export function OverlayLayer({ lessonId = null }: { lessonId?: string | null }) 
     scene.setPlayback(playback);
     // Сцену запустил не пользователь (открытие урока, сохранённый запрос): прячем, доска не гаснет,
     // таймлайн и плеер её вернут. При повторном монтировании той же трассы сохраняем видимость
-    if (firstTime ? lessonStart() || !userDrivesScene() : wasHidden) scene.hide();
+    // Стартовый текст урока прячем всегда (P8.111), даже если фокус уже на доске.
+    // Пользователь нажал «На доску»: сцену показываем, даже если этот SQL уже видели
+    if (lessonStart() || (!userDrivesScene() && (firstTime || wasHidden))) scene.hide();
   }, [trace, schema, rf, expanded, rootFont, locale]);
 
   const active = !!playback && playback.phases.length > 0 && !hidden;
