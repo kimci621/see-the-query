@@ -302,7 +302,7 @@ function BoardFlow({ compact = false, showControls = true }: { compact?: boolean
         )}
         {/* Справа снизу плашка версии Postgres, миникарта сверху */}
         {miniMap && <MiniMap pannable zoomable position="top-right" />}
-        <OverlayLayer />
+        <OverlayLayer lessonId={lessonId} />
       </ReactFlow>
     </div>
   );
